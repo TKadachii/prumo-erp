@@ -553,9 +553,23 @@
         });
         return produtos;
     }
+    // O APK 3.2 injeta __frigInjected e intercepta pedidojson ANTES da rede,
+    // salvando o conteúdo e fechando SpamovActivity. Seu chrome.storage é apenas
+    // um shim de localStorage do SPAmov: NÃO é compartilhado com a WebView do ERP.
+    function ehNavegadorAndroid() { return window.__frigInjected === true; }
+    function retornarAoAndroid(payload) {
+        const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+        // Esquema local: nenhum catálogo é enviado a um servidor ou aba da internet.
+        const url = 'friganso://retorno?pedidojson=' + encodeURIComponent(b64);
+        try { window.top.location.href = url; } catch (e) { window.location.href = url; }
+    }
     function enviarTabelaParaApp() {
         const produtos = extrairListaPrecos();
-        if (!produtos.length) { alert("Não consegui ler a tabela de preços nesta tela."); return; }
+        if (!produtos.length) { if (ehNavegadorAndroid()) statusBox()("Abra a Lista de Preços e carregue os produtos antes de enviar a tabela."); else alert("Não consegui ler a tabela de preços nesta tela."); return; }
+        if (ehNavegadorAndroid()) {
+            retornarAoAndroid({ frigansoRetorno: 1, tipo: 'tabela', produtos: produtos });
+            return;
+        }
         // 🚫 NÃO manda a tabela inteira pela URL — com muitos produtos ela fica gigante e o próprio
         // GitHub Pages/CDN não aguenta (dá "I/O error"). Usa o chrome.storage da extensão (compartilhado
         // entre todas as abas dela, sem limite de tamanho de URL) e navega com uma URL curtinha.
@@ -2093,6 +2107,94 @@
         } catch (e) {}
     }
 
+    // ---------- AÇÕES DO NAVEGADOR ANDROID ----------
+    // Barra da PÁGINA, atualizável por OTA; não altera a barra Java do APK.
+    function instalarBarraAndroid() {
+        if (!ehNavegadorAndroid()) return;
+        window.__frigMobileActions = {
+            tabela: function () { return ehTelaListaPrecos() ? extrairListaPrecos() : []; },
+            pedido: function () { return montarPedidoLeitura(true); },
+            login: function () { if (!document.querySelector('input[type=password]')) return false; forcarEtapaLogin(); return true; }
+        };
+        const barra = document.createElement('div');
+        barra.id = 'friganso-mobile-toolbar';
+        barra.setAttribute('role', 'region');
+        barra.setAttribute('aria-label', 'Ações do Friganso ERP');
+        Object.assign(barra.style, { position: 'fixed', zIndex: '2147483647', boxSizing: 'border-box', padding: '8px', borderRadius: '12px', background: '#0f172a', color: '#fff', fontFamily: 'system-ui,sans-serif', boxShadow: '0 4px 20px #0005', transformOrigin: 'top left' });
+        const acoes = document.createElement('div');
+        Object.assign(acoes.style, { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px' });
+        const aviso = document.createElement('div');
+        aviso.setAttribute('role', 'status');
+        Object.assign(aviso.style, { fontSize: '13px', lineHeight: '1.4', paddingTop: '6px' });
+        const avisar = txt => { aviso.textContent = txt; };
+        const visitar = () => {
+            const partes = [];
+            function ler(w) {
+                try {
+                    if (w.document.body && w.document.body.tagName !== 'FRAMESET' && w.innerWidth > 0 && w.innerHeight > 0) partes.push(w);
+                    for (let i = 0; i < w.frames.length; i++) ler(w.frames[i]);
+                } catch (e) { /* frame de outra origem: sem acesso */ }
+            }
+            try { ler(window.top); } catch (e) {}
+            if (!partes.includes(window)) partes.push(window);
+            return partes;
+        };
+        const adicionar = (rotulo, fn, cor) => {
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.textContent = rotulo;
+            Object.assign(btn.style, { minHeight: '44px', padding: '8px', border: '0', borderRadius: '8px', font: '600 14px system-ui,sans-serif', background: cor || '#334155', color: '#fff', cursor: 'pointer' });
+            btn.addEventListener('click', () => { try { aviso.textContent = ''; fn(); } catch (e) { avisar('Não foi possível concluir. Tente novamente: ' + (e.message || e)); } });
+            acoes.appendChild(btn); return btn;
+        };
+        const titulo = document.createElement('button');
+        titulo.type = 'button'; titulo.textContent = 'Friganso ERP · recolher ▴';
+        titulo.setAttribute('aria-expanded', 'true');
+        Object.assign(titulo.style, { width: '100%', minHeight: '44px', border: '0', borderRadius: '8px', background: '#1e293b', color: '#fff', font: '700 14px system-ui,sans-serif', cursor: 'pointer' });
+        titulo.onclick = () => {
+            const aberto = acoes.style.display === 'none';
+            acoes.style.display = aberto ? 'grid' : 'none'; aviso.style.display = aberto ? '' : 'none';
+            titulo.textContent = aberto ? 'Friganso ERP · recolher ▴' : 'Friganso ERP · ações ▾';
+            titulo.setAttribute('aria-expanded', String(aberto));
+        };
+        adicionar('📥 Enviar tabela', () => {
+            const produtos = new Map();
+            visitar().forEach(w => { if (w.__frigMobileActions) w.__frigMobileActions.tabela().forEach(p => produtos.set(String(p.code), p)); });
+            if (!produtos.size) { avisar('Abra a Lista de Preços e carregue os produtos antes de enviar.'); return; }
+            retornarAoAndroid({ frigansoRetorno: 1, tipo: 'tabela', produtos: Array.from(produtos.values()) });
+        }, '#7c3aed');
+        adicionar('📋 Enviar resumo', () => {
+            const pedido = { cliente: '', clienteNome: '', spamov: '', condicaoPagamento: '', itens: [] }, vistos = new Set();
+            visitar().forEach(w => {
+                if (!w.__frigMobileActions) return;
+                const p = w.__frigMobileActions.pedido();
+                ['cliente', 'clienteNome', 'spamov', 'condicaoPagamento'].forEach(k => { if (!pedido[k] && p[k]) pedido[k] = p[k]; });
+                (p.itens || []).forEach(it => { if (!vistos.has(String(it.code))) { vistos.add(String(it.code)); pedido.itens.push(it); } });
+            });
+            if (!pedido.itens.length) { avisar('Abra o pedido com a lista de itens antes de enviar o resumo.'); return; }
+            retornarAoAndroid(pedido);
+        }, '#be123c');
+        adicionar('🔑 Login salvo', () => {
+            if (!visitar().some(w => w.__frigMobileActions && w.__frigMobileActions.login())) avisar('Você já está logado ou a tela de login ainda não abriu.');
+            else avisar('Login solicitado. Se faltarem credenciais, salve-as em Debug no ERP.');
+        });
+        adicionar('↩ Voltar ao ERP', () => retornarAoAndroid({ frigansoRetorno: 1, tipo: 'voltar' }));
+        barra.append(titulo, acoes, aviso); document.body.appendChild(barra);
+        const posicionar = () => {
+            const principal = visitar().sort((a, b) => (b.innerWidth * b.innerHeight) - (a.innerWidth * a.innerHeight))[0];
+            barra.style.display = principal === window ? 'block' : 'none';
+            const v = window.visualViewport, escala = v && v.scale > 0 ? v.scale : 1;
+            const largura = Math.max(160, Math.min(360, (v ? v.width * escala : window.innerWidth) - 16));
+            barra.style.width = largura + 'px'; barra.style.transform = 'scale(' + (1 / escala) + ')';
+            barra.style.left = ((v ? v.offsetLeft + v.width : window.innerWidth) - (largura + 8) / escala) + 'px';
+            barra.style.top = ((v ? v.offsetTop : 0) + 8 / escala) + 'px';
+        };
+        posicionar();
+        window.addEventListener('resize', posicionar);
+        if (window.visualViewport) { window.visualViewport.addEventListener('resize', posicionar); window.visualViewport.addEventListener('scroll', posicionar); }
+        const timer = setInterval(posicionar, 1500);
+        window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
+    }
+
     // ---------- BOTÕES ----------
     function botao(id, texto, cor, bottom, onClick) {
         if (document.getElementById(id)) return;
@@ -2153,7 +2255,7 @@
     botao("friganso-diag-btn", "🔍 Ler Página", "#0f172a", "170px", gerarDiagnostico);
     // 📥 Atualizar Tabela: só na tela "Lista de Preços" — lê o catálogo inteiro direto da tela
     // (sem precisar de PDF) e manda pro site, que atualiza a Tabela de Preços sozinho.
-    if (ehTelaListaPrecos()) botao("friganso-tabela-btn", "📥 Atualizar Tabela do Site", "#7c3aed", "220px", enviarTabelaParaApp);
+    if (ehTelaListaPrecos()) botao("friganso-tabela-btn", ehNavegadorAndroid() ? "📥 Enviar tabela ao aplicativo" : "📥 Atualizar Tabela do Site", "#7c3aed", "220px", enviarTabelaParaApp);
     // 📊 Relatório de Vendas: só na tela que lista pedidos por SPAMOV com peso embarcado/faturado reais
     // — lê tudo e manda pro site, que usa isso pra corrigir o faturamento real (não a estimativa).
     if (ehTelaRelatorioVendas()) botao("friganso-vendas-btn", "📊 Enviar Relatório de Vendas", "#0891b2", "270px", enviarRelatorioVendasParaApp);
@@ -2161,6 +2263,8 @@
     // telefone e limite/saldo de crédito) e manda pro site. Usa o mesmo 270px do relatório de vendas
     // sem risco de conflito: as duas telas são diferentes, nunca aparecem juntas.
     if (ehTelaClientes()) botao("friganso-clientes-btn", "👥 Atualizar Clientes do Site", "#0d9488", "270px", enviarClientesParaApp);
+
+    instalarBarraAndroid();
 
     // Mostra o log salvo (passo a passo que sobrevive aos recarregamentos)
     if (ehFramePrincipal()) mostrarLogSalvo();
