@@ -6,7 +6,7 @@
 # anterior. (Rodar de novo depois conserta, é idempotente.)
 #
 # Existe porque estes três artefatos são gerados À MÃO e já ficaram pra trás antes:
-#   - friganso-extensao.zip ficou parado de 25/06 a 03/08 entregando um content.js velho pra quem
+#   - prumo-extensao.zip ficou parado de 25/06 a 03/08 entregando um content.js velho pra quem
 #     baixava a extensão pelo site (ver CONTEXTO-DO-PROJETO.md);
 #   - a versão do manifest ficou em "2.0.0" pra sempre, então não dava pra saber, olhando o
 #     chrome://extensions, se a extensão instalada era a nova ou a antiga;
@@ -61,8 +61,8 @@ $header = @"
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
-// @downloadURL  https://tkadachii.github.io/friganso-erp/friganso.user.js
-// @updateURL    https://tkadachii.github.io/friganso-erp/friganso.user.js
+// @downloadURL  https://tkadachii.github.io/prumo-erp/friganso.user.js
+// @updateURL    https://tkadachii.github.io/prumo-erp/friganso.user.js
 // ==/UserScript==
 
 "@ -replace "`r`n", "`n"
@@ -121,11 +121,11 @@ Copy-Item $srcCjs $raizCjs -Force
 # ---------- 6) o zip que o site entrega ----------
 $arquivos = "content.js","manifest.json","icon16.png","icon48.png","icon128.png","COMO-INSTALAR.txt" |
             ForEach-Object { Join-Path $ext $_ }
-Compress-Archive -Path $arquivos -DestinationPath (Join-Path $repo "friganso-extensao.zip") -Force
+Compress-Archive -Path $arquivos -DestinationPath (Join-Path $repo "prumo-extensao.zip") -Force
 
 # ---------- 7) conferencia: o content.js do zip TEM que bater com o da raiz ----------
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $repo "friganso-extensao.zip"))
+$zip = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $repo "prumo-extensao.zip"))
 try {
     $entry = $zip.Entries | Where-Object { $_.FullName -eq "content.js" }
     if (-not $entry) { throw "content.js nao entrou no zip!" }

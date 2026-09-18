@@ -10,7 +10,7 @@ function ambiente(android, lista = produtos) {
     const dados = {}, abas = [], avisos = [];
     const win = {__frigInjected: android, location: {href: ''}, open: url => abas.push(url)}; win.top=win;
     win.chrome = {storage: {local: {set: (v, cb) => {Object.assign(dados,v);cb();}}}};
-    const ctx = vm.createContext({window:win,chrome:win.chrome,navigator:{maxTouchPoints:android?5:0},APP_URL:'https://tkadachii.github.io/friganso-erp/',extrairListaPrecos:()=>lista,statusBox:()=>txt=>avisos.push(txt),alert:txt=>avisos.push(txt),btoa,atob,escape,unescape,encodeURIComponent,decodeURIComponent,console});
+    const ctx = vm.createContext({window:win,chrome:win.chrome,navigator:{maxTouchPoints:android?5:0},APP_URL:'https://tkadachii.github.io/prumo-erp/',extrairListaPrecos:()=>lista,statusBox:()=>txt=>avisos.push(txt),alert:txt=>avisos.push(txt),btoa,atob,escape,unescape,encodeURIComponent,decodeURIComponent,console});
     vm.runInContext(transporte+'\n'+decoder,ctx);
     return {ctx,win,dados,abas,avisos};
 }
@@ -21,7 +21,7 @@ const retorno=app.ctx.decodificarRetornoSpamov(url.searchParams.get('pedidojson'
 assert.equal(retorno.tipo,'tabela'); assert.deepEqual(JSON.parse(JSON.stringify(retorno.produtos)),produtos);
 console.log('OK: 1.000 produtos, acentos, cartão e prazos retornam sem aba nem chrome.storage.');
 const pc=ambiente(false); pc.ctx.enviarTabelaParaApp();
-assert.equal(pc.abas[0],'https://tkadachii.github.io/friganso-erp/?tabela=pendente');
+assert.equal(pc.abas[0],'https://tkadachii.github.io/prumo-erp/?tabela=pendente');
 assert.equal(pc.dados.friganso_tabela_pendente.produtos.length,1000);
 console.log('OK: extensão de PC conserva seu transporte original.');
 const vazio=ambiente(true,[]); vazio.ctx.enviarTabelaParaApp(); assert.equal(vazio.win.location.href,''); assert.equal(vazio.avisos.length,1);

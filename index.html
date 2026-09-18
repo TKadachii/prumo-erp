@@ -155,8 +155,9 @@
         .tema-esmeralda .bg-rose-50, .tema-esmeralda .bg-rose-100, .tema-esmeralda .bg-rose-50\/30 { background-color: rgba(12,120,78,.32) !important; }
         .tema-esmeralda .border, .tema-esmeralda .border-slate-100, .tema-esmeralda .border-slate-200 { border-color: rgba(52,211,153,.25) !important; }
     </style>
+    <link rel="stylesheet" href="./visual.css">
 </head>
-<body>
+<body class="prumo-production">
     <!-- 🎨 Tema do sistema (Claro/Escuro/Sakura/Oceano/Esmeralda). Escolha salva em friganso_tema.
          'auto' = claro no dia a dia, e Sakura nos dias especiais (21 e 27 de junho). -->
     <script>
@@ -351,7 +352,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 198;
+        const APP_BUILD_VERSION = 199;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -1256,7 +1257,7 @@
             };
 
             return (
-                <div className="animate-in fade-in space-y-6">
+                <div className="prumo-dashboard animate-in fade-in space-y-6">
                     {cartaoUrl && (
                         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-[999]">
                             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 flex flex-col items-center max-h-[92vh]">
@@ -1373,7 +1374,7 @@
                                 )
                             ) : (
                                 // --- PC: só botão de baixar .exe ---
-                                <a href="https://github.com/TKadachii/friganso-erp/releases/latest" target="_blank" rel="noreferrer"
+                                <a href="https://github.com/TKadachii/prumo-erp/releases/latest" target="_blank" rel="noreferrer"
                                     className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all">
                                     <div className="h-4 w-4"><IconCloudDownload /></div>
                                     Baixar Programa para PC (.exe)
@@ -1392,7 +1393,7 @@
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-3 items-center mt-4">
-                            <a href="friganso-extensao.zip" download className="flex items-center gap-2 bg-rose-700 hover:bg-rose-800 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all shadow-md shadow-rose-100">
+                            <a href="prumo-extensao.zip" download className="flex items-center gap-2 bg-rose-700 hover:bg-rose-800 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all shadow-md shadow-rose-100">
                                 <div className="h-4 w-4"><IconCloudDownload /></div>
                                 Baixar Extensão (.zip)
                             </a>
@@ -1454,7 +1455,7 @@
             return <div style={{ height: (altura || 260) + 'px', position: 'relative' }}><canvas ref={ref}></canvas></div>;
         };
         const CardGrafico = ({ titulo, children }) => (
-            <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200">
+            <div className="prumo-chart bg-white p-5 rounded-3xl shadow-sm border border-slate-200">
                 <h3 className="font-bold text-slate-800 mb-3 text-sm">{titulo}</h3>
                 {children}
             </div>
@@ -1585,7 +1586,7 @@
             const outrosCli = dados.topCli.slice(6).reduce((a, c) => a + c.n, 0);
             const vendKeys = Object.keys(dados.vendC);
             const Kpi = ({ icon, cor, label, valor }) => (
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <div className="prumo-kpi bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                     <div className={`h-9 w-9 ${cor} rounded-xl flex items-center justify-center mb-2 text-lg`}>{icon}</div>
                     <p className="text-slate-500 font-semibold text-xs">{label}</p>
                     <h3 className="text-2xl font-black text-slate-800 mt-0.5">{valor}</h3>
@@ -1672,12 +1673,12 @@
 
             return (
                 <div className="animate-in fade-in space-y-6">
-                    <div className="bg-slate-900 rounded-3xl p-7 text-white relative overflow-hidden shadow-xl border border-slate-800">
+                    <div className="prumo-welcome bg-slate-900 rounded-3xl p-7 text-white relative overflow-hidden shadow-xl border border-slate-800">
                         <img src={BG_IMAGE} className="absolute inset-0 w-full h-full object-cover opacity-20 mix-blend-overlay" />
                         <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-rose-950/90 to-transparent"></div>
                         <div className="relative z-10 flex flex-col gap-4">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                <div><h2 className="text-2xl sm:text-3xl font-extrabold mb-1">Olá, {user.name}! 📊</h2><p className="text-rose-200 font-medium opacity-80">Seu painel de controle de vendas.</p></div>
+                                <div><h2 className="text-2xl sm:text-3xl font-extrabold mb-1">Olá, {user.name}.</h2><p className="text-rose-200 font-medium opacity-80">Acompanhe suas vendas e os próximos passos do dia.</p></div>
                                 <div className="flex gap-1.5 bg-black/30 p-1 rounded-xl flex-wrap">
                                     {[['dia', 'Hoje'], ['semana', 'Semana'], ['mes', 'Mês'], [90, '90 dias'], [365, '1 ano']].map(([d, l]) => (
                                         <button key={d} onClick={() => { setPeriodo(d); if (d === 'mes') setMesOffset(0); }} className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${periodo === d ? 'bg-rose-600 text-white' : 'text-rose-200 hover:bg-white/10'}`}>{l}</button>
@@ -4978,7 +4979,7 @@
 
                     {/* 🧹 Correção pontual: a 1ª versão da extração não pegava a data real do pedido e
                         jogava tudo pra "hoje". Esse painel acha e remove só esses registros mal-datados. */}
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="prumo-kpi bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                             <div>
                                 <p className="font-bold text-slate-700 text-sm">🧹 Corrigir importação com data errada</p>
@@ -5005,7 +5006,7 @@
 
                     {/* 🔍 Acha vendas contadas 2x: mesmo SPAMOV em mais de 1 registro de compra — geralmente
                         o pedido original (estimado) + um pedido novo criado porque o SPAMOV não bateu. */}
-                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="prumo-kpi bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                             <div>
                                 <p className="font-bold text-slate-700 text-sm">🔍 Achar vendas contadas em dobro (SPAMOV duplicado)</p>
@@ -7390,6 +7391,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.26.1', data: '18/09/2026', areas: ['site', 'app', 'extensao'], itens: [
+                '🌌 Novo visual Prumo Cosmic aplicado ao sistema: preto profundo, violeta, ciano e painéis interativos',
+                '📱 Navegação móvel redesenhada e tabela de preços em cartões legíveis no celular',
+                '🔗 Novo endereço público prumo-erp, mantendo a instalação anterior como ponte de compatibilidade',
+            ]},
             { versao: '2.26.0', data: '18/09/2026', areas: ['site', 'app', 'extensao'], itens: [
                 '✨ Nova identidade Prumo no site, no aplicativo instalado e na extensão do navegador',
                 'Novo símbolo escuro com brilho violeta e ciano, preparado para a próxima interface visual',
@@ -8430,7 +8436,7 @@
                     <div className="h-32 bg-slate-900 relative overflow-hidden"><img src={BG_IMAGE} className="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-overlay" /></div>
                     <div className="px-8 pb-8 relative">
                         <div className="w-24 h-24 bg-white rounded-2xl shadow-lg border-4 border-white mx-auto -mt-12 mb-4 overflow-hidden relative z-10 flex items-center justify-center"><PrumoLogo className="w-16 h-16 object-contain" /></div>
-                        <h2 className="text-2xl font-black text-slate-800 mb-1">Sistema Prumo Premium ERP</h2>
+                        <h2 className="text-2xl font-black text-slate-800 mb-1">Sistema Prumo Gestão comercial</h2>
                         <p className="text-slate-500 font-medium mb-6">Versão Cloud - Inteligência & CRM</p>
                         <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 text-left mb-6">
                             <p className="text-sm text-slate-500 mb-1 uppercase tracking-wider font-bold">Desenvolvedor Oficial e CEO</p>
@@ -10923,7 +10929,7 @@
                 if (isCapacitor) return; // o app Android já se atualiza sozinho via OTA nativo (WebUpdater)
                 const checar = async () => {
                     try {
-                        const resp = await fetch('https://tkadachii.github.io/friganso-erp/web-version.json?t=' + Date.now(), { cache: 'no-store' });
+                        const resp = await fetch('https://tkadachii.github.io/prumo-erp/web-version.json?t=' + Date.now(), { cache: 'no-store' });
                         const remoto = await resp.json();
                         if (Number(remoto.version) > APP_BUILD_VERSION) setSiteUpdate(remoto);
                     } catch (e) { /* sem internet — segue normal, tenta de novo depois */ }
@@ -10950,7 +10956,7 @@
                 (async () => {
                     try {
                         const local = await P.versao();
-                        const resp = await fetch('https://tkadachii.github.io/friganso-erp/apk-version.json?t=' + Date.now(), { cache: 'no-store' });
+                        const resp = await fetch('https://tkadachii.github.io/prumo-erp/apk-version.json?t=' + Date.now(), { cache: 'no-store' });
                         const remoto = await resp.json();
                         if (Number(remoto.versionCode) > Number(local.versionCode)) setApkUpdate(remoto);
                     } catch (e) { /* sem internet ou arquivo ausente — segue normal */ }
@@ -10959,7 +10965,7 @@
             const baixarApkNovo = () => {
                 try {
                     const P = window.Capacitor.Plugins.SpamovAuto;
-                    P.abrirLink({ url: (apkUpdate && apkUpdate.url) || 'https://tkadachii.github.io/friganso-erp/PrumoERP.apk' });
+                    P.abrirLink({ url: (apkUpdate && apkUpdate.url) || 'https://tkadachii.github.io/prumo-erp/PrumoERP.apk' });
                 } catch (e) {}
             };
             // 🎨 Tema escolhido: auto | claro | escuro | sakura | oceano | esmeralda
@@ -11233,13 +11239,13 @@
             };
 
             const NavButton = ({ route, icon: Icon, label }) => (
-                <button onClick={() => { setActiveRoute(route); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all duration-200 ${activeRoute === route ? 'bg-rose-800 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+                <button data-nav={route} aria-current={activeRoute === route ? "page" : undefined} onClick={() => { setActiveRoute(route); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all duration-200 ${activeRoute === route ? 'bg-rose-800 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
                     <div className="h-5 w-5"><Icon /></div> {label}
                 </button>
             );
 
             return (
-                <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+                <div className="prumo-shell flex h-screen bg-slate-50 overflow-hidden font-sans">
                     {messageBox && <CustomMessageBox {...messageBox} onClose={() => setMessageBox(null)} />}
                     {siteUpdate && <SiteUpdateModal siteUpdate={siteUpdate} onAtualizar={atualizarSiteAgora} />}
 
@@ -11325,7 +11331,7 @@
                     )}
 
                     {/* Barra de topo do celular (cara de app) */}
-                    <div className="friganso-mobile-topbar md:hidden fixed top-0 inset-x-0 z-50 h-14 bg-slate-950 text-white flex items-center gap-3 px-3 shadow-lg">
+                    <div className="prumo-mobile-topbar friganso-mobile-topbar md:hidden fixed top-0 inset-x-0 z-50 h-14 bg-slate-950 text-white flex items-center gap-3 px-3 shadow-lg">
                         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1.5 rounded-lg hover:bg-slate-800 active:bg-slate-800">
                             <div className="h-6 w-6"><IconMenu/></div>
                         </button>
@@ -11333,48 +11339,48 @@
                         <span className="font-black tracking-tight text-base">PRUMO</span>
                     </div>
 
-                    <div className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-950 text-slate-300 transform transition-transform duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static border-r border-slate-800 shadow-2xl`}>
+                    <div className={`prumo-sidebar fixed inset-y-0 left-0 z-40 w-72 bg-slate-950 text-slate-300 transform transition-transform duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static border-r border-slate-800 shadow-2xl`}>
                         <div className="p-6 border-b border-slate-800 flex items-center gap-4 bg-slate-900/50">
                             <PrumoLogo className="h-12 w-12 rounded-xl bg-black/50 p-1.5 shadow-inner border border-slate-700" />
                             <div>
                                 <h1 className="text-xl font-black text-white tracking-tight">PRUMO</h1>
-                                <p className="text-[10px] text-rose-500 tracking-widest uppercase font-bold">Premium ERP</p>
+                                <p className="text-[10px] text-rose-500 tracking-widest uppercase font-bold">Gestão comercial</p>
                             </div>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-hide">
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-2 ml-2">Gestão Principal</p>
-                            <NavButton route="dashboard" icon={IconDashboard} label="Painel (Dashboard)" />
-                            <NavButton route="lembretes" icon={IconHistory} label="🔔 Lembretes" />
-                            <NavButton route="clients" icon={IconUsers} label="CRM & Rotas" />
-                            <NavButton route="cadastrosProcesso" icon={IconFileText} label="Em Cadastramento" />
+                            <NavButton route="dashboard" icon={IconDashboard} label="Visão geral" />
+                            <NavButton route="lembretes" icon={IconHistory} label="Lembretes" />
+                            <NavButton route="clients" icon={IconUsers} label="Clientes e rotas" />
+                            <NavButton route="cadastrosProcesso" icon={IconFileText} label="Cadastros em andamento" />
                             <NavButton route="consultaCnpj" icon={IconSearch} label="Consulta CNPJ" />
                             <NavButton route="prospeccao" icon={IconMapPin} label="Perto de Mim" />
-                            <NavButton route="leads" icon={IconUsers} label="🎯 Prospecção em Massa" />
+                            <NavButton route="leads" icon={IconUsers} label="Prospecção" />
                             <NavButton route="radar" icon={IconDashboard} label="Radar de Clientes" />
-                            <NavButton route="profile" icon={IconSettings} label="Meu Perfil / Admin" />
+                            <NavButton route="profile" icon={IconSettings} label="Minha conta" />
                             
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-8 ml-2">Vendas Diárias</p>
-                            <NavButton route="pdf" icon={IconFileText} label="Tabela do Dia (PDF)" />
-                            <NavButton route="cardapio" icon={IconTag} label="🍽️ Cardápio" />
-                            <NavButton route="pedido" icon={IconReceipt} label="Fazer Pedido" />
+                            <NavButton route="pdf" icon={IconFileText} label="Tabela de preços" />
+                            <NavButton route="cardapio" icon={IconTag} label="Catálogo" />
+                            <NavButton route="pedido" icon={IconReceipt} label="Novo pedido" />
                             {(isElectron || isCapacitor) && <NavButton route="navegador" icon={IconWhatsApp} label="🌐 Site da Prumo" />}
-                            <NavButton route="resumo" icon={IconReceipt} label="Resumo de Pedido" />
-                            <NavButton route="fila" icon={IconReceipt} label="📋 Fila de Pedidos" />
-                            <NavButton route="historico" icon={IconFileText} label="🧾 Histórico de Vendas" />
-                            <NavButton route="importarVendas" icon={IconCloudUpload} label="📊 Importar Vendas Reais" />
-                            <NavButton route="orcamentos" icon={IconWhatsApp} label="Gerador de Zap" />
-                            <NavButton route="disparos" icon={IconWhatsApp} label="Disparos WhatsApp" />
+                            <NavButton route="resumo" icon={IconReceipt} label="Resumo de pedido" />
+                            <NavButton route="fila" icon={IconReceipt} label="Fila de pedidos" />
+                            <NavButton route="historico" icon={IconFileText} label="Histórico de vendas" />
+                            <NavButton route="importarVendas" icon={IconCloudUpload} label="Importar vendas" />
+                            <NavButton route="orcamentos" icon={IconWhatsApp} label="Criar ofertas" />
+                            <NavButton route="disparos" icon={IconWhatsApp} label="Campanhas WhatsApp" />
                             
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-8 ml-2">Sistema & Ajuda</p>
                             <button onClick={() => { setShowSettings(true); setIsSidebarOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all duration-200 text-slate-400 hover:text-white hover:bg-slate-800/50">
                                 <div className="h-5 w-5 flex items-center justify-center text-base">⚙️</div> Configurações
                             </button>
                             <NavButton route="tutorial" icon={IconBook} label="Tutorial" />
-                            <NavButton route="changelog" icon={IconHistory} label="🔄 Atualizações" />
+                            <NavButton route="changelog" icon={IconHistory} label="Atualizações" />
                             <NavButton route="support" icon={IconSupport} label="Suporte Técnico" />
                             <NavButton route="credits" icon={IconCode} label="Sobre o Desenvolvedor" />
-                            {user.role === 'admin' && <NavButton route="debug" icon={IconSettings} label="🐞 Debug" />}
+                            {user.role === 'admin' && <NavButton route="debug" icon={IconSettings} label="Diagnóstico" />}
                         </div>
 
                         <div className="p-4 border-t border-slate-800 bg-slate-900/50">
@@ -11396,9 +11402,14 @@
                         </div>
                     </div>
 
-                    <div className="friganso-mobile-content flex-1 overflow-y-auto relative z-0 p-3 pt-[68px] sm:p-4 md:p-8 md:pt-8 bg-slate-100">
-                        <div className="absolute inset-0 pointer-events-none opacity-[0.02]" style={{ backgroundImage: `url('${BG_IMAGE}')`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-                        <div className="relative z-10 max-w-7xl mx-auto">
+                    <div data-route={activeRoute} className="prumo-main friganso-mobile-content flex-1 overflow-y-auto relative z-0 p-3 pt-[68px] sm:p-4 md:p-8 md:pt-8 bg-slate-100">
+                        <div className="prumo-topline"><span className="prumo-breadcrumb">Workspace <span className="prumo-separator">›</span> <strong>{({dashboard:'Visão geral',clients:'Clientes',pdf:'Tabela de preços',pedido:'Novo pedido',resumo:'Resumo de pedido',radar:'Radar de clientes',historico:'Histórico de vendas',orcamentos:'Ofertas',disparos:'Campanhas',lembretes:'Lembretes'})[activeRoute] || 'Gestão comercial'}</strong></span><div className="prumo-top-actions"><button className="prumo-command" onClick={() => setIsSidebarOpen(true)}><span>⌕</span> Buscar ou navegar <kbd>⌘ K</kbd></button><button onClick={() => setActiveRoute('profile')} className="prumo-profile"><span className="prumo-avatar">{user.name.charAt(0)}</span><span className="prumo-profile-name">{user.name}</span><span className="prumo-profile-role">Conta</span></button></div></div>
+                        {isSidebarOpen && <button aria-label="Fechar menu" className="prumo-scrim md:hidden" onClick={() => setIsSidebarOpen(false)} />}
+                        <nav className="prumo-bottomnav" aria-label="Navegação principal">
+                            {[['dashboard',IconDashboard,'Início'],['clients',IconUsers,'Clientes'],['pedido',IconReceipt,'Pedido'],['pdf',IconTag,'Preços']].map(([r,I,l]) => <button key={r} aria-current={activeRoute===r?'page':undefined} onClick={()=>{setActiveRoute(r);setIsSidebarOpen(false);}}><I/><span>{l}</span></button>)}
+                            <button aria-label="Mais opções" onClick={()=>setIsSidebarOpen(!isSidebarOpen)}><IconMenu/><span>Mais</span></button>
+                        </nav>
+                        <div className="prumo-page relative z-10 max-w-7xl mx-auto">
                             {renderContent()}
                         </div>
 

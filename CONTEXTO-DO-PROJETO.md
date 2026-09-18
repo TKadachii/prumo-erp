@@ -6,7 +6,7 @@
 
 ## O que é
 Prumo ERP — sistema de vendas (distribuidora de carnes). Um mesmo código React roda em 4 lugares:
-- **Site** (GitHub Pages): https://tkadachii.github.io/friganso-erp/ — repo: https://github.com/TKadachii/friganso-erp.git
+- **Site** (GitHub Pages): https://tkadachii.github.io/prumo-erp/ — repo: https://github.com/TKadachii/prumo-erp.git
 - **PWA** (site instalável, offline via service worker)
 - **Programa de PC** (Electron) — pasta local `friganso-desktop`
 - **App Android** (Capacitor) — pasta local `friganso-mobile` → gera `PrumoERP.apk`
@@ -56,7 +56,7 @@ cd friganso-app
 #    senão o app do celular nunca fica sabendo que tem conteúdo novo pra baixar sozinho)
 # ⚠️ Se mexeu no content.js (automação SPAmov), TAMBÉM copiar pra RAIZ do site:
 #    cp friganso-desktop/content.js friganso-app/content.js
-#    (o WebUpdater do app baixa de https://tkadachii.github.io/friganso-erp/content.js —
+#    (o WebUpdater do app baixa de https://tkadachii.github.io/prumo-erp/content.js —
 #    NÃO de /extensao/content.js. Esquecer isso faz o app nunca receber correções de
 #    automação via auto-atualização, só o index.html. Descoberto em 2026-07-03.)
 git add index.html sw.js web-version.json content.js
@@ -68,7 +68,7 @@ git push origin main
 O `content.js` mora em **3 lugares** no repo, e o zip é o único que NÃO se atualiza sozinho:
 1. `content.js` (raiz) — o que o `WebUpdater` do app baixa;
 2. `extensao/content.js` — a pasta-fonte da extensão;
-3. **`friganso-extensao.zip`** — ⚠️ **artefato gerado À MÃO**, é o que o botão de download do site entrega.
+3. **`prumo-extensao.zip`** — ⚠️ **artefato gerado À MÃO**, é o que o botão de download do site entrega.
 
 O zip ficou **parado em 25/06 até 03/08**: o `content.js` de dentro dele era o de 56 KB enquanto o de
 verdade já estava em 111 KB. Quem baixava a extensão pelo site recebia uma versão de mais de um mês
@@ -81,7 +81,7 @@ por isso a extensão "parou de pegar os preços do produto direto do site". O `f
 powershell -ExecutionPolicy Bypass -File extensao\gerar-extensao.ps1
 ```
 Ele grava a versão no `manifest.json`, gera o `friganso.user.js`, copia o `content.js` pra raiz, monta
-o `friganso-extensao.zip` e **falha** se o `content.js` de dentro do zip não bater com o da raiz.
+o `prumo-extensao.zip` e **falha** se o `content.js` de dentro do zip não bater com o da raiz.
 ⚠️ Rode DEPOIS de bumpar o `web-version.json` e de escrever a entrada nova no `CHANGELOG` — o script
 lê os dois pra montar a versão da extensão.
 
@@ -146,9 +146,9 @@ antes de tentar mexer nisso de novo.
 
 ## 📲 Auto-atualização do APK (desde a v2 — 2026-07-01)
 O app checa atualização sozinho ao abrir (estilo Discord): chama `SpamovAuto.versao()` (versionCode
-nativo) e compara com `https://tkadachii.github.io/friganso-erp/apk-version.json`. Se o remoto for
+nativo) e compara com `https://tkadachii.github.io/prumo-erp/apk-version.json`. Se o remoto for
 maior → modal "🚀 Atualização disponível" → `SpamovAuto.abrirLink(url)` abre o navegador que baixa
-`https://tkadachii.github.io/friganso-erp/PrumoERP.apk` → instala por cima (⚠️ mesma assinatura
+`https://tkadachii.github.io/prumo-erp/PrumoERP.apk` → instala por cima (⚠️ mesma assinatura
 debug DESTE PC; não buildar noutro PC senão não instala por cima).
 
 **Publicar APK novo (nunca mais mandar pro WhatsApp):**

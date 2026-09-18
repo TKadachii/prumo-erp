@@ -1,5 +1,5 @@
-const CACHE = 'friganso-v198';
-const BASE = '/friganso-erp';
+const CACHE = 'prumo-v199';
+const BASE = '/prumo-erp';
 const ASSETS = [
     BASE + '/',
     BASE + '/index.html',

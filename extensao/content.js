@@ -2,7 +2,7 @@
 (function () {
     "use strict";
 
-    const APP_URL = "https://TKadachii.github.io/friganso-erp/";
+    const APP_URL = "https://TKadachii.github.io/prumo-erp/";
     const host = location.hostname || "";
 
     // 🤖 WhatsApp Web: dispara a campanha sozinho (vem antes dos outros hosts porque

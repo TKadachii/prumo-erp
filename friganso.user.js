@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
-// @version      2026.9.18.1352
+// @version      2026.9.18.1403
 // @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
 // @author       Prumo
 // @match        https://tkadachii.github.io/*
@@ -12,8 +12,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
-// @downloadURL  https://tkadachii.github.io/friganso-erp/friganso.user.js
-// @updateURL    https://tkadachii.github.io/friganso-erp/friganso.user.js
+// @downloadURL  https://tkadachii.github.io/prumo-erp/friganso.user.js
+// @updateURL    https://tkadachii.github.io/prumo-erp/friganso.user.js
 // ==/UserScript==
 
 // Prumo ERP - Extensão (Resumo + Lançar pedido)
@@ -41,7 +41,7 @@
     };
 
 
-    const APP_URL = "https://TKadachii.github.io/friganso-erp/";
+    const APP_URL = "https://TKadachii.github.io/prumo-erp/";
     const host = location.hostname || "";
 
     // 🤖 WhatsApp Web: dispara a campanha sozinho (vem antes dos outros hosts porque

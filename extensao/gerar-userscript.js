@@ -24,8 +24,8 @@ const header = `// ==UserScript==
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
-// @downloadURL  https://tkadachii.github.io/friganso-erp/friganso.user.js
-// @updateURL    https://tkadachii.github.io/friganso-erp/friganso.user.js
+// @downloadURL  https://tkadachii.github.io/prumo-erp/friganso.user.js
+// @updateURL    https://tkadachii.github.io/prumo-erp/friganso.user.js
 // ==/UserScript==
 `;
 
