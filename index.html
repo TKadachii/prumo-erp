@@ -150,7 +150,7 @@
         .tema-esmeralda .bg-rose-50, .tema-esmeralda .bg-rose-100, .tema-esmeralda .bg-rose-50\/30 { background-color: rgba(12,120,78,.32) !important; }
         .tema-esmeralda .border, .tema-esmeralda .border-slate-100, .tema-esmeralda .border-slate-200 { border-color: rgba(52,211,153,.25) !important; }
     </style>
-    <link rel="stylesheet" href="./visual.css?v=202">
+    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=203">
 </head>
 <body class="prumo-production">
     <!-- 🎨 Tema do sistema (Claro/Escuro/Sakura/Oceano/Esmeralda). Escolha salva em friganso_tema.
@@ -367,7 +367,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 202;
+        const APP_BUILD_VERSION = 203;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -7418,6 +7418,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.26.5', data: '18/09/2026', areas: ['app', 'site'], itens: [
+                '📱 Novo APK Prumo: nome, ícone, tela inicial e visual interno sincronizados com o site atual',
+                '🔗 Aplicativo Android migrado para o endereço prumo-erp e preparado como instalação independente da versão anterior',
+                '⚡ Conteúdo inicial atualizado para abrir diretamente no tema cósmico com Modo Lite disponível',
+            ]},
             { versao: '2.26.4', data: '18/09/2026', areas: ['site', 'app'], itens: [
                 '📱 Download do APK agora fica sempre visível na entrada, no perfil e nas configurações',
                 '⬇️ O botão baixa diretamente o instalador oficial do Prumo ERP para Android',
