@@ -57,6 +57,11 @@ html.prumo-lite .prumo-page button,html.prumo-lite .prumo-page .bg-rose-700,html
 html.prumo-lite .prumo-kpi:hover,html.prumo-lite .prumo-page button:hover:not(:disabled),html.prumo-lite .prumo-sidebar .overflow-y-auto>button:hover{transform:none!important}
 
 /* Prévia de WhatsApp: conversa legível e alinhada à identidade cósmica. */
+.prumo-message-stage{position:relative;background-color:#08090d!important;background-image:radial-gradient(circle at 12% 18%,#7c6cff13,transparent 35%),radial-gradient(circle at 91% 88%,#22d3ee0e,transparent 32%),linear-gradient(#ffffff03 1px,transparent 1px),linear-gradient(90deg,#ffffff03 1px,transparent 1px)!important;background-size:auto,auto,28px 28px,28px 28px!important}
+.prumo-message-bubble{position:relative;background:linear-gradient(135deg,#241f3a,#16232d)!important;border:1px solid #8b7cff35!important;color:#f1f1f4!important;box-shadow:0 14px 38px #0005!important}
+.prumo-message-bubble,.prumo-message-bubble *{color:#f1f1f4!important}.prumo-message-bubble pre{margin:0;color:#f1f1f4!important;line-height:1.58;word-break:break-word}.prumo-message-bubble::-webkit-scrollbar{width:7px}.prumo-message-bubble::-webkit-scrollbar-thumb{background:#8b7cff55;border-radius:999px}
+.prumo-message-stage .bg-white\/95{background:#14141b!important;color:#c9c9d1!important;border-color:#ffffff14!important}.prumo-message-stage .bg-white\/95 *{color:#c9c9d1!important}
+html.prumo-lite .prumo-message-stage{background:#08090d!important}.prumo-lite .prumo-message-bubble{background:#15151d!important;box-shadow:none!important}
 .prumo-zap-preview{overflow:hidden;border:1px solid #ffffff14;border-radius:16px;background:#09090e;box-shadow:0 18px 55px #0004}
 .prumo-zap-preview-head{min-height:54px;display:flex;align-items:center;gap:10px;padding:9px 12px;background:linear-gradient(110deg,#151321,#0b1117);border-bottom:1px solid #ffffff0f}
 .prumo-zap-preview-avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:none;background:linear-gradient(135deg,#a78bfa,#6d5dfb 52%,#22d3ee);color:#07070a;font-size:13px;font-weight:800;box-shadow:0 0 22px #7c6cff38}

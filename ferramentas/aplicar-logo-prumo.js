@@ -13,22 +13,28 @@ if (start < 0 || end < 0) throw new Error('Bloco antigo da logo não encontrado.
 
 const brandBlock = `        // Símbolo oficial da Prumo embutido para funcionar offline e nos materiais gerados.\n` +
 `        const PRUMO_LOGO_DATA_URI = 'data:image/svg+xml;base64,${iconData}';\n\n` +
-`        const PrumoLogo = ({ className }) => (\n` +
+`        const PrumoLogo = ({ className }) => {\n` +
+`            const logoId = React.useId().replace(/:/g, '');\n` +
+`            const bgId = \`prumoBg-\${logoId}\`;\n` +
+`            const brandId = \`prumoBrand-\${logoId}\`;\n` +
+`            const glowId = \`prumoGlow-\${logoId}\`;\n` +
+`            return (\n` +
 `            <svg className={className} aria-label="Prumo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">\n` +
 `                <defs>\n` +
-`                    <linearGradient id="prumoBg" x1="72" y1="34" x2="440" y2="478" gradientUnits="userSpaceOnUse"><stop stopColor="#111526"/><stop offset="1" stopColor="#070910"/></linearGradient>\n` +
-`                    <linearGradient id="prumoBrand" x1="132" y1="110" x2="386" y2="390" gradientUnits="userSpaceOnUse"><stop stopColor="#C4B5FD"/><stop offset=".48" stopColor="#8B5CF6"/><stop offset="1" stopColor="#22D3EE"/></linearGradient>\n` +
-`                    <radialGradient id="prumoGlow" cx="0" cy="0" r="1" gradientTransform="translate(368 126) rotate(131) scale(260)"><stop stopColor="#7C3AED" stopOpacity=".42"/><stop offset="1" stopColor="#7C3AED" stopOpacity="0"/></radialGradient>\n` +
+`                    <linearGradient id={bgId} x1="72" y1="34" x2="440" y2="478" gradientUnits="userSpaceOnUse"><stop stopColor="#111526"/><stop offset="1" stopColor="#070910"/></linearGradient>\n` +
+`                    <linearGradient id={brandId} x1="132" y1="110" x2="386" y2="390" gradientUnits="userSpaceOnUse"><stop stopColor="#C4B5FD"/><stop offset=".48" stopColor="#8B5CF6"/><stop offset="1" stopColor="#22D3EE"/></linearGradient>\n` +
+`                    <radialGradient id={glowId} cx="0" cy="0" r="1" gradientTransform="translate(368 126) rotate(131) scale(260)"><stop stopColor="#7C3AED" stopOpacity=".42"/><stop offset="1" stopColor="#7C3AED" stopOpacity="0"/></radialGradient>\n` +
 `                </defs>\n` +
-`                <rect width="512" height="512" rx="122" fill="url(#prumoBg)"/>\n` +
-`                <rect width="512" height="512" rx="122" fill="url(#prumoGlow)"/>\n` +
+`                <rect width="512" height="512" rx="122" fill={\`url(#\${bgId})\`}/>\n` +
+`                <rect width="512" height="512" rx="122" fill={\`url(#\${glowId})\`}/>\n` +
 `                <rect x="11" y="11" width="490" height="490" rx="111" fill="none" stroke="#C4B5FD" strokeOpacity=".16" strokeWidth="2"/>\n` +
-`                <circle cx="256" cy="256" r="166" fill="none" stroke="url(#prumoBrand)" strokeOpacity=".16" strokeWidth="2" strokeDasharray="8 17"/>\n` +
-`                <path d="M158 382V139h120c61 0 101 36 101 91s-40 91-101 91h-55" fill="none" stroke="url(#prumoBrand)" strokeWidth="58" strokeLinecap="round" strokeLinejoin="round"/>\n` +
+`                <circle cx="256" cy="256" r="166" fill="none" stroke={\`url(#\${brandId})\`} strokeOpacity=".16" strokeWidth="2" strokeDasharray="8 17"/>\n` +
+`                <path d="M158 382V139h120c61 0 101 36 101 91s-40 91-101 91h-55" fill="none" stroke={\`url(#\${brandId})\`} strokeWidth="58" strokeLinecap="round" strokeLinejoin="round"/>\n` +
 `                <path d="M246 278 340 184M303 184h37v37" fill="none" stroke="#F8FAFC" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/>\n` +
 `                <circle cx="158" cy="402" r="9" fill="#22D3EE"/>\n` +
 `            </svg>\n` +
-`        );\n\n`;
+`            );\n` +
+`        };\n\n`;
 
 html = html.slice(0, start) + brandBlock + html.slice(end);
 html = html
