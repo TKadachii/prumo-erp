@@ -43,3 +43,41 @@ html,body,#root{background:var(--cosmic-bg)!important;color:var(--cosmic-text)!i
 /* O sistema real não exibe a faixa de demonstração usada no laboratório. */
 .prumo-production .prumo-shell{padding-top:0}.prumo-production .prumo-shell:before{inset:0 0 0 246px}.prumo-production .prumo-topline{top:0}.prumo-production .prumo-scrim{inset:0 0 0}
 @media(max-width:767px){.prumo-production .prumo-shell{padding-top:0}.prumo-production .prumo-mobile-topbar{top:0!important}.prumo-production .prumo-sidebar{top:60px!important}.prumo-production .prumo-scrim{top:60px!important}.prumo-production .prumo-page{padding-top:82px!important}.prumo-production .prumo-shell:before{inset:60px 0 70px}}
+
+/* Modo Lite: preserva todas as funções e reduz o custo gráfico no WebView do Android. */
+html.prumo-lite *,html.prumo-lite *:before,html.prumo-lite *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+html.prumo-lite .prumo-shell,html.prumo-lite .prumo-main,html.prumo-lite .prumo-login{background:#07080d!important}
+html.prumo-lite .prumo-shell:before,html.prumo-lite .prumo-welcome:before,html.prumo-lite .prumo-welcome:after,html.prumo-lite .prumo-kpi:after,html.prumo-lite .sakura-petals{display:none!important}
+html.prumo-lite .prumo-sidebar,html.prumo-lite .prumo-topline,html.prumo-lite .prumo-mobile-topbar,html.prumo-lite .prumo-bottomnav,html.prumo-lite .prumo-login .glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+html.prumo-lite .prumo-sidebar{background:#09090d!important;box-shadow:none!important}
+html.prumo-lite .prumo-topline,html.prumo-lite .prumo-mobile-topbar,html.prumo-lite .prumo-bottomnav{background:#0a0a0f!important;box-shadow:none!important}
+html.prumo-lite .prumo-page header,html.prumo-lite .prumo-welcome,html.prumo-lite .prumo-kpi,html.prumo-lite .prumo-chart,html.prumo-lite .prumo-page .bg-white,html.prumo-lite .prumo-page .dark\:bg-slate-900{background:#0e0e14!important;box-shadow:none!important}
+html.prumo-lite .prumo-page canvas,html.prumo-lite .prumo-sidebar svg,html.prumo-lite .prumo-mobile-topbar svg,html.prumo-lite .prumo-login svg[aria-label=Prumo]{filter:none!important}
+html.prumo-lite .prumo-page button,html.prumo-lite .prumo-page .bg-rose-700,html.prumo-lite .prumo-page .bg-rose-800,html.prumo-lite .prumo-page .bg-rose-600{box-shadow:none!important}
+html.prumo-lite .prumo-kpi:hover,html.prumo-lite .prumo-page button:hover:not(:disabled),html.prumo-lite .prumo-sidebar .overflow-y-auto>button:hover{transform:none!important}
+
+/* Prévia de WhatsApp: conversa legível e alinhada à identidade cósmica. */
+.prumo-zap-preview{overflow:hidden;border:1px solid #ffffff14;border-radius:16px;background:#09090e;box-shadow:0 18px 55px #0004}
+.prumo-zap-preview-head{min-height:54px;display:flex;align-items:center;gap:10px;padding:9px 12px;background:linear-gradient(110deg,#151321,#0b1117);border-bottom:1px solid #ffffff0f}
+.prumo-zap-preview-avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:none;background:linear-gradient(135deg,#a78bfa,#6d5dfb 52%,#22d3ee);color:#07070a;font-size:13px;font-weight:800;box-shadow:0 0 22px #7c6cff38}
+.prumo-zap-preview-head>span:nth-child(2){display:flex;min-width:0;flex-direction:column;line-height:1.25}.prumo-zap-preview-head strong{color:#f4f4f6;font-size:12px}.prumo-zap-preview-head small{color:#73737e;font-size:9px;margin-top:2px}
+.prumo-zap-preview-status{margin-left:auto;border:1px solid #22d3ee35;background:#22d3ee0d;color:#67e8f9;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:700;letter-spacing:.04em}
+.prumo-zap-preview-chat{position:relative;min-height:130px;max-height:240px;overflow-y:auto;padding:16px;background-color:#08090d;background-image:radial-gradient(circle at 12% 18%,#7c6cff13,transparent 35%),radial-gradient(circle at 91% 88%,#22d3ee0e,transparent 32%),linear-gradient(#ffffff03 1px,transparent 1px),linear-gradient(90deg,#ffffff03 1px,transparent 1px);background-size:auto,auto,28px 28px,28px 28px}
+.prumo-zap-preview-bubble{position:relative;width:min(92%,640px);margin-left:auto;padding:13px 14px 24px;border:1px solid #8b7cff2b;border-radius:15px 15px 4px 15px;background:linear-gradient(135deg,#241f3a,#16232d);box-shadow:0 12px 35px #0005;color:#eeeef3}
+.prumo-zap-preview-bubble:after{content:"";position:absolute;right:-7px;bottom:-1px;border-left:9px solid #17232d;border-top:9px solid transparent}
+.prumo-zap-preview-bubble pre{margin:0;color:#eeeef3!important;line-height:1.55;overflow:visible;word-break:break-word}.prumo-zap-preview-time{position:absolute;right:10px;bottom:7px;color:#79d8e7;font-size:9px;font-weight:600}
+html.prumo-lite .prumo-zap-preview,html.prumo-lite .prumo-zap-preview-bubble{box-shadow:none!important}.prumo-lite .prumo-zap-preview-chat{background:#08090d!important}
+
+/* Contraste consistente: estados hover antigos não podem clarear cartões no tema cósmico. */
+.prumo-sidebar .overflow-y-auto>button{color:#b3b3bf!important}.prumo-sidebar .overflow-y-auto>button svg{color:#a6a6b3!important}.prumo-sidebar .overflow-y-auto>p{color:#777783!important}
+.prumo-page [class*="hover:bg-slate"]:hover,.prumo-page [class*="hover:bg-gray"]:hover,.prumo-page [class*="hover:bg-white"]:hover{background:#191921!important;color:#f5f5f7!important;border-color:#ffffff1c!important}
+.prumo-page [class*="hover:bg-slate"]:hover .text-slate-900,.prumo-page [class*="hover:bg-slate"]:hover .text-slate-800,.prumo-page [class*="hover:bg-slate"]:hover .text-slate-700,.prumo-page [class*="hover:bg-slate"]:hover .text-slate-600,.prumo-page [class*="hover:bg-slate"]:hover .text-slate-500,.prumo-page [class*="hover:bg-gray"]:hover .text-slate-900,.prumo-page [class*="hover:bg-gray"]:hover .text-slate-800,.prumo-page [class*="hover:bg-gray"]:hover .text-slate-700,.prumo-page [class*="hover:bg-gray"]:hover .text-slate-600{color:#f5f5f7!important}
+.prumo-page [class*="hover:bg-slate"]:hover .text-slate-400,.prumo-page [class*="hover:bg-gray"]:hover .text-slate-400{color:#b8b8c3!important}
+.prumo-page [class*="bg-slate-200/"],.prumo-page [class*="bg-gray-200/"]{background:#ffffff0d!important;color:#a9a9b5!important;border-color:#ffffff12!important}
+.prumo-page label[class*="cursor-pointer"]:hover,.prumo-page button[class*="text-left"]:hover{outline:1px solid #8b7cff28;outline-offset:-1px}
+.prumo-page input[type="checkbox"]{accent-color:#7c6cff}.prumo-page input[type="checkbox"]:focus-visible{outline:2px solid #a99fff;outline-offset:2px}
+
+/* Acabamento da entrada com a nova identidade. */
+.prumo-login svg[aria-label=Prumo]{width:76px!important;height:76px!important}.prumo-login .bg-rose-700{background:var(--cosmic-glow)!important;box-shadow:0 10px 35px #6d5dfb35!important}.prumo-login .text-rose-700{color:#a99fff!important}.prumo-login input:focus{border-color:#8b7cff!important;box-shadow:0 0 0 3px #7c6cff22!important}
+.prumo-product-option{background:#0b0b10!important;color:#ededf1!important}.prumo-product-option:hover{background:linear-gradient(110deg,#171323,#101920)!important;border-color:#8b7cff35!important}.prumo-product-option.is-selected{background:linear-gradient(110deg,#211a37,#12232b)!important;border-color:#8b7cff88!important;box-shadow:inset 3px 0 #8b7cff!important}.prumo-product-option p{color:#f2f2f5!important}.prumo-product-option span{color:#aaaab5!important}.prumo-product-option.is-selected p{color:#fff!important}
+.prumo-login input{background:#08080cbf!important;border-color:#ffffff18!important;color:#f4f4f5!important}.prumo-login input::placeholder{color:#7f7f8a!important}.prumo-login button.bg-white{background:#15151c!important;border:1px solid #ffffff16!important;color:#e7e7eb!important}.prumo-login button.bg-white:hover{background:#1d1d27!important;border-color:#8b7cff55!important}.prumo-login button:not(.bg-white):not(.bg-rose-700){color:#a9a9b5!important}.prumo-login button:not(.bg-white):not(.bg-rose-700):hover{color:#c4b5fd!important}

@@ -7,7 +7,7 @@
 
     <!-- PWA -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#e11d48">
+    <meta name="theme-color" content="#08090d">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -155,7 +155,7 @@
         .tema-esmeralda .bg-rose-50, .tema-esmeralda .bg-rose-100, .tema-esmeralda .bg-rose-50\/30 { background-color: rgba(12,120,78,.32) !important; }
         .tema-esmeralda .border, .tema-esmeralda .border-slate-100, .tema-esmeralda .border-slate-200 { border-color: rgba(52,211,153,.25) !important; }
     </style>
-    <link rel="stylesheet" href="./visual.css">
+    <link rel="stylesheet" href="./visual.css?v=200">
 </head>
 <body class="prumo-production">
     <!-- 🎨 Tema do sistema (Claro/Escuro/Sakura/Oceano/Esmeralda). Escolha salva em friganso_tema.
@@ -188,12 +188,37 @@
                 else if (efetivo === 'oceano') el.classList.add('dark', 'tema-oceano');
                 else if (efetivo === 'esmeralda') el.classList.add('dark', 'tema-esmeralda');
                 window.__temaEscolha = t; window.__temaEfetivo = efetivo;
-                petalas(efetivo === 'sakura');
+                petalas(efetivo === 'sakura' && !document.documentElement.classList.contains('prumo-lite'));
             };
             // logo vira sakura só no tema sakura
             window.ehTemaSakura = function () { return document.documentElement.classList.contains('tema-sakura'); };
+            window.detectarModoLite = function () {
+                try {
+                    var salvo = localStorage.getItem('prumo_modo_lite');
+                    if (salvo === '1') return true;
+                    if (salvo === '0') return false;
+                } catch (e) {}
+                var android = /Android/i.test(navigator.userAgent || '');
+                var poucaMemoria = Number(navigator.deviceMemory || 8) <= 4;
+                var poucosNucleos = Number(navigator.hardwareConcurrency || 8) <= 4;
+                return android && (poucaMemoria || poucosNucleos);
+            };
+            window.aplicarModoLite = function (ativo, salvar) {
+                document.documentElement.classList.toggle('prumo-lite', !!ativo);
+                if (ativo) {
+                    var petalasAtuais = document.querySelector('.sakura-petals');
+                    if (petalasAtuais) petalasAtuais.remove();
+                } else if (window.__temaEfetivo === 'sakura') {
+                    petalas(true);
+                }
+                if (salvar !== false) { try { localStorage.setItem('prumo_modo_lite', ativo ? '1' : '0'); } catch (e) {} }
+                window.__prumoModoLite = !!ativo;
+            };
+            try { window.aplicarModoLite(window.detectarModoLite(), false); } catch (e) {}
             try { window.aplicarTema(); } catch (e) {}
-            document.addEventListener('DOMContentLoaded', function () { try { window.aplicarTema(); } catch (e) {} });
+            document.addEventListener('DOMContentLoaded', function () {
+                try { window.aplicarModoLite(window.detectarModoLite(), false); window.aplicarTema(); } catch (e) {}
+            });
         })();
     </script>
     <div id="root"></div>
@@ -253,38 +278,25 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         };
 
-        // Logo oficial (gansos + "PRUMO") embutida como base64 — evita qualquer problema de
-        // CORS ao desenhar no canvas, e funciona offline (PWA) sem depender de rede.
-        const PRUMO_LOGO_DATA_URI = 'data:image/png;base64,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';
+        // Símbolo oficial da Prumo embutido para funcionar offline e nos materiais gerados.
+        const PRUMO_LOGO_DATA_URI = 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNTEyIDUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IlBydW1vIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSI3MiIgeTE9IjM0IiB4Mj0iNDQwIiB5Mj0iNDc4IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiMxMTE1MjYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDcwOTEwIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJicmFuZCIgeDE9IjEzMiIgeTE9IjExMCIgeDI9IjM4NiIgeTI9IjM5MCIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPgogICAgICA8c3RvcCBzdG9wLWNvbG9yPSIjQzRCNUZEIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iLjQ4IiBzdG9wLWNvbG9yPSIjOEI1Q0Y2Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzIyRDNFRSIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0iZ2xvdyIgY3g9IjAiIGN5PSIwIiByPSIxIiBncmFkaWVudFRyYW5zZm9ybT0idHJhbnNsYXRlKDM2OCAxMjYpIHJvdGF0ZSgxMzEpIHNjYWxlKDI2MCkiPgogICAgICA8c3RvcCBzdG9wLWNvbG9yPSIjN0MzQUVEIiBzdG9wLW9wYWNpdHk9Ii40MiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM3QzNBRUQiIHN0b3Atb3BhY2l0eT0iMCIvPgogICAgPC9yYWRpYWxHcmFkaWVudD4KICAgIDxmaWx0ZXIgaWQ9InNvZnQiIHg9Ii0zMCUiIHk9Ii0zMCUiIHdpZHRoPSIxNjAlIiBoZWlnaHQ9IjE2MCUiPgogICAgICA8ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSIxMSIvPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTIyIiBmaWxsPSJ1cmwoI2JnKSIvPgogIDxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTIyIiBmaWxsPSJ1cmwoI2dsb3cpIi8+CiAgPHJlY3QgeD0iMTEiIHk9IjExIiB3aWR0aD0iNDkwIiBoZWlnaHQ9IjQ5MCIgcng9IjExMSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjQzRCNUZEIiBzdHJva2Utb3BhY2l0eT0iLjE2IiBzdHJva2Utd2lkdGg9IjIiLz4KICA8Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjE2NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2JyYW5kKSIgc3Ryb2tlLW9wYWNpdHk9Ii4xNiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtZGFzaGFycmF5PSI4IDE3Ii8+CiAgPHBhdGggZD0iTTE1OCAzODJWMTM5aDEyMGM2MSAwIDEwMSAzNiAxMDEgOTFzLTQwIDkxLTEwMSA5MWgtNTUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzdDM0FFRCIgc3Ryb2tlLW9wYWNpdHk9Ii4yMiIgc3Ryb2tlLXdpZHRoPSI3MiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBmaWx0ZXI9InVybCgjc29mdCkiLz4KICA8cGF0aCBkPSJNMTU4IDM4MlYxMzloMTIwYzYxIDAgMTAxIDM2IDEwMSA5MXMtNDAgOTEtMTAxIDkxaC01NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2JyYW5kKSIgc3Ryb2tlLXdpZHRoPSI1OCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHBhdGggZD0iTTI0NiAyNzggMzQwIDE4NE0zMDMgMTg0aDM3djM3IiBmaWxsPSJub25lIiBzdHJva2U9IiNGOEZBRkMiIHN0cm9rZS13aWR0aD0iMjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxjaXJjbGUgY3g9IjE1OCIgY3k9IjQwMiIgcj0iOSIgZmlsbD0iIzIyRDNFRSIvPgo8L3N2Zz4K';
 
-        const PrumoLogo = ({ className }) => {
-            // 🌸 Nos dias do tema sakura, a logo vira uma flor de cerejeira minimalista.
-            if (typeof window !== 'undefined' && window.ehTemaSakura && window.ehTemaSakura()) {
-                return (
-                    <svg className={className} viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                        <g transform="translate(100,100)">
-                            <g fill="#ff5d7e">
-                                {[0, 72, 144, 216, 288].map(a => (
-                                    <path key={a} transform={`rotate(${a})`} d="M0,-16 C -22,-30 -27,-56 -13,-72 C -6,-79 -4,-67 0,-72 C 4,-67 6,-79 13,-72 C 27,-56 22,-30 0,-16 Z" />
-                                ))}
-                            </g>
-                            <circle r="10" fill="#ffd6df" />
-                            {[0, 72, 144, 216, 288].map(a => (
-                                <circle key={'s' + a} transform={`rotate(${a}) translate(0,-15)`} r="2.4" fill="#c9305a" />
-                            ))}
-                        </g>
-                    </svg>
-                );
-            }
-            return (
-                <svg className={className} viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                    <g transform="translate(-10 3) scale(1.9)" fill="#FB4B3A">
-                        <path d="M22,82 C19,68 27,57 41,53 C45,41 53,31 65,25 C75,20 85,18 91,20 C95,21 95,25 90,26 C81,28 73,32 67,38 C61,44 57,51 55,59 C66,57 78,53 89,46 C82,58 71,66 58,70 C47,73 32,75 26,83 C24,85 22,85 22,82 Z" />
-                        <path d="M89,19 L97,17 L91,24 Z" />
-                    </g>
-                </svg>
-            );
-        };
+        const PrumoLogo = ({ className }) => (
+            <svg className={className} aria-label="Prumo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="prumoBg" x1="72" y1="34" x2="440" y2="478" gradientUnits="userSpaceOnUse"><stop stopColor="#111526"/><stop offset="1" stopColor="#070910"/></linearGradient>
+                    <linearGradient id="prumoBrand" x1="132" y1="110" x2="386" y2="390" gradientUnits="userSpaceOnUse"><stop stopColor="#C4B5FD"/><stop offset=".48" stopColor="#8B5CF6"/><stop offset="1" stopColor="#22D3EE"/></linearGradient>
+                    <radialGradient id="prumoGlow" cx="0" cy="0" r="1" gradientTransform="translate(368 126) rotate(131) scale(260)"><stop stopColor="#7C3AED" stopOpacity=".42"/><stop offset="1" stopColor="#7C3AED" stopOpacity="0"/></radialGradient>
+                </defs>
+                <rect width="512" height="512" rx="122" fill="url(#prumoBg)"/>
+                <rect width="512" height="512" rx="122" fill="url(#prumoGlow)"/>
+                <rect x="11" y="11" width="490" height="490" rx="111" fill="none" stroke="#C4B5FD" strokeOpacity=".16" strokeWidth="2"/>
+                <circle cx="256" cy="256" r="166" fill="none" stroke="url(#prumoBrand)" strokeOpacity=".16" strokeWidth="2" strokeDasharray="8 17"/>
+                <path d="M158 382V139h120c61 0 101 36 101 91s-40 91-101 91h-55" fill="none" stroke="url(#prumoBrand)" strokeWidth="58" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M246 278 340 184M303 184h37v37" fill="none" stroke="#F8FAFC" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="158" cy="402" r="9" fill="#22D3EE"/>
+            </svg>
+        );
 
         const BG_IMAGE = "https://images.unsplash.com/photo-1607623814075-e51df1bd682f?q=80&w=2000&auto=format&fit=crop";
 
@@ -352,7 +364,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 199;
+        const APP_BUILD_VERSION = 200;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -1090,15 +1102,15 @@
             };
 
             return (
-                <div className="min-h-screen flex items-center justify-center bg-slate-900 relative overflow-hidden p-4">
+                <div className="prumo-login min-h-screen flex items-center justify-center bg-slate-900 relative overflow-hidden p-4">
                     <img src={BG_IMAGE} className="absolute inset-0 w-full h-full object-cover opacity-20" />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-rose-950/80 to-transparent"></div>
                     
                     <div className="w-full max-w-md p-8 glass rounded-3xl shadow-2xl relative z-10 border border-white/20 animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex flex-col items-center mb-6">
-                            <PrumoLogo className="h-20 w-20 rounded-2xl bg-black/80 p-2 shadow-lg border border-rose-500/50 mb-4" />
-                            <h1 className="text-3xl font-extrabold text-slate-800">Prumo<span className="text-rose-700">ERP</span></h1>
-                            <p className="text-slate-500 text-sm mt-1">{isRegistering ? 'Crie sua conta de Vendedor' : 'Gestão Inteligente de Vendas'}</p>
+                            <PrumoLogo className="h-24 w-24 mb-5" />
+                            <h1 className="text-3xl font-extrabold text-slate-800 tracking-[.08em]">PRUMO</h1>
+                            <p className="text-slate-500 text-sm mt-1">{isRegistering ? 'Crie sua conta de Vendedor' : 'GESTÃO COMERCIAL · SIMPLES E INTELIGENTE'}</p>
                         </div>
 
                         {needsPass ? (
@@ -4558,7 +4570,7 @@
                                 </div>
                                 <div className="overflow-y-auto p-2 space-y-1">
                                     {filtered.map(p => (
-                                        <label key={p.code} className={`flex items-start gap-3 p-4 rounded-xl cursor-pointer border-2 transition-all ${selectedCodes.has(p.code) ? 'border-rose-500 bg-rose-50 shadow-sm' : 'border-transparent hover:bg-slate-50'}`}>
+                                        <label key={p.code} className={`prumo-product-option flex items-start gap-3 p-4 rounded-xl cursor-pointer border-2 transition-all ${selectedCodes.has(p.code) ? 'is-selected border-rose-500 bg-rose-50 shadow-sm' : 'border-transparent hover:bg-slate-50'}`}>
                                             <input type="checkbox" checked={selectedCodes.has(p.code)} onChange={()=>toggleCode(p.code)} className="mt-1 h-5 w-5 text-rose-700 rounded flex-shrink-0"/>
                                             <div className="flex-1">
                                                 <span className="text-[10px] font-bold text-slate-500 bg-slate-200/50 px-2 py-0.5 rounded-full inline-block mb-1 border border-slate-200">Cód: {p.code}</span>
@@ -7391,6 +7403,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.26.2', data: '18/09/2026', areas: ['site', 'app', 'extensao'], itens: [
+                '🧭 Nova identidade oficial Prumo: símbolo P direcional em violeta e ciano no site, PWA, extensão, catálogos e cartões',
+                '⚡ Novo Modo Lite nas configurações: mantém todas as funções e reduz efeitos pesados para acelerar o aplicativo no celular',
+                '💬 Prévia do Gerador de WhatsApp corrigida, com texto legível e novo painel de conversa no tema cósmico',
+            ]},
             { versao: '2.26.1', data: '18/09/2026', areas: ['site', 'app', 'extensao'], itens: [
                 '🌌 Novo visual Prumo Cosmic aplicado ao sistema: preto profundo, violeta, ciano e painéis interativos',
                 '📱 Navegação móvel redesenhada e tabela de preços em cartões legíveis no celular',
@@ -7741,7 +7758,7 @@
                 'Meu Portfólio: botão pra copiar uma mensagem de apresentação pronta, pra mandar junto com o cartão quando for puxar conversa com um cliente novo',
             ]},
             { versao: '2.3.1', data: '08/07/2026', areas: ['site'], itens: [
-                'Catálogo e Meu Portfólio agora usam a logo oficial da Prumo (gansos + nome) embutida no app — carrega instantâneo e não depende mais de internet/CORS',
+                'Catálogo e Meu Portfólio agora usam a nova identidade visual da Prumo embutida no app — carrega instantâneo e não depende mais de internet/CORS',
             ]},
             { versao: '2.3.0', data: '08/07/2026', areas: ['site'], itens: [
                 'Novo "📇 Meu Portfólio" (na tela de Perfil): preenche cargo, tempo de casa, especialidades e WhatsApp, e gera um cartão de apresentação (imagem 9:16) pra mandar pro cliente se apresentar',
@@ -8058,9 +8075,9 @@
             if (paginaInfo && paginaInfo.total > 1) linhaInfo += `   ·   página ${paginaInfo.atual}/${paginaInfo.total}`;
             ctx.fillText(linhaInfo, PAD, 108);
 
-            // logo oficial da Prumo (canto direito) — já vem com o nome escrito, então não precisa de texto ao lado
+            // símbolo oficial da Prumo no canto direito
             {
-                const logoH = 66, logoW = logoH * (112 / 98);
+                const logoH = 66, logoW = logoH;
                 try {
                     const logo = await carregarImagemCanvas(PRUMO_LOGO_DATA_URI);
                     ctx.drawImage(logo, W - PAD - logoW, 18, logoW, logoH);
@@ -8136,9 +8153,9 @@
             bgGrad.addColorStop(0, '#C81E1E'); bgGrad.addColorStop(1, '#7f1d1d');
             ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
 
-            // logo oficial no topo — dentro de um selo branco pra manter contraste sobre o fundo vermelho
+            // símbolo oficial no topo, dentro de um selo para manter contraste
             {
-                const logoH = 78, logoW = logoH * (112 / 98);
+                const logoH = 78, logoW = logoH;
                 const seloW = logoW + 56, seloH = logoH + 40;
                 const seloX = W / 2 - seloW / 2, seloY = 60;
                 roundRectPath(ctx, seloX, seloY, seloW, seloH, 20);
@@ -10262,10 +10279,20 @@
                             </div>
                             {/* Pré-visualização da mensagem */}
                             {clients.length > 0 && (
-                                <div>
-                                    <p className="text-xs font-bold text-slate-400 mb-1">Prévia (1º cliente):</p>
-                                    <div className="bg-[#e1ffc7] rounded-xl p-3 border border-[#d3f4b8] max-h-48 overflow-y-auto">
-                                        <pre className="font-sans text-xs whitespace-pre-wrap text-slate-800">{personalizar(clients[0])}</pre>
+                                <div className="prumo-zap-preview">
+                                    <div className="prumo-zap-preview-head">
+                                        <span className="prumo-zap-preview-avatar">{(clients[0].name || clients[0].fantasia || 'C').charAt(0).toUpperCase()}</span>
+                                        <span>
+                                            <strong>Prévia da mensagem</strong>
+                                            <small>Como o primeiro cliente receberá</small>
+                                        </span>
+                                        <span className="prumo-zap-preview-status">WhatsApp</span>
+                                    </div>
+                                    <div className="prumo-zap-preview-chat">
+                                        <div className="prumo-zap-preview-bubble">
+                                            <pre className="font-sans text-xs whitespace-pre-wrap">{personalizar(clients[0])}</pre>
+                                            <span className="prumo-zap-preview-time">agora&nbsp; ✓✓</span>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -10970,6 +10997,7 @@
             };
             // 🎨 Tema escolhido: auto | claro | escuro | sakura | oceano | esmeralda
             const [tema, setTema] = useState(() => { try { return window.localStorage.getItem('friganso_tema') || 'auto'; } catch (e) { return 'auto'; } });
+            const [modoLite, setModoLite] = useState(() => { try { return window.detectarModoLite ? window.detectarModoLite() : false; } catch (e) { return false; } });
 
             // 🟢 WhatsApp embutido SEMPRE carregado (não recarrega ao trocar de tela) — só no programa de PC
             const appZapRef = useRef(null);
@@ -11070,6 +11098,7 @@
 
             // Aplica o tema escolhido (e salva). aplicarTema cuida das classes + pétalas.
             useEffect(() => { try { window.aplicarTema(tema); } catch (e) {} }, [tema]);
+            useEffect(() => { try { window.aplicarModoLite(modoLite, true); } catch (e) {} }, [modoLite]);
             const [clients, setClients] = useState([]);
 
             useEffect(() => {
@@ -11306,6 +11335,22 @@
                                         </div>
                                     </div>
                                     <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-400 text-center"><b>Automático</b> = claro no dia a dia e 🌸 Sakura nos dias especiais (21 e 27 de junho). 🦢</div>
+
+                                    <div className="border-t border-slate-200 pt-4">
+                                        <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xl">⚡</span>
+                                                    <p className="text-sm font-bold text-slate-700">Modo Lite</p>
+                                                </div>
+                                                <p className="text-xs text-slate-400 mt-1 leading-relaxed">Mantém todas as funções e deixa o app mais rápido, reduzindo animações, transparências, brilhos e efeitos visuais.</p>
+                                            </div>
+                                            <button type="button" role="switch" aria-checked={modoLite} onClick={() => setModoLite(v => !v)} className={`relative h-8 w-14 shrink-0 rounded-full border transition-colors ${modoLite ? 'bg-rose-700 border-rose-500' : 'bg-slate-200 border-slate-300'}`}>
+                                                <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${modoLite ? 'translate-x-5' : 'translate-x-1'}`}></span>
+                                            </button>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-2">Em celulares mais fracos, o Prumo ativa esse modo automaticamente na primeira utilização.</p>
+                                    </div>
 
                                     {/* ✋ Trava contra pedido errado por distração */}
                                     <div className="border-t border-slate-200 pt-4">

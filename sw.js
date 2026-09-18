@@ -1,9 +1,10 @@
-const CACHE = 'prumo-v199';
+const CACHE = 'prumo-v200';
 const BASE = '/prumo-erp';
 const ASSETS = [
     BASE + '/',
     BASE + '/index.html',
     BASE + '/icon.svg',
+    BASE + '/visual.css',
     BASE + '/manifest.json'
 ];
 

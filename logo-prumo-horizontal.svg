@@ -1,0 +1,24 @@
+<svg viewBox="0 0 920 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Prumo — Gestão comercial">
+  <defs>
+    <linearGradient id="bg" x1="25" y1="15" x2="225" y2="230" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111526"/>
+      <stop offset="1" stop-color="#070910"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="62" y1="44" x2="198" y2="206" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C4B5FD"/>
+      <stop offset=".48" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(12 12) scale(.421875)">
+    <rect width="512" height="512" rx="122" fill="url(#bg)"/>
+    <rect x="11" y="11" width="490" height="490" rx="111" fill="none" stroke="#C4B5FD" stroke-opacity=".18" stroke-width="3"/>
+    <circle cx="256" cy="256" r="166" fill="none" stroke="url(#brand)" stroke-opacity=".18" stroke-width="3" stroke-dasharray="8 17"/>
+    <path d="M158 382V139h120c61 0 101 36 101 91s-40 91-101 91h-55" fill="none" stroke="url(#brand)" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M246 278 340 184M303 184h37v37" fill="none" stroke="#F8FAFC" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="158" cy="402" r="9" fill="#22D3EE"/>
+  </g>
+  <text x="270" y="117" fill="#0B0D16" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="86" font-weight="850" letter-spacing="-3">PRUMO</text>
+  <rect x="273" y="143" width="56" height="5" rx="2.5" fill="url(#brand)"/>
+  <text x="347" y="154" fill="#64748B" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="24" font-weight="650" letter-spacing="7">GESTÃO COMERCIAL</text>
+</svg>
