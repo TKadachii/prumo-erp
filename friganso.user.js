@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Friganso ERP - Lancar pedido
+// @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
-// @version      2026.9.17.1039
-// @description  Le e lanca pedidos no SPAmov direto pelo app Friganso (funciona no celular via Firefox + Tampermonkey).
-// @author       Friganso
+// @version      2026.9.18.1352
+// @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
+// @author       Prumo
 // @match        https://tkadachii.github.io/*
 // @match        *://*.friganso.com.br/*
 // @match        *://spd1.friganso.com.br/*
@@ -16,7 +16,7 @@
 // @updateURL    https://tkadachii.github.io/friganso-erp/friganso.user.js
 // ==/UserScript==
 
-// Friganso ERP - Extensão (Resumo + Lançar pedido)
+// Prumo ERP - Extensão (Resumo + Lançar pedido)
 (function () {
     "use strict";
 
@@ -2158,7 +2158,7 @@
         const barra = document.createElement('div');
         barra.id = 'friganso-mobile-toolbar';
         barra.setAttribute('role', 'region');
-        barra.setAttribute('aria-label', 'Ações do Friganso ERP');
+        barra.setAttribute('aria-label', 'Ações do Prumo ERP');
         Object.assign(barra.style, { position: 'fixed', zIndex: '2147483647', boxSizing: 'border-box', padding: '8px', borderRadius: '12px', background: '#0f172a', color: '#fff', fontFamily: 'system-ui,sans-serif', boxShadow: '0 4px 20px #0005', transformOrigin: 'top left' });
         const acoes = document.createElement('div');
         Object.assign(acoes.style, { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px' });
@@ -2186,13 +2186,13 @@
             acoes.appendChild(btn); return btn;
         };
         const titulo = document.createElement('button');
-        titulo.type = 'button'; titulo.textContent = 'Friganso ERP · recolher ▴';
+        titulo.type = 'button'; titulo.textContent = 'Prumo ERP · recolher ▴';
         titulo.setAttribute('aria-expanded', 'true');
         Object.assign(titulo.style, { width: '100%', minHeight: '44px', border: '0', borderRadius: '8px', background: '#1e293b', color: '#fff', font: '700 14px system-ui,sans-serif', cursor: 'pointer' });
         titulo.onclick = () => {
             const aberto = acoes.style.display === 'none';
             acoes.style.display = aberto ? 'grid' : 'none'; aviso.style.display = aberto ? '' : 'none';
-            titulo.textContent = aberto ? 'Friganso ERP · recolher ▴' : 'Friganso ERP · ações ▾';
+            titulo.textContent = aberto ? 'Prumo ERP · recolher ▴' : 'Prumo ERP · ações ▾';
             titulo.setAttribute('aria-expanded', String(aberto));
         };
         adicionar('📥 Enviar tabela', () => {
@@ -2371,7 +2371,7 @@
             p.innerHTML =
                 '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
                     '<span style="font-size:18px">🥩</span>' +
-                    '<b style="flex:1">Friganso — Disparo</b>' +
+                    '<b style="flex:1">Prumo — Disparo</b>' +
                     '<span id="frig-x" style="cursor:pointer;opacity:.6;font-size:16px" title="Fechar e cancelar">✕</span>' +
                 '</div>' +
                 '<div style="background:#1e293b;border-radius:999px;height:6px;overflow:hidden;margin-bottom:6px">' +

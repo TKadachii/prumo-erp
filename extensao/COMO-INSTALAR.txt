@@ -1,11 +1,11 @@
 ==========================================================
-  FRIGANSO ERP - Extensão "Resumo Rápido" (Chrome)
+  PRUMO ERP - Extensão "Resumo Rápido" (Chrome)
 ==========================================================
 
 O QUE FAZ:
-  Coloca um botão "📋 Enviar pro Friganso ERP" nas telas do
+  Coloca um botão "📋 Enviar pro Prumo ERP" nas telas do
   SPAmov (friganso.com.br). Ao clicar, ele lê o pedido aberto
-  (cliente, SPAmov e itens) e abre o seu app Friganso ERP já
+  (cliente, SPAmov e itens) e abre o seu app Prumo ERP já
   com o Resumo de Pedido preenchido — sem copiar e colar.
 
 ------------------------------------------------------------
@@ -23,9 +23,9 @@ COMO INSTALAR (uma vez só):
 COMO USAR:
 ------------------------------------------------------------
 1. Abra um pedido no SPAmov (spd1.friganso.com.br).
-2. Clique no botão vermelho "📋 Enviar pro Friganso ERP"
+2. Clique no botão vermelho "📋 Enviar pro Prumo ERP"
    (canto inferior direito da tela).
-3. O Friganso ERP abre numa nova aba já com o pedido no
+3. O Prumo ERP abre numa nova aba já com o pedido no
    Resumo. Confira as quantidades e finalize.
 
 ------------------------------------------------------------

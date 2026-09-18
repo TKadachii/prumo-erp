@@ -1,4 +1,13 @@
 <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="110" fill="#ffffff"/>
-  <g transform="translate(-11 21) scale(4.6)" fill="#FB4B3A"><path d="M22,82 C19,68 27,57 41,53 C45,41 53,31 65,25 C75,20 85,18 91,20 C95,21 95,25 90,26 C81,28 73,32 67,38 C61,44 57,51 55,59 C66,57 78,53 89,46 C82,58 71,66 58,70 C47,73 32,75 26,83 C24,85 22,85 22,82 Z"/><path d="M89,19 L97,17 L91,24 Z"/></g>
+  <defs>
+    <linearGradient id="prumo" x1="64" y1="42" x2="458" y2="475" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a78bfa"/>
+      <stop offset=".52" stop-color="#6d5dfb"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="118" fill="#09090b"/>
+  <rect x="10" y="10" width="492" height="492" rx="108" fill="none" stroke="url(#prumo)" stroke-width="10" stroke-opacity=".75"/>
+  <path d="M148 374V138h139c83 0 83 151 0 151h-72" fill="none" stroke="url(#prumo)" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M282 374h82" fill="none" stroke="#fff" stroke-width="46" stroke-linecap="round"/>
 </svg>

@@ -12,11 +12,11 @@ const pad = (n) => String(n).padStart(2, "0");
 const version = `${now.getFullYear()}.${now.getMonth() + 1}.${now.getDate()}.${pad(now.getHours())}${pad(now.getMinutes())}`;
 
 const header = `// ==UserScript==
-// @name         Friganso ERP - Lancar pedido
+// @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
 // @version      ${version}
-// @description  Le e lanca pedidos no SPAmov direto pelo app Friganso (funciona no celular via Firefox + Tampermonkey).
-// @author       Friganso
+// @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
+// @author       Prumo
 // @match        https://tkadachii.github.io/*
 // @match        *://*.friganso.com.br/*
 // @match        *://spd1.friganso.com.br/*

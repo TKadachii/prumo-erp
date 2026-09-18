@@ -48,11 +48,11 @@ $now = Get-Date
 $verUS = "{0}.{1}.{2}.{3:00}{4:00}" -f $now.Year, $now.Month, $now.Day, $now.Hour, $now.Minute
 $header = @"
 // ==UserScript==
-// @name         Friganso ERP - Lancar pedido
+// @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
 // @version      $verUS
-// @description  Le e lanca pedidos no SPAmov direto pelo app Friganso (funciona no celular via Firefox + Tampermonkey).
-// @author       Friganso
+// @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
+// @author       Prumo
 // @match        https://tkadachii.github.io/*
 // @match        *://*.friganso.com.br/*
 // @match        *://spd1.friganso.com.br/*

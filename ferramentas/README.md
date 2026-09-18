@@ -44,7 +44,7 @@ npm install playwright jspdf xlsx pdfjs-dist@3.11.174 react@18 react-dom@18 char
 
 ## 🎯 `gerar-leads.js` — lista de prospecção de graça
 
-Monta a lista de empresas pra abastecer a tela **🎯 Prospecção em Massa** do Friganso ERP,
+Monta a lista de empresas pra abastecer a tela **🎯 Prospecção em Massa** do Prumo ERP,
 lendo a base **pública e gratuita** de CNPJ da Receita Federal.
 
 ### Por que isso existe

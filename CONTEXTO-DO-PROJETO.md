@@ -1,15 +1,15 @@
-# 🧠 CONTEXTO DO PROJETO — Friganso ERP
+# 🧠 CONTEXTO DO PROJETO — Prumo ERP
 
 > Este arquivo é o "cérebro compartilhado" entre os PCs. Ao começar a trabalhar em qualquer
 > computador, abra o Claude Code na pasta do projeto e diga: **"leia o CONTEXTO-DO-PROJETO.md"**.
 > Mantenha-o atualizado (peça ao Claude pra atualizar quando algo mudar de verdade).
 
 ## O que é
-Friganso ERP — sistema de vendas (distribuidora de carnes). Um mesmo código React roda em 4 lugares:
+Prumo ERP — sistema de vendas (distribuidora de carnes). Um mesmo código React roda em 4 lugares:
 - **Site** (GitHub Pages): https://tkadachii.github.io/friganso-erp/ — repo: https://github.com/TKadachii/friganso-erp.git
 - **PWA** (site instalável, offline via service worker)
 - **Programa de PC** (Electron) — pasta local `friganso-desktop`
-- **App Android** (Capacitor) — pasta local `friganso-mobile` → gera `FrigansoERP.apk`
+- **App Android** (Capacitor) — pasta local `friganso-mobile` → gera `PrumoERP.apk`
 
 Tudo num único `index.html` (React 18 via CDN + Babel no navegador + Tailwind + Firebase Firestore).
 Trechos só-PC são protegidos por `if (isElectron)`, e só-app por `if (isCapacitor)`.
@@ -124,7 +124,7 @@ cd friganso-desktop && node precompile.js              (gera index-compiled.html
 Copy index-compiled.html -> friganso-mobile\www\index.html
 cd friganso-mobile && npx cap copy android
 cd android && .\gradlew.bat assembleDebug --no-daemon  (gera o APK)
-APK -> friganso-mobile\android\app\build\outputs\apk\debug\app-debug.apk  (cópia em Downloads\FrigansoERP.apk)
+APK -> friganso-mobile\android\app\build\outputs\apk\debug\app-debug.apk  (cópia em Downloads\PrumoERP.apk)
 ```
 Programa de PC: lê `index-compiled.html`; basta reabrir pelo atalho.
 
@@ -148,13 +148,13 @@ antes de tentar mexer nisso de novo.
 O app checa atualização sozinho ao abrir (estilo Discord): chama `SpamovAuto.versao()` (versionCode
 nativo) e compara com `https://tkadachii.github.io/friganso-erp/apk-version.json`. Se o remoto for
 maior → modal "🚀 Atualização disponível" → `SpamovAuto.abrirLink(url)` abre o navegador que baixa
-`https://tkadachii.github.io/friganso-erp/FrigansoERP.apk` → instala por cima (⚠️ mesma assinatura
+`https://tkadachii.github.io/friganso-erp/PrumoERP.apk` → instala por cima (⚠️ mesma assinatura
 debug DESTE PC; não buildar noutro PC senão não instala por cima).
 
 **Publicar APK novo (nunca mais mandar pro WhatsApp):**
 1. Bump `versionCode`/`versionName` no `friganso-mobile/android/app/build.gradle`.
 2. Fluxo de build acima (precompile → www → cap copy → assembleDebug).
-3. Copiar o APK pra `Downloads\FrigansoERP.apk`, `G:\Meu Drive\Friganso APK\` **e `friganso-app/FrigansoERP.apk`**.
+3. Copiar o APK pra `Downloads\PrumoERP.apk`, `G:\Meu Drive\Prumo APK\` **e `friganso-app/PrumoERP.apk`**.
 4. Atualizar `friganso-app/apk-version.json` (mesmo versionCode + novidades) e commitar/pushar
    junto com o APK — todos os celulares avisam sozinhos na próxima abertura do app.
 
@@ -210,7 +210,7 @@ Já implementado: filtro "Forma de pagamento" na Tabela (tela PdfScreen), com 3 
 **Também implementado (2026-07-04): captura + histórico + aviso no Resumo.** `extrairCondicaoPagamento()`
 no content.js acha o `<select>` de "Condição de Pagamento" na tela do pedido do SPAmov (perto do rótulo,
 por posição Y) e devolve o TEXTO da opção selecionada (ex.: "21 Dias"), não só o value cru ("4", sem
-significado fora do SPAmov). Isso vai junto no `montarPedidoLeitura()` (botão "📋 Enviar pro Friganso
+significado fora do SPAmov). Isso vai junto no `montarPedidoLeitura()` (botão "📋 Enviar pro Prumo
 ERP", extensão/PC) e no `window.__frigDadosFrame()` + `enviarResumoTopo()` (app mobile, `SpamovActivity.
 java` — MEXEU EM JAVA, precisa de um novo APK pra valer no celular). No site: `registrarCompra` salva
 `condicaoPagamento` em cada compra; `normalizarCondicaoPagamento()` reduz o texto cru pra uma de 4
@@ -532,7 +532,7 @@ Funções puras `montarRankCompras` / `ordenarPelosMaisComprados`. ✅ `ferramen
 ## 🔒 PDF de mudanças de preço: sem dados pessoais (2026-08-13, v2.16.1)
 O rodapé saía com `nome - whatsapp` do vendedor em TODAS as páginas. Esse PDF nasceu pra ir pro
 cliente no WhatsApp, e dali é reencaminhado — o contato pessoal circulava junto. Agora sai só
-"Friganso". O parâmetro `user` foi REMOVIDO da assinatura de `gerarPdfMudancasPreco` de propósito:
+"Prumo". O parâmetro `user` foi REMOVIDO da assinatura de `gerarPdfMudancasPreco` de propósito:
 sem ele, não dá pra reintroduzir dado pessoal ali sem querer.
 ⚠️ O cartão do **Portfólio** continua mostrando o WhatsApp — lá o contato é o propósito da peça.
 
@@ -629,4 +629,4 @@ linha (verificado reintroduzindo o bug de propósito).
 - Conversa do Claude: fica local em `~/.claude/projects/<hash-do-caminho>/*.jsonl`. Não sincroniza
   sozinha. Pra retomar no mesmo PC: `claude --resume`.
 - Pra "cérebro" compartilhado: este arquivo (vai junto no `git pull`).
-- Export legível da conversa: `Downloads\Conversa-Friganso.html` (gerado por `friganso-mobile\exportar-conversa.js`).
+- Export legível da conversa: `Downloads\Conversa-Prumo.html` (gerado por `friganso-mobile\exportar-conversa.js`).

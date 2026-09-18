@@ -7,7 +7,7 @@
  * exatamente este arquivo. O telefone e o email que eles cobram pra mostrar são os campos
  * `telefone_1` e `correio_eletronico` da tabela ESTABELECIMENTOS. Este script baixa a fonte,
  * filtra as suas cidades e os seus segmentos, e cospe um CSV pronto pra importar na tela
- * "🎯 Prospecção em Massa" do Friganso ERP.
+ * "🎯 Prospecção em Massa" do Prumo ERP.
  *
  * COMO USAR (no PowerShell, na pasta do projeto):
  *     node ferramentas\gerar-leads.js
@@ -304,7 +304,7 @@ async function processarZip(url, nomeZip, aoLerLinha) {
 
 async function principal() {
     log('');
-    log('🎯 GERADOR DE LEADS — Friganso ERP');
+    log('🎯 GERADOR DE LEADS — Prumo ERP');
     log('   Fonte: base pública de CNPJ da Receita Federal (a mesma que o CNPJ.biz revende)');
     log('');
     log(`   Cidades:   ${CIDADES_ALVO.join(', ')}`);
@@ -400,7 +400,7 @@ async function principal() {
     achados.forEach(a => { const s = CNAES_ALVO[a.cnae.slice(0, 4)] || 'Outro'; porSeg[s] = (porSeg[s] || 0) + 1; });
     Object.entries(porSeg).sort((a, b) => b[1] - a[1]).forEach(([s, n]) => log(`     ${String(n).padStart(5)}  ${s}`));
     log('');
-    log('👉 Agora abra o Friganso ERP → 🎯 Prospecção em Massa → "Selecionar planilha de leads"');
+    log('👉 Agora abra o Prumo ERP → 🎯 Prospecção em Massa → "Selecionar planilha de leads"');
     log('   e escolha esse arquivo.');
     log('');
 }

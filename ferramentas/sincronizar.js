@@ -43,7 +43,7 @@ const git = (cmd, silencioso) => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 log('');
-log('🔄 SINCRONIZAR — Friganso ERP');
+log('🔄 SINCRONIZAR — Prumo ERP');
 
 const antes = git('rev-parse HEAD', true);
 let marcaAnterior = '';
