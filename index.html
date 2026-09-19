@@ -367,7 +367,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 203;
+        const APP_BUILD_VERSION = 204;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -6556,6 +6556,290 @@
             <div className="mb-4 bg-white p-4 rounded-xl border border-slate-200 hover:border-rose-300 transition-colors shadow-sm"><p className="font-semibold text-slate-700 mb-3 text-sm">{question}</p><div className="flex items-center justify-between gap-2"><span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase">1 - Não</span><div className="flex gap-1.5 sm:gap-3">{[1, 2, 3, 4, 5].map(num => (<button key={num} type="button" onClick={() => onChange(num)} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all border-2 ${value === num ? 'bg-rose-700 border-rose-700 text-white shadow-md transform scale-110' : 'bg-slate-50 border-slate-300 text-slate-500 hover:border-rose-400 hover:bg-rose-50'}`}>{num}</button>))}</div><span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase">5 - Sim</span></div></div>
         );
 
+        // 🚚 ROTAS DE ENTREGA — transcritas da folha da distribuidora (2026-09-19).
+        // `locais` é o que a rota cobre, no formato 'cidade' ou 'cidade/bairro' (sem acento, minúsculo).
+        // Rota com bairro ganha de rota só com cidade: 'rio de janeiro/barra da tijuca' (032) ganha de
+        // 'rio de janeiro/tijuca' (020) porque a regra é "o local mais específico vence".
+        // `manual: true` = não entra na descoberta automática (Cozinhas e Área de risco dependem do
+        // tipo de cliente, não do endereço). `inativa: true` = a folha diz "Não existe"/"não sai mais".
+        const ROTAS_ENTREGA = [
+            { rota: '001', regiao: 'Central', area: 'Caxias (centro)', dias: 'Todos os dias', locais: ['duque de caxias', 'duque de caxias/centro'] },
+            { rota: '002', regiao: 'Central', area: 'Magé (Guapimirim depende de peso)', dias: 'Todos os dias', locais: ['mage', 'guapimirim'] },
+            { rota: '004', regiao: 'Central', area: 'Nilópolis, Nova Iguaçu (junto com rotas 013.1, 017 e 018)', dias: 'Todos os dias', locais: ['nilopolis', 'nova iguacu'] },
+            { rota: '005', regiao: 'Central', area: 'São João de Meriti', dias: 'Todos os dias', locais: ['sao joao de meriti'] },
+            { rota: '006', regiao: 'Central', area: 'Jacarepaguá, Vila Valqueire', dias: 'Todos os dias', locais: ['rio de janeiro/jacarepagua', 'rio de janeiro/vila valqueire'] },
+            { rota: '008', regiao: 'Central', area: 'Centro 2, Santa Teresa', dias: 'Todos os dias', locais: ['rio de janeiro/centro', 'rio de janeiro/santa teresa'] },
+            { rota: '009', regiao: 'Central', area: 'Magalhães Bastos, Vasconcelos, Bangu', dias: 'Todos os dias', locais: ['rio de janeiro/magalhaes bastos', 'rio de janeiro/senador vasconcelos', 'rio de janeiro/bangu'] },
+            { rota: '010', regiao: 'Central', area: 'Campo Grande', dias: 'Todos os dias', locais: ['rio de janeiro/campo grande'] },
+            { rota: '011', regiao: 'Central', area: 'Castelo, Rodoviária, Centro (junto com rota 008)', dias: 'Todos os dias', locais: ['rio de janeiro/castelo', 'rio de janeiro/centro'] },
+            { rota: '012', regiao: 'Central', area: 'Pavuna, Acari, Ricardo de Albuquerque (junto com rota 005)', dias: 'Todos os dias', locais: ['rio de janeiro/pavuna', 'rio de janeiro/acari', 'rio de janeiro/ricardo de albuquerque'] },
+            { rota: '013', regiao: 'Região dos Lagos', area: 'Campos dos Goytacazes', dias: 'Quinta', locais: ['campos dos goytacazes'] },
+            { rota: '015', regiao: 'Região dos Lagos', area: 'Macaé', dias: 'Todos os dias', locais: ['macae'] },
+            { rota: '016', regiao: 'Serrana', area: 'Piraí, Volta Redonda', dias: 'Terça e sexta', obs: 'Com 1,5 tonelada no caminhão pode ter entrega na quarta', locais: ['pirai', 'volta redonda'] },
+            { rota: '017', regiao: 'Central', area: 'Belford Roxo', dias: 'Todos os dias', locais: ['belford roxo'] },
+            { rota: '018', regiao: 'Central', area: 'Nova Iguaçu, Japeri, Palhada, Queimados, Paracambi', dias: 'Todos os dias', locais: ['nova iguacu', 'nova iguacu/palhada', 'japeri', 'queimados', 'paracambi'] },
+            { rota: '020', regiao: 'Central', area: 'Méier, Lins, Tijuca', dias: 'Todos os dias', locais: ['rio de janeiro/meier', 'rio de janeiro/lins de vasconcelos', 'rio de janeiro/tijuca'] },
+            { rota: '021', regiao: 'Central', area: 'Ilha do Governador, Ramos, Olaria, Penha, Bonsucesso', dias: 'Todos os dias', locais: ['rio de janeiro/ilha do governador', 'rio de janeiro/jardim guanabara', 'rio de janeiro/cacuia', 'rio de janeiro/portuguesa', 'rio de janeiro/taua', 'rio de janeiro/cocota', 'rio de janeiro/jardim carioca', 'rio de janeiro/ramos', 'rio de janeiro/olaria', 'rio de janeiro/penha', 'rio de janeiro/bonsucesso'] },
+            { rota: '022', regiao: 'Central', area: 'São Gonçalo, Alcântara', dias: 'Todos os dias', locais: ['sao goncalo', 'sao goncalo/alcantara'] },
+            { rota: '022A', regiao: 'Central', area: 'Alcântara (Itaboraí junto com rota 003.1)', dias: 'Todos os dias', locais: ['sao goncalo/alcantara', 'itaborai'] },
+            { rota: '023', regiao: 'Central', area: 'Diversos, área de risco', dias: 'Todos os dias', manual: true, locais: [] },
+            { rota: '024', regiao: 'Central', area: 'Jacarezinho, Benfica, São Cristóvão', dias: 'Todos os dias', locais: ['rio de janeiro/jacarezinho', 'rio de janeiro/benfica', 'rio de janeiro/sao cristovao'] },
+            { rota: '031', regiao: 'Central', area: 'Zona Sul, Jardim Botânico, Botafogo', dias: 'Todos os dias', locais: ['rio de janeiro/jardim botanico', 'rio de janeiro/botafogo', 'rio de janeiro/flamengo', 'rio de janeiro/laranjeiras', 'rio de janeiro/catete', 'rio de janeiro/gloria', 'rio de janeiro/cosme velho', 'rio de janeiro/humaita', 'rio de janeiro/urca', 'rio de janeiro/leme', 'rio de janeiro/gavea', 'rio de janeiro/lagoa'] },
+            { rota: '032', regiao: 'Central', area: 'Barra, Recreio', dias: 'Todos os dias', locais: ['rio de janeiro/barra da tijuca', 'rio de janeiro/recreio dos bandeirantes', 'rio de janeiro/recreio'] },
+            { rota: '033', regiao: 'Central', area: 'Niterói, Centro', dias: 'Todos os dias', locais: ['niteroi', 'niteroi/centro'] },
+            { rota: '035', regiao: 'Central', area: 'Bairro Cavaleiros, Pilar', dias: 'Todos os dias', locais: ['duque de caxias/pilar'] },
+            { rota: '043', regiao: 'Central', area: 'Cozinhas: Caxias, Nova Iguaçu', dias: 'Todos os dias', manual: true, locais: [] },
+            { rota: '044', regiao: 'Central', area: 'Cozinhas: Campo Grande', dias: 'Todos os dias', manual: true, locais: [] },
+            { rota: '045', regiao: 'Central', area: 'Santa Cruz', dias: 'Todos os dias', locais: ['rio de janeiro/santa cruz'] },
+            { rota: '047', regiao: 'Central', area: 'Madureira, Irajá, Vila da Penha, Vista Alegre, Jardim América', dias: 'Todos os dias', locais: ['rio de janeiro/madureira', 'rio de janeiro/iraja', 'rio de janeiro/vila da penha', 'rio de janeiro/vista alegre', 'rio de janeiro/jardim america'] },
+            { rota: '051', regiao: 'Central', area: 'Gramacho, Xerém (junto com rota 002)', dias: 'Todos os dias', locais: ['duque de caxias/gramacho', 'duque de caxias/jardim gramacho', 'duque de caxias/xerem'] },
+            { rota: 'Sub 010.3', regiao: 'Central', area: 'Copacabana, Ipanema, Leblon', dias: 'Todos os dias', locais: ['rio de janeiro/copacabana', 'rio de janeiro/ipanema', 'rio de janeiro/leblon'] },
+            { rota: '910.003', regiao: 'Serrana', area: 'Resende', dias: 'Terça e sexta', locais: ['resende'] },
+            { rota: '026', chave: '026-antiga', regiao: 'Serrana', area: 'Nova Friburgo (não sai mais)', dias: 'Sexta', inativa: true, locais: ['nova friburgo'] },
+            { rota: '025', regiao: 'Região dos Lagos', area: 'Cabo Frio', dias: 'Terça a sábado', locais: ['cabo frio'] },
+            { rota: '029', regiao: 'Região dos Lagos', area: 'Costa Verde, Muriqui', dias: 'Junto com rota 039', locais: ['mangaratiba', 'mangaratiba/muriqui'] },
+            { rota: '034', regiao: 'Região dos Lagos', area: 'Guaratiba, Sepetiba', dias: 'Todos os dias', locais: ['rio de janeiro/guaratiba', 'rio de janeiro/pedra de guaratiba', 'rio de janeiro/barra de guaratiba', 'rio de janeiro/sepetiba'] },
+            { rota: '037', regiao: 'Região dos Lagos', area: 'Iguaba, São Pedro da Aldeia, Búzios', dias: 'Terça a sábado', locais: ['iguaba grande', 'sao pedro da aldeia', 'armacao dos buzios', 'buzios'] },
+            { rota: '039', regiao: 'Região dos Lagos', area: 'Seropédica, Marapicu, Coroa Grande', dias: 'Todos os dias', locais: ['seropedica', 'nova iguacu/marapicu', 'itaguai/coroa grande'] },
+            { rota: '041', regiao: 'Região dos Lagos', area: 'Saquarema, Praia Seca, Araruama', dias: 'Terça a sábado', locais: ['saquarema', 'araruama', 'araruama/praia seca'] },
+            { rota: '042', regiao: 'Região dos Lagos', area: 'Niterói, Itaipu, Maricá', dias: 'Todos os dias', locais: ['niteroi', 'niteroi/itaipu', 'marica'] },
+            { rota: '052', regiao: 'Região dos Lagos', area: 'Rio das Ostras', dias: 'Terça a sábado', locais: ['rio das ostras'] },
+            { rota: 'Sub 003.3', regiao: 'Região dos Lagos', area: 'Unamar, São Pedro da Aldeia', dias: 'Junto com rota 015', locais: ['cabo frio/unamar', 'sao pedro da aldeia'] },
+            { rota: 'Sub 903.001', regiao: 'Região dos Lagos', area: 'Casimiro de Abreu, Silva Jardim', dias: 'Todos os dias', locais: ['casimiro de abreu', 'silva jardim'] },
+            { rota: '019', regiao: 'Serrana', area: 'Petrópolis', dias: 'Não existe', inativa: true, locais: ['petropolis'] },
+            { rota: '026', regiao: 'Serrana', area: 'Cachoeiras de Macacu, Nova Friburgo, Bom Jardim', dias: 'Quarta e sábado', locais: ['cachoeiras de macacu', 'nova friburgo', 'bom jardim'] },
+            { rota: '027', regiao: 'Serrana', area: 'Levy, Três Rios', dias: 'Terça e sexta', locais: ['comendador levy gasparian', 'tres rios'] },
+            { rota: '028', regiao: 'Serrana', area: 'Teresópolis', dias: 'Quarta e sábado', locais: ['teresopolis'] },
+            { rota: '036', regiao: 'Serrana', area: 'Miguel Pereira, Paty do Alferes', dias: 'Quarta', locais: ['miguel pereira', 'paty do alferes'] },
+            { rota: '038', regiao: 'Serrana', area: 'Conceição de Macabu, Santa Maria Madalena', dias: 'Não existe', inativa: true, locais: ['conceicao de macabu', 'santa maria madalena'] },
+            { rota: 'Sub 006.1', regiao: 'Serrana', area: 'Bom Jardim, Santa Maria Madalena', dias: 'Quarta e sábado', locais: ['bom jardim', 'santa maria madalena'] },
+            { rota: 'Sub 007.1', regiao: 'Serrana', area: 'Areal, Paraíba do Sul', dias: 'Quinta', locais: ['areal', 'paraiba do sul'] },
+            { rota: '030', regiao: 'Serrana', area: 'Barra do Piraí, Vassouras', dias: 'Quinta', locais: ['barra do pirai', 'vassouras'] },
+        ].map(r => ({ ...r, chave: r.chave || r.rota }));
+
+        const normalizarLocal = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+        const temPalavras = (texto, trecho) => !!texto && !!trecho && (' ' + texto + ' ').includes(' ' + trecho + ' ');
+        const rotaPorChave = (chave) => ROTAS_ENTREGA.find(r => r.chave === chave) || null;
+
+        // Descobre a rota pelo município/bairro do cadastro (vindos do SPAmov) ou, se faltarem, pelo
+        // texto do endereço. Devolve TODAS as empatadas: Nova Iguaçu é 004 e 018 ao mesmo tempo, e aí
+        // quem decide é o vendedor — escolher uma no chute mandaria o pedido pro caminhão errado.
+        const descobrirRotas = (cliente) => {
+            const mun = normalizarLocal(cliente && cliente.municipio);
+            const bai = normalizarLocal(cliente && cliente.bairro);
+            const end = normalizarLocal(cliente && cliente.address);
+            if (!mun && !bai && !end) return [];
+            let melhor = 0, achadas = [];
+            ROTAS_ENTREGA.forEach(r => {
+                if (r.manual) return;
+                let nota = 0;
+                r.locais.forEach(local => {
+                    const [cidade, bairro] = local.split('/');
+                    const cidadeOk = mun ? mun === cidade : temPalavras(end, cidade);
+                    if (!cidadeOk) return;
+                    if (!bairro) { nota = Math.max(nota, 100); return; }
+                    if (temPalavras(bai, bairro) || temPalavras(end, bairro)) nota = Math.max(nota, 200 + bairro.length);
+                });
+                if (!nota) return;
+                if (r.inativa) nota -= 50; // rota que não sai mais só aparece se não houver outra
+                if (nota > melhor) { melhor = nota; achadas = [r]; }
+                else if (nota === melhor) achadas.push(r);
+            });
+            return achadas;
+        };
+
+        // Rota que vale pro cliente: a escolhida à mão (campo `rota`) manda; senão, a descoberta.
+        const rotaDoCliente = (cliente) => {
+            const escolhida = cliente && cliente.rota ? rotaPorChave(cliente.rota) : null;
+            if (escolhida) return { rota: escolhida, opcoes: [escolhida], manual: true };
+            const opcoes = descobrirRotas(cliente);
+            return { rota: opcoes.length === 1 ? opcoes[0] : null, opcoes, manual: false };
+        };
+
+        const RotaBadge = ({ cliente, compacto }) => {
+            const { rota, opcoes } = rotaDoCliente(cliente);
+            if (rota) return (
+                <span className={`inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg font-bold ${compacto ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'}`} title={`${rota.area} · ${rota.dias}`}>
+                    🚚 Rota {rota.rota}{!compacto && <span className="text-slate-500 font-medium">· {rota.dias}</span>}
+                    {rota.inativa && <span className="text-amber-600">⚠️</span>}
+                </span>
+            );
+            if (opcoes.length > 1) return (
+                <span className={`inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg font-bold ${compacto ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'}`}>
+                    🚚 Rota {opcoes.map(o => o.rota).join(' ou ')}
+                </span>
+            );
+            return compacto ? null : <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-500 rounded-lg px-2.5 py-1 text-xs font-bold">🚚 Sem rota identificada</span>;
+        };
+
+        // Bloco "Rota de entrega" na ficha do cliente. Nível de módulo de propósito (ver lição da
+        // digitação ao contrário): componente dentro de componente remonta a cada tecla.
+        const RotaCliente = ({ cliente, onEscolher, setActiveRoute, fechar }) => {
+            const { rota, opcoes, manual } = rotaDoCliente(cliente);
+            const sugeridas = manual ? descobrirRotas(cliente) : opcoes;
+            return (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                        <label className="text-xs font-bold text-slate-600 flex items-center gap-1">🚚 Rota de entrega</label>
+                        <button type="button" onClick={() => { fechar(); setActiveRoute('rotas'); }} className="text-[11px] font-bold text-rose-700 hover:underline">Ver todas as rotas →</button>
+                    </div>
+                    {rota ? (
+                        <div className="mb-2">
+                            <p className="text-sm font-bold text-slate-800">Rota {rota.rota} <span className="text-slate-500 font-medium">· {rota.area}</span></p>
+                            <p className="text-xs text-rose-700 font-bold mt-0.5">📅 {rota.dias}{rota.inativa && <span className="text-amber-600"> · ⚠️ rota sem entrega</span>}</p>
+                            {rota.obs && <p className="text-[11px] text-amber-700 mt-1">⚠️ {rota.obs}</p>}
+                            <p className="text-[10px] text-slate-400 mt-1">{manual ? 'Escolhida à mão.' : 'Descoberta pela cidade/bairro do cadastro.'}</p>
+                        </div>
+                    ) : opcoes.length > 1 ? (
+                        <div className="mb-2">
+                            <p className="text-xs text-amber-700 font-bold mb-1.5">Essa cidade tem mais de uma rota. Qual é a deste cliente?</p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {opcoes.map(o => (
+                                    <button key={o.chave} type="button" onClick={() => onEscolher(o.chave)} className="text-left bg-white border border-slate-200 hover:border-rose-400 rounded-lg px-2.5 py-1.5">
+                                        <span className="block text-xs font-bold text-slate-800">Rota {o.rota}</span>
+                                        <span className="block text-[10px] text-slate-500">{o.area}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-slate-500 mb-2">Não achei a rota pela cidade/bairro. Preencha o Bairro e o Município ou escolha abaixo.</p>
+                    )}
+                    <select value={cliente.rota || ''} onChange={e => onEscolher(e.target.value)} className="w-full p-2 bg-white border rounded-lg text-xs outline-none focus:border-rose-500">
+                        <option value="">{sugeridas.length === 1 ? `Automático (Rota ${sugeridas[0].rota})` : 'Automático (pela cidade/bairro)'}</option>
+                        {ROTAS_ENTREGA.map(r => <option key={r.chave} value={r.chave}>{r.rota} · {r.area} · {r.dias}</option>)}
+                    </select>
+                </div>
+            );
+        };
+
+        // 🔎 Tela "Rotas de Entrega": pesquisa por número, cidade, bairro ou dia, com os clientes de cada rota.
+        const RotasScreen = ({ clients, setActiveRoute }) => {
+            const [busca, setBusca] = useState('');
+            const [regiao, setRegiao] = useState('todas');
+            const [aberta, setAberta] = useState(null);
+
+            const clientesPorRota = useMemo(() => {
+                const mapa = new Map();
+                (clients || []).forEach(c => {
+                    const { rota } = rotaDoCliente(c);
+                    if (!rota) return;
+                    if (!mapa.has(rota.chave)) mapa.set(rota.chave, []);
+                    mapa.get(rota.chave).push(c);
+                });
+                return mapa;
+            }, [clients]);
+
+            const semRota = useMemo(() => (clients || []).filter(c => !rotaDoCliente(c).rota), [clients]);
+
+            const lista = useMemo(() => {
+                const q = normalizarLocal(busca);
+                const qNum = busca.replace(/\D/g, '');
+                return ROTAS_ENTREGA.filter(r => {
+                    if (regiao !== 'todas' && r.regiao !== regiao) return false;
+                    if (!q) return true;
+                    // "25", "025" e "rota 25" acham a 025; "10.3" acha a Sub 010.3
+                    if (qNum && r.rota.replace(/\D/g, '').replace(/^0+/, '') === qNum.replace(/^0+/, '')) return true;
+                    if (qNum && normalizarLocal(r.rota).includes(q)) return true;
+                    const texto = normalizarLocal([r.rota, r.area, r.dias, r.regiao, r.obs, r.locais.join(' ')].join(' '));
+                    return q.split(' ').every(p => texto.includes(p));
+                });
+            }, [busca, regiao]);
+
+            const abrirCliente = (c) => { try { window.localStorage.setItem('friganso_open_client_id', c.id); } catch (e) {} setActiveRoute('clients'); };
+            const regioes = ['todas', 'Central', 'Região dos Lagos', 'Serrana'];
+
+            return (
+                <div className="animate-in fade-in">
+                    <div className="mb-6">
+                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><span>🚚</span> Rotas de Entrega</h2>
+                        <p className="text-slate-500 text-sm">Pesquise pelo número da rota, cidade, bairro ou dia de entrega.</p>
+                    </div>
+
+                    <div className="relative mb-3">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none"><IconSearch/></div>
+                        <input type="text" value={busca} onChange={e => setBusca(e.target.value)} autoFocus
+                            placeholder="Ex.: 025, Cabo Frio, Tijuca, sábado..."
+                            className="w-full pl-12 pr-10 py-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-sm outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all" />
+                        {busca && <button onClick={() => setBusca('')} className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500"><div className="h-3.5 w-3.5"><IconX/></div></button>}
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-6">
+                        {regioes.map(r => (
+                            <button key={r} onClick={() => setRegiao(r)} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-colors ${regiao === r ? 'bg-rose-700 border-rose-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                                {r === 'todas' ? 'Todas as regiões' : r}
+                            </button>
+                        ))}
+                        <span className="ml-auto self-center text-xs text-slate-400">{lista.length} rota(s)</span>
+                    </div>
+
+                    {lista.length === 0 ? (
+                        <div className="text-center py-16 text-slate-400"><div className="text-4xl mb-3">🔍</div><p className="font-medium">Nenhuma rota encontrada para "{busca}".</p></div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {lista.map(r => {
+                                const doRota = clientesPorRota.get(r.chave) || [];
+                                const expandida = aberta === r.chave;
+                                return (
+                                    <div key={r.chave} className={`bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col ${r.inativa ? 'opacity-60' : ''}`}>
+                                        <div className="flex items-start gap-3">
+                                            <div className="bg-rose-700 text-white rounded-xl px-3 py-2 text-center flex-shrink-0 min-w-[64px]">
+                                                <span className="block text-[9px] font-bold opacity-70 uppercase">Rota</span>
+                                                <span className="block font-mono font-black text-lg leading-none">{r.rota.replace('Sub ', '')}</span>
+                                                {r.rota.startsWith('Sub') && <span className="block text-[9px] font-bold opacity-70 uppercase mt-0.5">Sub</span>}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-bold text-slate-800 leading-snug">{r.area}</p>
+                                                <p className="text-[11px] text-slate-400 uppercase tracking-wider font-bold mt-1">{r.regiao}</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                                            <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${r.inativa ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>📅 {r.dias}</span>
+                                            {r.manual && <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-500">escolha manual</span>}
+                                        </div>
+                                        {r.obs && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2">⚠️ {r.obs}</p>}
+                                        <button onClick={() => setAberta(expandida ? null : r.chave)} disabled={!doRota.length}
+                                            className="mt-4 text-left text-xs font-bold text-slate-500 hover:bg-slate-50 rounded-lg px-2 py-1.5 -mx-2 disabled:opacity-60">
+                                            👥 {doRota.length} cliente(s) nesta rota {doRota.length > 0 && (expandida ? '▲' : '▼')}
+                                        </button>
+                                        {expandida && (
+                                            <div className="mt-2 space-y-1 max-h-60 overflow-y-auto">
+                                                {doRota.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
+                                                    <button key={c.id} onClick={() => abrirCliente(c)} className="w-full text-left flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-100">
+                                                        <span className="font-mono text-[10px] font-bold text-rose-700">{c.code}</span>
+                                                        <span className="text-xs text-slate-700 truncate flex-1">{c.name}</span>
+                                                        <span className="text-[10px] text-slate-400 truncate max-w-[40%]">{c.bairro || c.municipio || ''}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {semRota.length > 0 && !busca && regiao === 'todas' && (
+                        <div className="mt-8 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                            <p className="font-bold text-slate-800 mb-1">⚠️ {semRota.length} cliente(s) sem rota definida</p>
+                            <p className="text-xs text-slate-500 mb-3">A cidade/bairro do cadastro não bateu com nenhuma rota, ou bateu com mais de uma. Abra o cliente e escolha a rota.</p>
+                            <div className="space-y-1 max-h-72 overflow-y-auto">
+                                {semRota.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => {
+                                    const { opcoes } = rotaDoCliente(c);
+                                    return (
+                                        <button key={c.id} onClick={() => abrirCliente(c)} className="w-full text-left flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-100">
+                                            <span className="font-mono text-[10px] font-bold text-rose-700">{c.code}</span>
+                                            <span className="text-xs text-slate-700 truncate flex-1">{c.name}</span>
+                                            <span className="text-[10px] text-slate-400 truncate max-w-[45%]">{opcoes.length > 1 ? `${opcoes.map(o => o.rota).join(' ou ')}` : ([c.bairro, c.municipio].filter(Boolean).join(' · ') || 'sem cidade')}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         const ClientsScreen = ({ products, showMessage, setActiveRoute }) => {
             const [clients, setClients] = useState([]);
             const [isAdding, setIsAdding] = useState(false);
@@ -6583,10 +6867,17 @@
             const filteredClients = useMemo(() => {
                 const q = clientSearch.trim().toLowerCase();
                 if (!q) return clients;
+                // "rota 25" / "rota 025" lista quem está naquela rota
+                const mRota = q.match(/^rota\s*(.+)$/);
+                if (mRota) {
+                    const alvo = mRota[1].replace(/\D/g, '').replace(/^0+/, '');
+                    return clients.filter(c => rotaDoCliente(c).opcoes.some(r => r.rota.replace(/\D/g, '').replace(/^0+/, '') === alvo));
+                }
                 return clients.filter(c =>
                     (c.name || '').toLowerCase().includes(q) ||
                     String(c.code || '').toLowerCase().includes(q) ||
-                    (c.contactName || '').toLowerCase().includes(q)
+                    (c.contactName || '').toLowerCase().includes(q) ||
+                    normalizarLocal([c.municipio, c.bairro].join(' ')).includes(normalizarLocal(q))
                 );
             }, [clients, clientSearch]);
 
@@ -7013,9 +7304,19 @@
             const handleUpdateClient = async () => {
                 if(!editForm.code) { showMessage("O ID não pode ficar vazio.", "error"); return; }
                 try {
-                    await db.collection('clients').doc(selectedClient.id).update({ name: editForm.name, contactName: editForm.contactName || '', code: editForm.code, cnpj: editForm.cnpj || '', phone: editForm.phone || '', address: editForm.address || '', mapLocation: editForm.mapLocation || '' });
+                    await db.collection('clients').doc(selectedClient.id).update({ name: editForm.name, contactName: editForm.contactName || '', code: editForm.code, cnpj: editForm.cnpj || '', phone: editForm.phone || '', address: editForm.address || '', mapLocation: editForm.mapLocation || '', bairro: editForm.bairro || '', municipio: editForm.municipio || '' });
                     showMessage("Alterações salvas!", "success");
                 } catch(e) { showMessage("Erro ao atualizar.", "error"); }
+            };
+
+            // 🚚 Rota escolhida à mão grava na hora ('' = volta pro automático pela cidade/bairro)
+            const handleEscolherRota = async (chave) => {
+                setEditForm(prev => ({ ...prev, rota: chave }));
+                try {
+                    await db.collection('clients').doc(selectedClient.id).update({ rota: chave || '' });
+                    const r = rotaPorChave(chave);
+                    showMessage(r ? `Rota ${r.rota} salva no cliente.` : 'Rota voltou pro automático.', 'success');
+                } catch (e) { showMessage('Erro ao salvar a rota.', 'error'); }
             };
 
             const handleExtractHistory = async () => {
@@ -7117,6 +7418,11 @@
                                                 </div>
                                                 <div><label className="text-xs font-bold text-slate-500">WhatsApp</label><input type="text" value={editForm.phone || ''} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="w-full p-2.5 bg-slate-50 border rounded-lg text-sm outline-none focus:border-rose-500"/></div>
                                                 <div><label className="text-xs font-bold text-slate-500">Endereço</label><textarea value={editForm.address || ''} onChange={e => setEditForm({...editForm, address: e.target.value})} className="w-full p-2.5 bg-slate-50 border rounded-lg text-sm resize-none outline-none focus:border-rose-500" rows="2"></textarea></div>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div><label className="text-xs font-bold text-slate-500">Bairro</label><input type="text" value={editForm.bairro || ''} onChange={e => setEditForm({...editForm, bairro: e.target.value})} className="w-full p-2.5 bg-slate-50 border rounded-lg text-sm outline-none focus:border-rose-500"/></div>
+                                                    <div><label className="text-xs font-bold text-slate-500">Município</label><input type="text" value={editForm.municipio || ''} onChange={e => setEditForm({...editForm, municipio: e.target.value})} className="w-full p-2.5 bg-slate-50 border rounded-lg text-sm outline-none focus:border-rose-500"/></div>
+                                                </div>
+                                                <RotaCliente cliente={editForm} onEscolher={handleEscolherRota} setActiveRoute={setActiveRoute} fechar={() => setSelectedClient(null)} />
                                                 <div>
                                                     <label className="text-xs font-bold text-slate-500 flex items-center gap-1">📍 Localização no Mapa</label>
                                                     <input type="text" value={editForm.mapLocation || ''} onChange={e => setEditForm({...editForm, mapLocation: e.target.value})} placeholder="Endereço, coordenadas (lat,lng) ou link do Google Maps" className="w-full p-2.5 bg-slate-50 border rounded-lg text-sm outline-none focus:border-rose-500"/>
@@ -7327,7 +7633,7 @@
                             type="text"
                             value={clientSearch}
                             onChange={e => setClientSearch(e.target.value)}
-                            placeholder="Buscar cliente por nome ou ID..."
+                            placeholder="Buscar por nome, ID, cidade, bairro ou &quot;rota 025&quot;..."
                             className="w-full pl-12 pr-10 py-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm text-sm outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all"
                         />
                         {clientSearch && (
@@ -7350,11 +7656,15 @@
                                     <div className="inline-flex items-center gap-1.5 bg-rose-700 text-white px-3 py-1 rounded-lg mb-2 shadow-sm"><span className="text-[10px] font-bold opacity-70">COD</span><span className="font-mono font-black text-base leading-none">{c.code || '—'}</span></div>
                                     <h4 className="font-bold text-lg text-slate-800 leading-tight truncate">{c.name || 'Empresa S/ Nome'}</h4>
                                     {c.contactName && <p className="text-xs font-bold text-slate-400 mb-2 truncate uppercase">Contato: <span className="text-slate-600">{c.contactName}</span></p>}
-                                    <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold mt-1 mb-4 ${c.profile?.color || 'bg-slate-100 text-slate-600'}`}>{c.profile?.title || 'Perfil Base'}</span>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1 mb-4">
+                                        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold ${c.profile?.color || 'bg-slate-100 text-slate-600'}`}>{c.profile?.title || 'Perfil Base'}</span>
+                                        <RotaBadge cliente={c} compacto />
+                                    </div>
                                     <div className="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
                                         <p><b className="text-slate-400">ID:</b> <span className="font-mono font-bold">{c.code}</span></p>
                                         {c.cnpj && <p><b className="text-slate-400">CNPJ:</b> {c.cnpj}</p>}
                                         <p className="truncate"><b className="text-slate-400">END:</b> {c.address || '-'}</p>
+                                        {(c.bairro || c.municipio) && <p className="truncate"><b className="text-slate-400">LOCAL:</b> {[c.bairro, c.municipio].filter(Boolean).join(' · ')}</p>}
                                     </div>
                                 </div>
                             </div>
@@ -7418,6 +7728,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.27.0', data: '19/09/2026', areas: ['site'], itens: [
+                '🚚 NOVO: Rotas de Entrega — todas as rotas da distribuidora (número, área e dias de entrega) numa tela própria, com pesquisa por número, cidade, bairro ou dia',
+                '👥 Cada cliente agora mostra a rota dele, descoberta sozinha pelo município e bairro do cadastro (ex.: cliente de Cabo Frio → Rota 025)',
+                '🏙️ Cidade com mais de uma rota (Nova Iguaçu, Niterói, Bom Jardim...) pede pra você escolher qual, em vez de chutar; dá pra trocar a rota de qualquer cliente à mão',
+                '🔎 Na busca de clientes: digite "rota 025" pra ver todo mundo daquela rota, ou o nome da cidade/bairro',
+            ]},
             { versao: '2.26.5', data: '18/09/2026', areas: ['app', 'site'], itens: [
                 '📱 Novo APK Prumo: nome, ícone, tela inicial e visual interno sincronizados com o site atual',
                 '🔗 Aplicativo Android migrado para o endereço prumo-erp e preparado como instalação independente da versão anterior',
@@ -11275,6 +11591,7 @@
                     case 'prospeccao': return <ProspeccaoScreen user={user} clients={clients} showMessage={showMessage} />;
                     case 'lembretes': return <LembretesScreen user={user} showMessage={showMessage} />;
                     case 'leads': return <LeadsScreen user={user} clients={clients} products={products} showMessage={showMessage} setActiveRoute={setActiveRoute} listaNegra={listaNegra} />;
+                    case 'rotas': return <RotasScreen clients={clients} setActiveRoute={setActiveRoute} />;
                     case 'radar': return <RadarScreen clients={clients} products={products} setActiveRoute={setActiveRoute} showMessage={showMessage} />;
                     case 'support': return <SupportScreen user={user} />;
                     case 'credits': return <CreditsScreen />;
@@ -11444,6 +11761,7 @@
                             <NavButton route="dashboard" icon={IconDashboard} label="Visão geral" />
                             <NavButton route="lembretes" icon={IconHistory} label="Lembretes" />
                             <NavButton route="clients" icon={IconUsers} label="Clientes e rotas" />
+                            <NavButton route="rotas" icon={IconMapPin} label="Rotas de entrega" />
                             <NavButton route="cadastrosProcesso" icon={IconFileText} label="Cadastros em andamento" />
                             <NavButton route="consultaCnpj" icon={IconSearch} label="Consulta CNPJ" />
                             <NavButton route="prospeccao" icon={IconMapPin} label="Perto de Mim" />
@@ -11494,7 +11812,7 @@
                     </div>
 
                     <div data-route={activeRoute} className="prumo-main friganso-mobile-content flex-1 overflow-y-auto relative z-0 p-3 pt-[68px] sm:p-4 md:p-8 md:pt-8 bg-slate-100">
-                        <div className="prumo-topline"><span className="prumo-breadcrumb">Workspace <span className="prumo-separator">›</span> <strong>{({dashboard:'Visão geral',clients:'Clientes',pdf:'Tabela de preços',pedido:'Novo pedido',resumo:'Resumo de pedido',radar:'Radar de clientes',historico:'Histórico de vendas',orcamentos:'Ofertas',disparos:'Campanhas',lembretes:'Lembretes'})[activeRoute] || 'Gestão comercial'}</strong></span><div className="prumo-top-actions"><button className="prumo-command" onClick={() => setIsSidebarOpen(true)}><span>⌕</span> Buscar ou navegar <kbd>⌘ K</kbd></button><button onClick={() => setActiveRoute('profile')} className="prumo-profile"><span className="prumo-avatar">{user.name.charAt(0)}</span><span className="prumo-profile-name">{user.name}</span><span className="prumo-profile-role">Conta</span></button></div></div>
+                        <div className="prumo-topline"><span className="prumo-breadcrumb">Workspace <span className="prumo-separator">›</span> <strong>{({dashboard:'Visão geral',clients:'Clientes',rotas:'Rotas de entrega',pdf:'Tabela de preços',pedido:'Novo pedido',resumo:'Resumo de pedido',radar:'Radar de clientes',historico:'Histórico de vendas',orcamentos:'Ofertas',disparos:'Campanhas',lembretes:'Lembretes'})[activeRoute] || 'Gestão comercial'}</strong></span><div className="prumo-top-actions"><button className="prumo-command" onClick={() => setIsSidebarOpen(true)}><span>⌕</span> Buscar ou navegar <kbd>⌘ K</kbd></button><button onClick={() => setActiveRoute('profile')} className="prumo-profile"><span className="prumo-avatar">{user.name.charAt(0)}</span><span className="prumo-profile-name">{user.name}</span><span className="prumo-profile-role">Conta</span></button></div></div>
                         {isSidebarOpen && <button aria-label="Fechar menu" className="prumo-scrim md:hidden" onClick={() => setIsSidebarOpen(false)} />}
                         <nav className="prumo-bottomnav" aria-label="Navegação principal">
                             {[['dashboard',IconDashboard,'Início'],['clients',IconUsers,'Clientes'],['pedido',IconReceipt,'Pedido'],['pdf',IconTag,'Preços']].map(([r,I,l]) => <button key={r} aria-current={activeRoute===r?'page':undefined} onClick={()=>{setActiveRoute(r);setIsSidebarOpen(false);}}><I/><span>{l}</span></button>)}
