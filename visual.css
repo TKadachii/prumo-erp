@@ -90,3 +90,9 @@ html.prumo-lite .prumo-zap-preview,html.prumo-lite .prumo-zap-preview-bubble{box
 /* Download permanente do aplicativo Android. */
 .prumo-apk-download{width:100%;min-height:58px;display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #8b7cff48;border-radius:13px;background:linear-gradient(110deg,#191426,#0d171d)!important;color:#f5f5f7!important;text-decoration:none;box-shadow:0 10px 34px #0004,0 0 28px #7c6cff0d;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}.prumo-apk-download:hover{transform:translateY(-1px);border-color:#9e93ff88;box-shadow:0 14px 40px #0006,0 0 32px #7c6cff18}.prumo-apk-download-icon{width:36px;height:36px;display:grid;place-items:center;flex:none;border-radius:10px;background:linear-gradient(135deg,#a78bfa,#6d5dfb 52%,#22d3ee);color:#08080b;box-shadow:0 0 22px #7c6cff35}.prumo-apk-download-icon svg{width:18px!important;height:18px!important;filter:none!important}.prumo-apk-download strong,.prumo-apk-download small{display:block}.prumo-apk-download strong{font-size:13px;line-height:1.2;color:#f7f7f8!important}.prumo-apk-download small{margin-top:3px;font-size:10px;line-height:1.2;color:#92929e!important}.prumo-apk-download-arrow{margin-left:auto;padding:0 4px;color:#79e6f5;font-size:18px;font-weight:800}.prumo-apk-download-compact{width:auto;min-width:min(100%,270px);min-height:54px}.prumo-page .prumo-apk-download:hover{color:#fff!important}.prumo-lite .prumo-apk-download{background:#121219!important;box-shadow:none!important}
 @media(max-width:520px){.prumo-apk-download-compact{width:100%}}
+/* Listas nativas (select/option, calendário, barras de rolagem) no escuro: sem clarão branco ao abrir. */
+html{color-scheme:dark}
+select,input,textarea{color-scheme:dark}
+select option,select optgroup{background:#101016!important;color:#ececf1!important}
+select option:checked{background:#2a2350!important;color:#fff!important}
+select option:disabled{color:#6b6b76!important}
