@@ -221,3 +221,20 @@ html.prumo-lite .prumo-precos .pt-avista,html.prumo-lite .prumo-precos .pt-chip.
 .prumo-btn-perigo{color:#f3a3ad;background:#ffffff06;border-color:#ef444433}
 .prumo-btn-perigo:hover:not(:disabled){color:#fecdd3;background:#ef444418;border-color:#ef444477}
 html.prumo-lite .prumo-btn{box-shadow:none!important;transform:none!important}
+/* Textos vermelho/âmbar escuros (feitos pro tema claro) ficavam ilegíveis no fundo escuro */
+.prumo-page .text-red-800{color:#fca5a5!important}.prumo-page .text-amber-800{color:#fcd34d!important}.prumo-page .text-amber-700{color:#fbbf24!important}
+.prumo-page .border-red-200{border-color:#ef444440!important}.prumo-page .border-amber-200{border-color:#f59e0b40!important}
+/* Histórico → "Mandar pro cliente": mesmo cartão + balão degradê do "Criar ofertas" e da Fila */
+.prumo-resumo-cliente{border:1px solid #ffffff12;border-radius:18px;padding:14px;background:linear-gradient(160deg,#111118f2,#0a0a0ef2);box-shadow:0 18px 55px #0003}
+.prumo-resumo-cliente .prc-topo{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.prumo-resumo-cliente .prc-titulo{display:inline-flex;align-items:center;gap:8px;font-family:Manrope,'DM Sans',sans-serif;font-size:15px;font-weight:750;color:#f1f1f5;margin-right:auto}
+.prumo-resumo-cliente .prc-titulo svg{color:#34d399}
+.prumo-resumo-cliente .prumo-layout-pdf button.is-on.is-prumo{color:#fff;background:linear-gradient(135deg,#a78bfa,#6d5dfb 52%,#22d3ee);box-shadow:0 5px 18px #6d5dfb33}
+.prumo-resumo-cliente .prc-copiar{height:34px}
+/* Botões verdes de "Copiar"/"Enviar" no tema cósmico (antes eram verde chapado, fora do visual do site) */
+.prumo-page button.bg-emerald-600{background:linear-gradient(135deg,#a78bfa,#6d5dfb 52%,#22d3ee)!important;color:#fff!important;border-color:transparent!important;box-shadow:0 8px 24px #6d5dfb33!important}
+.prumo-page button.bg-emerald-600:hover:not(:disabled){box-shadow:0 10px 30px #6d5dfb55!important}
+.prumo-page button.bg-emerald-600:disabled{opacity:.45}
+.prumo-page button.bg-emerald-100{background:#ffffff08!important;color:#d9d4ff!important;border:1px solid #8b7cff44!important}
+.prumo-page button.bg-emerald-100:hover{background:#8b7cff1c!important;border-color:#8b7cff88!important;color:#fff!important}
+html.prumo-lite .prumo-page button.bg-emerald-600,html.prumo-lite .prumo-resumo-cliente{box-shadow:none!important}
