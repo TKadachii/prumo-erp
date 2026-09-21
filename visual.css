@@ -211,3 +211,13 @@ html.prumo-lite .prumo-precos .pt-avista,html.prumo-lite .prumo-precos .pt-chip.
 /* Botões em tom pastel (amarelo/vermelho claro, ex.: Editar e Mover pra lixeira) viravam clarão no escuro */
 .prumo-page .bg-amber-100{background:#f59e0b1f!important;color:#fcd34d!important;border-color:#f59e0b40!important}.prumo-page .hover\:bg-amber-200:hover{background:#f59e0b33!important}
 .prumo-page .bg-red-100{background:#ef44441f!important;color:#fca5a5!important;border-color:#ef444440!important}.prumo-page .hover\:bg-red-200:hover{background:#ef444433!important}
+/* Botões no padrão cósmico (reutilizáveis): primário = brilho roxo→ciano; secundário = vidro com borda roxa; perigo = vidro com vermelho discreto */
+.prumo-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:11px;font-size:12px;font-weight:700;letter-spacing:.01em;border:1px solid transparent;transition:transform .15s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease,color .15s ease;white-space:nowrap}
+.prumo-btn:disabled{opacity:.5;cursor:default}
+.prumo-btn-primario{color:#fff;background:linear-gradient(135deg,#a78bfa,#6d5dfb 52%,#22d3ee);box-shadow:0 8px 24px #6d5dfb33}
+.prumo-btn-primario:hover:not(:disabled){box-shadow:0 10px 30px #6d5dfb55;transform:translateY(-1px)}
+.prumo-btn-secundario{color:#d9d4ff;background:#ffffff08;border-color:#8b7cff44}
+.prumo-btn-secundario:hover:not(:disabled){color:#fff;background:#8b7cff1c;border-color:#8b7cff88}
+.prumo-btn-perigo{color:#f3a3ad;background:#ffffff06;border-color:#ef444433}
+.prumo-btn-perigo:hover:not(:disabled){color:#fecdd3;background:#ef444418;border-color:#ef444477}
+html.prumo-lite .prumo-btn{box-shadow:none!important;transform:none!important}
