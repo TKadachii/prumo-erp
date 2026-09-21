@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 217;
+        const APP_BUILD_VERSION = 218;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2250,6 +2250,17 @@
             return t;
         };
 
+        // 🧾 Versão SIMPLES do resumo pro cliente: só o título, os itens e a quantidade — sem loja, data,
+        // pagamento, peso ou valor (pedido do usuário, 2026-09-21).
+        const montarResumoSimples = (p) => {
+            const itens = (p.itens || []).filter(it => Number(it.qty) > 0);
+            return '*Resumo do pedido*\n\n' + itens.map(it => `• ${it.qty}x ${it.name || ('Produto ' + it.code)}`).join('\n');
+        };
+        const copiarTexto = (txt, showMessage, ok) => {
+            try { navigator.clipboard.writeText(txt).then(() => showMessage && showMessage(ok, 'success'), () => showMessage && showMessage('Não consegui copiar. Tente de novo.', 'error')); }
+            catch (e) { showMessage && showMessage('Não consegui copiar. Tente de novo.', 'error'); }
+        };
+
         const HistoricoScreen = ({ user, showMessage }) => {
             const [purchases, setPurchases] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -2456,11 +2467,10 @@
                                     </div>
                                 )}
                                 <div className="flex flex-wrap justify-end gap-2 pt-1">
-                                    <button onClick={() => {
-                                        const txt = montarResumoCliente(p);
-                                        try { navigator.clipboard.writeText(txt).then(() => showMessage && showMessage('Resumo copiado! É só colar no WhatsApp do cliente. 📋', 'success'), () => showMessage && showMessage('Não consegui copiar. Tente de novo.', 'error')); }
-                                        catch (e) { showMessage && showMessage('Não consegui copiar. Tente de novo.', 'error'); }
-                                    }} className="prumo-btn prumo-btn-primario">📋 Copiar resumo pro cliente</button>
+                                    <button onClick={() => copiarTexto(montarResumoSimples(p), showMessage, 'Resumo simples copiado! É só colar no WhatsApp do cliente. 📋')}
+                                        title="Só os itens e a quantidade" className="prumo-btn prumo-btn-secundario">📝 Copiar resumo simples</button>
+                                    <button onClick={() => copiarTexto(montarResumoCliente(p), showMessage, 'Resumo copiado! É só colar no WhatsApp do cliente. 📋')}
+                                        title="Loja, data, pagamento, itens, peso e prévia do total" className="prumo-btn prumo-btn-primario">📋 Copiar resumo pro cliente</button>
                                 {dono === 'ativo' && (
                                     <>
                                         <button onClick={() => abrirEdicao(p)} className="prumo-btn prumo-btn-secundario">✏️ Editar</button>
@@ -8027,6 +8037,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.33.0', data: '21/09/2026', areas: ['site'], itens: [
+                '📝 NOVO no Histórico de Vendas: botão "Copiar resumo simples" — só "Resumo do pedido" com os itens e a quantidade, sem valores',
+            ]},
             { versao: '2.32.2', data: '21/09/2026', areas: ['site'], itens: [
                 '🌌 Botões do pedido no Histórico de Vendas (Copiar resumo, Editar, Mover pra lixeira) no visual cósmico do Prumo',
             ]},
