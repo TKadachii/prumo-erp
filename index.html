@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 211;
+        const APP_BUILD_VERSION = 212;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2667,10 +2667,10 @@
             const n = doc.internal.getNumberOfPages();
             for (let i = 1; i <= n; i++) {
                 doc.setPage(i);
-                doc.setDrawColor(...L.linha); doc.setLineWidth(0.25); doc.line(10, alt - 8, larg - 10, alt - 8);
-                doc.setTextColor(...L.suave); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-                doc.text(L.rodape + '  ·  Preços sujeitos a alteração sem aviso prévio', 10, alt - 4);
-                doc.text('Página ' + i + ' de ' + n, larg - 10, alt - 4, { align: 'right' });
+                doc.setDrawColor(...L.linha); doc.setLineWidth(0.2); doc.line(10, alt - 5.5, larg - 10, alt - 5.5);
+                doc.setTextColor(...L.suave); doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5);
+                doc.text(L.rodape + '  ·  Preços sujeitos a alteração sem aviso prévio', 10, alt - 3);
+                doc.text('Página ' + i + ' de ' + n, larg - 10, alt - 3, { align: 'right' });
             }
         };
 
@@ -2681,7 +2681,7 @@
             const JsPDF = window.jspdf && window.jspdf.jsPDF;
             if (!JsPDF) throw new Error('sem-lib');
             const L = PDF_LAYOUTS[layout] || PDF_LAYOUTS[lerLayoutPdf()];
-            const W = 210, H = 297, FUNDO = H - 14;
+            const W = 210, H = 297, FUNDO = H - 8;
             const preco = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const doc = new JsPDF({ unit: 'mm', format: 'a4' });
             const hoje = new Date().toLocaleDateString('pt-BR');
@@ -2933,10 +2933,12 @@
             const JsPDF = window.jspdf && window.jspdf.jsPDF;
             if (!JsPDF) throw new Error('sem-lib');
             const L = PDF_LAYOUTS[layout] || PDF_LAYOUTS[lerLayoutPdf()];
-            const W = 297, H = 210, FUNDO = H - 12;
+            const W = 297, H = 210, FUNDO = H - 7;
             const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
             const brl = (v) => (v == null || v === '' || isNaN(Number(v)) || Number(v) <= 0) ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            const lista = (produtos || []).slice().sort((a, b) => String(a.code).localeCompare(String(b.code), 'pt-BR', { numeric: true }));
+            // Ordem de CÓDIGO como TEXTO (06…, 12…, 15…, 16…, 27…, 40…), igual à tabela da Friganso: é o que deixa
+            // cada grupo (os 2 primeiros dígitos — os mesmos grupos da regra de desconto, 16/27/90…) todo junto.
+            const lista = (produtos || []).slice().sort((a, b) => { const x = String(a.code).trim(), z = String(b.code).trim(); return x < z ? -1 : x > z ? 1 : 0; });
             const quando = dataTabela || new Date();
             const subtitulo = lista.length + ' produtos  ·  ' + (dataTabela ? 'tabela distribuída em ' : 'gerada em ') + quando.toLocaleDateString('pt-BR') + ' às ' + quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '  ·  valores em R$ por kg/unidade';
 
@@ -2967,14 +2969,29 @@
             const corta = (txt, larg) => { let t = String(txt || ''); if (doc.getTextWidth(t) <= larg) return t; while (doc.getTextWidth(t + '…') > larg && t.length > 3) t = t.slice(0, -1); return t + '…'; };
 
             cabecalho();
-            lista.forEach((p, i) => {
+            const TOPO = y;
+            let grupoAnterior = null, iNoGrupo = 0;
+            lista.forEach((p) => {
                 // Nome NUNCA é cortado: quebra em quantas linhas precisar e a linha da tabela cresce junto
                 // (nome cortado pode esconder justamente o que diferencia dois produtos parecidos).
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
                 const linhasNome = doc.splitTextToSize(String(p.name || ''), COLS[1].w - 2);
                 const altura = Math.max(ALTURA, linhasNome.length * 3.2 + 2.2);
-                if (y + altura > FUNDO) { doc.addPage(); cabecalho(); }
-                if (i % 2 === 0) { doc.setFillColor(...L.zebra); doc.rect(10, y, 277, altura, 'F'); }
+                // 🗂️ Grupo novo (2 primeiros dígitos do código): um respiro + rótulo antes de começar.
+                // Se o grupo começa no pé da página, o rótulo desce junto com o 1º item pra página seguinte.
+                const grupo = String(p.code).trim().slice(0, 2);
+                const novoGrupo = grupo !== grupoAnterior;
+                const espacoGrupo = novoGrupo ? (y > TOPO ? 4 : 0) + 5 : 0;
+                if (y + espacoGrupo + altura > FUNDO) { doc.addPage(); cabecalho(); }
+                if (novoGrupo) {
+                    if (y > TOPO) y += 4;
+                    doc.setTextColor(...L.acento); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+                    doc.text('GRUPO ' + grupo, 11, y + 3.2);
+                    doc.setDrawColor(...L.acento); doc.setLineWidth(0.3); doc.line(27, y + 2.2, 287, y + 2.2);
+                    y += 5;
+                    grupoAnterior = grupo; iNoGrupo = 0;
+                }
+                if (iNoGrupo++ % 2 === 0) { doc.setFillColor(...L.zebra); doc.rect(10, y, 277, altura, 'F'); }
                 doc.setDrawColor(...L.linha); doc.setLineWidth(0.2); doc.line(10, y + altura, 287, y + altura);
                 const pz = p.precosPrazo || {};
                 const vals = [String(p.code), p.name, String(p.tipo || ''), String(p.pesoItem || ''),
@@ -7969,6 +7986,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.30.1', data: '21/09/2026', areas: ['site'], itens: [
+                '🗂️ PDF da tabela separa os GRUPOS de código (2 primeiros dígitos: 16, 27, 40…) com um espaço e uma linha com o nome do grupo — igual à tabela da Friganso',
+                'Códigos agora na ordem da Friganso (06…, 12…, 15…, 16…), que deixa cada grupo todo junto',
+                'Rodapé dos PDFs menor, sobrando mais espaço pros produtos',
+            ]},
             { versao: '2.30.0', data: '21/09/2026', areas: ['site'], itens: [
                 '🎚️ NOVO na Fila de Pedidos: cada item tem botões − e + pra escolher o desconto de 0 a 3%, e o preço pode ser digitado à mão (↺ volta pro calculado)',
                 'Padrão continua o mesmo: à vista e a prazo já vêm com 3%; Prazo Parcelado vem sem desconto, mas agora dá pra dar desconto se você conseguir',
