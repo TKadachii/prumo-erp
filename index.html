@@ -367,7 +367,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 205;
+        const APP_BUILD_VERSION = 206;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2841,6 +2841,80 @@
             return doc;
         };
 
+        // 📄 PDF da TABELA DE PREÇOS COMPLETA (botão na tela Tabela de Preços): todo produto da tabela
+        // de hoje com TODOS os preços — à vista, cartão e os 7 prazos. Diferente do PDF de conferência
+        // do Debug (que despeja até os inativos, pra caçar bug), este é pra usar/mandar: só a tabela
+        // atual, em ordem alfabética, legível. Folha branca de propósito (impressão/WhatsApp); a
+        // identidade escura do Prumo vai no cabeçalho. Sem dado pessoal no rodapé (ver v2.16.1).
+        const gerarPdfTabelaPrecos = (produtos) => {
+            const JsPDF = window.jspdf && window.jspdf.jsPDF;
+            if (!JsPDF) throw new Error('sem-lib');
+            const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+            const brl = (v) => (v == null || v === '' || isNaN(Number(v)) || Number(v) <= 0) ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const lista = (produtos || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { numeric: true }));
+            const hoje = new Date();
+
+            // ⚠️ Larguras somam 277mm (A4 deitado com 10mm de margem). Se acrescentar coluna, refaça a conta.
+            // `dir: true` = número alinhado à direita da coluna.
+            const COLS = [
+                { t: 'CÓD.', x: 10, w: 14 },  { t: 'PRODUTO', x: 24, w: 93 },
+                { t: 'TIPO', x: 118, w: 10 }, { t: 'PESO', x: 129, w: 19 },
+                { t: 'À VISTA', x: 149, w: 18, dir: true }, { t: 'CARTÃO', x: 168, w: 18, dir: true },
+                { t: '7 DIAS', x: 187, w: 14, dir: true },  { t: '14 DIAS', x: 201, w: 14, dir: true },
+                { t: '21 DIAS', x: 215, w: 14, dir: true }, { t: '28 DIAS', x: 229, w: 14, dir: true },
+                { t: '30 DIAS', x: 243, w: 14, dir: true }, { t: '35 DIAS', x: 257, w: 14, dir: true },
+                { t: '45 DIAS', x: 271, w: 16, dir: true },
+            ];
+            const ALTURA = 5, TOPO_LINHAS = 38, FUNDO = 198;
+            let y = 0;
+            const cabecalho = () => {
+                doc.setFillColor(16, 16, 22); doc.rect(0, 0, 297, 24, 'F');
+                doc.setFillColor(124, 108, 255); doc.rect(0, 24, 297, 1.2, 'F');
+                doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+                doc.text('PRUMO', 10, 12);
+                doc.setTextColor(169, 159, 255); doc.setFontSize(11);
+                doc.text('TABELA DE PREÇOS', 34, 12);
+                doc.setTextColor(170, 170, 185); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+                doc.text(lista.length + ' produtos  ·  gerada em ' + hoje.toLocaleDateString('pt-BR') + ' às ' + hoje.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), 10, 18.5);
+                doc.text('Valores em R$ por kg/unidade', 287, 18.5, { align: 'right' });
+                doc.setFillColor(28, 26, 46); doc.rect(10, 29, 277, 7, 'F');
+                doc.setTextColor(230, 228, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+                COLS.forEach(c => c.dir ? doc.text(c.t, c.x + c.w - 1, 33.6, { align: 'right' }) : doc.text(c.t, c.x + 1, 33.6));
+                y = TOPO_LINHAS;
+            };
+            const corta = (txt, larg) => { let t = String(txt || ''); if (doc.getTextWidth(t) <= larg) return t; while (doc.getTextWidth(t + '…') > larg && t.length > 3) t = t.slice(0, -1); return t + '…'; };
+
+            cabecalho();
+            lista.forEach((p, i) => {
+                if (y + ALTURA > FUNDO) { doc.addPage(); cabecalho(); }
+                if (i % 2 === 0) { doc.setFillColor(244, 243, 251); doc.rect(10, y, 277, ALTURA, 'F'); }
+                const pz = p.precosPrazo || {};
+                const vals = [String(p.code), p.name, String(p.tipo || ''), String(p.pesoItem || ''),
+                              brl(p.originalPrice), brl(p.precoCartao),
+                              brl(pz[7]), brl(pz[14]), brl(pz[21]), brl(pz[28]), brl(pz[30]), brl(pz[35]), brl(pz[45])];
+                const base = y + 3.5;
+                COLS.forEach((c, k) => {
+                    const destaque = k === 4; // à vista em destaque: é o preço de referência de toda venda
+                    doc.setFont('helvetica', destaque || k === 1 ? 'bold' : 'normal');
+                    doc.setFontSize(destaque ? 8 : 7.5);
+                    if (destaque) doc.setTextColor(75, 63, 209); else if (k === 0) doc.setTextColor(120, 120, 135); else doc.setTextColor(30, 30, 40);
+                    const texto = corta(vals[k], c.w - 2);
+                    c.dir ? doc.text(texto, c.x + c.w - 1, base, { align: 'right' }) : doc.text(texto, c.x + 1, base);
+                });
+                y += ALTURA;
+            });
+
+            const n = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= n; i++) {
+                doc.setPage(i);
+                doc.setDrawColor(220, 218, 235); doc.setLineWidth(0.2); doc.line(10, 202, 287, 202);
+                doc.setTextColor(140, 140, 155); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+                doc.text('Prumo  ·  Preços sujeitos a alteração sem aviso prévio', 10, 206);
+                doc.text('Página ' + i + ' de ' + n, 287, 206, { align: 'right' });
+            }
+            return doc;
+        };
+
         const PdfScreen = ({ user, products, setProducts, showMessage, listaNegra, toggleListaNegra, valorMaximo, setValorMaximoProduto }) => {
             const lnSet = new Set((listaNegra || []).map(String));
             const vmMap = valorMaximo || {};
@@ -2866,6 +2940,22 @@
                     const nome = 'friganso-mudancas-preco-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf';
                     doc.save(nome);
                     showMessage('PDF gerado! Procure em Downloads pra mandar no WhatsApp. 📄', 'success');
+                } catch (e) {
+                    if (e && e.message === 'sem-lib') showMessage('O gerador de PDF não carregou. Conecte na internet e atualize a página uma vez.', 'error');
+                    else showMessage('Erro ao gerar o PDF: ' + (e && e.message ? e.message : e), 'error');
+                }
+            };
+
+            // 📄 Tabela completa em PDF: só os produtos da tabela de HOJE (os "fora da tabela" guardam o
+            // último preço visto, que pode estar velho — num PDF que vai pro cliente isso vira promessa).
+            const baixarPdfTabela = () => {
+                const ativos = (products || []).filter(p => p.ativo !== false);
+                if (!ativos.length) { showMessage('Carregue a tabela primeiro (Nuvem ou Ler PDF).', 'error'); return; }
+                try {
+                    const doc = gerarPdfTabelaPrecos(ativos);
+                    const d = new Date();
+                    doc.save('prumo-tabela-precos-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf');
+                    showMessage(ativos.length + ' produtos no PDF! Procure em Downloads. 📄', 'success');
                 } catch (e) {
                     if (e && e.message === 'sem-lib') showMessage('O gerador de PDF não carregou. Conecte na internet e atualize a página uma vez.', 'error');
                     else showMessage('Erro ao gerar o PDF: ' + (e && e.message ? e.message : e), 'error');
@@ -3138,6 +3228,11 @@
                             <button onClick={() => { fetchPdfVersions(); setShowCloudModal(true); }} disabled={isLoading} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
                                 <div className="h-5 w-5"><IconCloudDownload /></div> Nuvem
                             </button>
+                            {products.length > 0 && (
+                                <button onClick={baixarPdfTabela} title="Baixa a tabela de hoje com todos os preços: à vista, cartão e prazos" className="bg-rose-700 hover:bg-rose-800 text-white px-5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
+                                    📄 Baixar PDF
+                                </button>
+                            )}
                             {products.length > 0 && (
                                 <button onClick={compararComAnterior} disabled={isLoading} title="Compara a tabela atual com a anterior da nuvem" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
                                     📊 Comparar com anterior
@@ -7728,6 +7823,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.28.0', data: '21/09/2026', areas: ['site'], itens: [
+                '📄 NOVO: botão "Baixar PDF" na Tabela de Preços — a tabela de hoje inteira, com todos os preços de cada produto (à vista, cartão e 7/14/21/28/30/35/45 dias), em ordem alfabética',
+                'O preço à vista vem em destaque; itens "fora da tabela" (com preço antigo) ficam de fora pra ninguém receber preço vencido',
+            ]},
             { versao: '2.27.1', data: '19/09/2026', areas: ['site'], itens: [
                 '🌙 Listas de seleção (como a escolha da rota) agora abrem no tema escuro do Prumo, sem aquele clarão branco',
             ]},
