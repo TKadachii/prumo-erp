@@ -208,3 +208,6 @@ html.prumo-lite .prumo-precos .pt-avista,html.prumo-lite .prumo-precos .pt-chip.
 @media(max-width:767px){.prumo-fila-item{flex-direction:column;align-items:stretch;gap:8px}.pfi-controles{justify-content:space-between}.prumo-page .pfi-preco input{font-size:16px}}
 /* Verdes-claros de botão (ex.: "abrir no WhatsApp") viravam um clarão no tema escuro */
 .prumo-page .bg-emerald-100{background:#34d3991f!important;color:#6ee7b7!important}.prumo-page .hover\:bg-emerald-200:hover{background:#34d39933!important}
+/* Botões em tom pastel (amarelo/vermelho claro, ex.: Editar e Mover pra lixeira) viravam clarão no escuro */
+.prumo-page .bg-amber-100{background:#f59e0b1f!important;color:#fcd34d!important;border-color:#f59e0b40!important}.prumo-page .hover\:bg-amber-200:hover{background:#f59e0b33!important}
+.prumo-page .bg-red-100{background:#ef44441f!important;color:#fca5a5!important;border-color:#ef444440!important}.prumo-page .hover\:bg-red-200:hover{background:#ef444433!important}

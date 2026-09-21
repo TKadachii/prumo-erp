@@ -150,7 +150,7 @@
         .tema-esmeralda .bg-rose-50, .tema-esmeralda .bg-rose-100, .tema-esmeralda .bg-rose-50\/30 { background-color: rgba(12,120,78,.32) !important; }
         .tema-esmeralda .border, .tema-esmeralda .border-slate-100, .tema-esmeralda .border-slate-200 { border-color: rgba(52,211,153,.25) !important; }
     </style>
-    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=211">
+    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=215">
 </head>
 <body class="prumo-production">
     <!-- 🎨 Tema do sistema (Claro/Escuro/Sakura/Oceano/Esmeralda). Escolha salva em friganso_tema.
@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 214;
+        const APP_BUILD_VERSION = 215;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2216,6 +2216,28 @@
             return { valor: Math.round(valor * 100) / 100, pesoTotal: Math.round(pesoTotal * 100) / 100 };
         };
 
+        // 🧾 Resumo AMIGÁVEL pro cliente (Histórico de Vendas → "Copiar resumo pro cliente"). Diferente do
+        // resumo do supervisor (código - qtd - preço): aqui vai nome da loja, nome dos itens, quantidade,
+        // peso e uma PRÉVIA do total. "Prévia" porque carne é vendida por peso — a nota final pode mudar
+        // um pouco. Sem dado pessoal do vendedor (o texto é repassado).
+        const montarResumoCliente = (p) => {
+            const kg = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const itens = (p.itens || []).filter(it => Number(it.qty) > 0);
+            const quando = p.ts ? new Date(p.ts) : (p.dia ? new Date(p.dia + 'T12:00:00') : new Date());
+            let t = '🧾 *Resumo do seu pedido*\n';
+            if (p.clienteName) t += `🏪 ${p.clienteName}\n`;
+            t += `📅 ${quando.toLocaleDateString('pt-BR')}\n\n`;
+            itens.forEach(it => {
+                t += `• ${it.qty}x ${it.name || ('Produto ' + it.code)}${Number(it.peso) > 0 ? ` (${kg(it.peso)} kg)` : ''}\n`;
+            });
+            const peso = Number(p.pesoTotal) || itens.reduce((a, it) => a + (Number(it.peso) || 0), 0);
+            t += '\n';
+            if (peso > 0) t += `⚖️ Peso aprox.: ${kg(peso)} kg\n`;
+            t += `💰 *Prévia do total: ${formatPrice(Math.abs(Number(p.valor) || 0))}*\n`;
+            t += '_Valor aproximado, o total final vem na nota conforme o peso real._';
+            return t;
+        };
+
         const HistoricoScreen = ({ user, showMessage }) => {
             const [purchases, setPurchases] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -2421,12 +2443,19 @@
                                         ))}
                                     </div>
                                 )}
+                                <div className="flex flex-wrap justify-end gap-2 pt-1">
+                                    <button onClick={() => {
+                                        const txt = montarResumoCliente(p);
+                                        try { navigator.clipboard.writeText(txt).then(() => showMessage && showMessage('Resumo copiado! É só colar no WhatsApp do cliente. 📋', 'success'), () => showMessage && showMessage('Não consegui copiar. Tente de novo.', 'error')); }
+                                        catch (e) { showMessage && showMessage('Não consegui copiar. Tente de novo.', 'error'); }
+                                    }} className="text-xs font-bold px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors">📋 Copiar resumo pro cliente</button>
                                 {dono === 'ativo' && (
-                                    <div className="flex justify-end gap-2 pt-1">
+                                    <>
                                         <button onClick={() => abrirEdicao(p)} className="text-xs font-bold px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors">✏️ Editar</button>
                                         <button onClick={() => moverParaLixeira(p)} disabled={emProcesso} className="text-xs font-bold px-3 py-2 rounded-xl bg-red-100 hover:bg-red-200 text-red-700 transition-colors disabled:opacity-50">{emProcesso ? 'Movendo...' : '🗑️ Mover pra lixeira'}</button>
-                                    </div>
+                                    </>
                                 )}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -7986,6 +8015,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.32.0', data: '21/09/2026', areas: ['site'], itens: [
+                '🧾 NOVO no Histórico de Vendas: botão "Copiar resumo pro cliente" em cada pedido — nome da loja, data, itens com quantidade e peso, e a prévia do total, pronto pra colar no WhatsApp',
+                '🌙 Botões "Editar" e "Mover pra lixeira" (e outros em amarelo/vermelho claro) agora no tema escuro, sem clarão',
+            ]},
             { versao: '2.31.0', data: '21/09/2026', areas: ['site'], itens: [
                 '🔎 Novo Pedido → "Tudo que já comprou": barra de pesquisa (código ou nome) e itens na ordem das ÚLTIMAS compras, com a data de cada um (Hoje, Ontem, 12/09…)',
                 '🏷️ "Compras deste cliente → Por dia" agora mostra o nome do produto junto do código (e o nome completo ao passar o mouse)',
