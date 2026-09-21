@@ -96,3 +96,83 @@ select,input,textarea{color-scheme:dark}
 select option,select optgroup{background:#101016!important;color:#ececf1!important}
 select option:checked{background:#2a2350!important;color:#fff!important}
 select option:disabled{color:#6b6b76!important}
+
+/* Tabela de Preços (v2.29.0): cartão cósmico, preço à vista em destaque, nada de branco. */
+.prumo-page .prumo-precos{display:flex;flex-direction:column;height:calc(100vh - 150px);min-height:560px;overflow:hidden;border:1px solid #ffffff12;border-radius:19px;background:linear-gradient(160deg,#111118f2,#0a0a0ef2);box-shadow:0 24px 80px #0005}
+.prumo-precos .pt-toolbar{padding:16px 18px 12px;border-bottom:1px solid #ffffff0d;background:linear-gradient(110deg,#7c6cff0c,transparent 45%,#22d3ee08);display:flex;flex-direction:column;gap:12px}
+.prumo-precos .pt-busca{position:relative;display:flex;align-items:center}
+.prumo-precos .pt-busca-icone{position:absolute;left:15px;width:18px;height:18px;color:#8b7cff;pointer-events:none}
+.prumo-page .prumo-precos .pt-busca input{width:100%;height:48px;padding:0 150px 0 44px;border-radius:13px!important;background:#07070bcc!important;border:1px solid #ffffff14!important;color:#f2f2f5!important;font-size:15px;font-weight:500}
+.prumo-page .prumo-precos .pt-busca input:focus{border-color:#8b7cffaa!important;box-shadow:0 0 0 3px #7c6cff22,0 0 30px #7c6cff14!important}
+.prumo-precos .pt-busca-limpar{position:absolute;right:108px;width:26px;height:26px;padding:6px;border-radius:50%;background:#ffffff0d;color:#a0a0ab;display:grid;place-items:center}
+.prumo-precos .pt-busca-limpar:hover{background:#8b7cff30;color:#fff}
+.prumo-precos .pt-contador{position:absolute;right:12px;font-size:11px;font-weight:700;color:#a99fff;background:#7c6cff14;border:1px solid #8b7cff30;border-radius:999px;padding:4px 10px;white-space:nowrap}
+.prumo-precos .pt-linha-filtros{display:flex;flex-wrap:wrap;gap:10px 22px}
+.prumo-precos .pt-grupo{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.prumo-precos .pt-rotulo{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6f6f7b;margin-right:4px}
+.prumo-precos .pt-chip{height:32px;padding:0 13px;border-radius:10px;border:1px solid #ffffff10;background:#ffffff06;color:#b4b4bf;font-size:12px;font-weight:650;transition:background .15s,border-color .15s,color .15s}
+.prumo-precos .pt-chip:hover{background:#8b7cff14;border-color:#8b7cff40;color:#fff}
+.prumo-precos .pt-chip.is-on{background:linear-gradient(135deg,#a78bfa,#6d5dfb 52%,#22d3ee);border-color:transparent;color:#fff;box-shadow:0 6px 20px #6d5dfb35}
+.prumo-precos .pt-chip-mini{height:28px;padding:0 9px;font-size:11px}
+.prumo-precos .pt-aviso{font-size:11px;font-weight:700;color:#fcd34d;background:#f59e0b14;border:1px solid #f59e0b33;border-radius:999px;padding:4px 10px}
+.prumo-precos .pt-rolagem{flex:1;overflow:auto;scrollbar-width:thin;scrollbar-color:#8b7cff44 transparent}
+.prumo-precos .pt-rolagem::-webkit-scrollbar{width:8px;height:8px}.prumo-precos .pt-rolagem::-webkit-scrollbar-thumb{background:#8b7cff44;border-radius:999px}
+.prumo-precos .pt-vazio{display:flex;flex-direction:column;align-items:center;gap:8px;padding:70px 20px;color:#7d7d89;font-size:14px}.prumo-precos .pt-vazio span{font-size:34px}
+.prumo-page .prumo-precos .pt-tabela{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.prumo-page .prumo-precos .pt-tabela th{position:sticky;top:0;z-index:2;background:#0c0c12f2!important;backdrop-filter:blur(12px);color:#777784!important;font-size:10px;font-weight:700!important;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:12px 14px!important;border-bottom:1px solid #ffffff10!important;white-space:nowrap}
+.prumo-page .prumo-precos .pt-tabela th.pt-th-avista{color:#b8b0ff!important;background:linear-gradient(#171230f2,#110f22f2)!important}
+.prumo-page .prumo-precos .pt-tabela th.pt-th-desc{color:#7ee8b4!important}
+.prumo-page .prumo-precos .pt-tabela td{padding:11px 14px!important;border-bottom:1px solid #ffffff08!important;vertical-align:middle;color:#c9c9d2}
+.prumo-precos .pt-dir{text-align:right!important}.prumo-precos .pt-centro{text-align:center!important}
+.prumo-precos .pt-cod{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#7b7b88!important;white-space:nowrap}
+.prumo-precos .pt-nome{min-width:260px}
+.prumo-precos .pt-nome-texto{display:block;color:#f1f1f5;font-weight:650;font-size:13.5px;line-height:1.35}
+.prumo-precos .pt-selos{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.prumo-precos .pt-selo{font-size:10px;font-weight:700;border-radius:999px;padding:2px 8px;border:1px solid}
+.prumo-precos .pt-selo-cinza{color:#b4b4bf;background:#ffffff0a;border-color:#ffffff14}
+.prumo-precos .pt-selo-ambar{color:#fcd34d;background:#f59e0b14;border-color:#f59e0b40}
+.prumo-precos .pt-selo-vermelho{color:#fca5a5;background:#ef444414;border-color:#ef444440}
+.prumo-precos .pt-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.prumo-precos .pt-meta span{font-size:10.5px;color:#8f8f9b;background:#ffffff07;border:1px solid #ffffff0b;border-radius:6px;padding:1px 7px;white-space:nowrap}
+.prumo-precos .pt-tabela-preco{color:#9d9daa!important;white-space:nowrap;font-variant-numeric:tabular-nums}
+.prumo-precos .pt-avista{display:inline-block;white-space:nowrap;font-weight:800;font-size:14.5px;color:#ece9ff;background:linear-gradient(135deg,#7c6cff2e,#22d3ee12);border:1px solid #8b7cff45;border-radius:10px;padding:5px 11px;font-variant-numeric:tabular-nums;box-shadow:0 0 22px #7c6cff12}
+.prumo-precos .pt-desc{color:#8df5bd!important;font-weight:750;white-space:nowrap;font-variant-numeric:tabular-nums}
+.prumo-precos .pt-desc.is-fixo{color:#fcd34d!important}
+.prumo-page .prumo-precos .prumo-vm-input{background:#07070b!important;border-color:#ffffff14!important;color:#fcd34d!important;font-weight:700;min-height:34px}
+.prumo-page .prumo-precos .prumo-vm-input:focus{border-color:#f59e0baa!important;box-shadow:0 0 0 3px #f59e0b22!important}
+.prumo-precos .pt-zap{width:36px;height:36px;border-radius:10px;border:1px solid #ffffff10;background:#ffffff06;font-size:15px;transition:background .15s,border-color .15s}
+.prumo-precos .pt-zap:hover{background:#8b7cff18;border-color:#8b7cff44}
+.prumo-precos .pt-zap.is-banido{background:#34d39912;border-color:#34d39940}
+@media(min-width:768px){
+.prumo-precos .pt-tabela tbody tr{transition:background .12s}
+.prumo-precos .pt-tabela tbody tr:nth-child(even) td{background:#ffffff03}
+.prumo-precos .pt-tabela tbody tr:hover td{background:#8b7cff0d!important}
+.prumo-precos .pt-tabela tbody tr:hover td:first-child{box-shadow:inset 3px 0 #8b7cff}
+.prumo-precos .pt-tabela tbody tr.is-inativo td:first-child{box-shadow:inset 3px 0 #ef4444aa}
+.prumo-precos .pt-tabela tbody tr.is-inativo .pt-nome-texto{color:#fca5a5}
+.prumo-precos .pt-tabela tbody tr.is-inativo .pt-avista{filter:grayscale(.7);opacity:.7}
+.prumo-precos .pt-tabela tbody tr.is-banido td{opacity:.55}
+.prumo-precos .pt-tabela tbody tr.is-banido .pt-nome-texto{text-decoration:line-through}
+}
+@media(max-width:767px){
+.prumo-page .prumo-precos{height:auto;min-height:0;max-height:none;overflow:visible;border-radius:17px}
+.prumo-precos .pt-toolbar{position:sticky;top:0;z-index:5;background:#0c0c12f2;backdrop-filter:blur(14px);border-radius:17px 17px 0 0}
+.prumo-page .prumo-precos .pt-busca input{padding-right:110px;font-size:16px}
+.prumo-precos .pt-busca-limpar{right:92px}
+.prumo-precos .pt-contador{font-size:10px;padding:3px 8px}
+.prumo-precos .pt-rolagem{overflow:visible}
+[data-route=pdf] .prumo-precos tbody tr.is-inativo{border-color:#ef444455!important}
+[data-route=pdf] .prumo-precos tbody tr.is-banido{opacity:.6}
+[data-route=pdf] .prumo-precos .pt-avista{font-size:15px}
+}
+html.prumo-lite .prumo-precos,html.prumo-lite .prumo-precos .pt-toolbar,html.prumo-lite .prumo-precos .pt-tabela th{backdrop-filter:none!important;box-shadow:none!important}
+html.prumo-lite .prumo-precos .pt-avista,html.prumo-lite .prumo-precos .pt-chip.is-on{box-shadow:none!important}
+.prumo-layout-pdf{display:inline-flex;align-items:center;gap:3px;padding:3px;border-radius:12px;border:1px solid #ffffff12;background:#07070bcc;white-space:nowrap}
+.prumo-layout-pdf>span{font-size:9px;font-weight:800;letter-spacing:.12em;color:#6f6f7b;padding:0 6px 0 7px}
+.prumo-layout-pdf button{height:30px;padding:0 11px;border-radius:9px;font-size:11.5px;font-weight:700;color:#9d9daa;background:transparent;border:1px solid transparent}
+.prumo-layout-pdf button:hover{color:#fff;background:#ffffff0a}
+.prumo-layout-pdf button.is-on.is-prumo{color:#fff;background:linear-gradient(135deg,#a78bfa,#6d5dfb 52%,#22d3ee);box-shadow:0 5px 18px #6d5dfb33}
+.prumo-layout-pdf button.is-on.is-friganso{color:#fff;background:linear-gradient(135deg,#fb7185,#e11d48 55%,#f97316);box-shadow:0 5px 18px #e11d4833}
+/* Fundos claros de alerta que o tema cósmico não convertia (ex.: botão "Fora da tabela") */
+.prumo-page .bg-red-50{background:#ef444414!important}.prumo-page .hover\:bg-red-100:hover{background:#ef444422!important}
+.prumo-page .text-red-700{color:#fca5a5!important}.prumo-page .text-red-600{color:#f87171!important}
