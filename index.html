@@ -150,7 +150,7 @@
         .tema-esmeralda .bg-rose-50, .tema-esmeralda .bg-rose-100, .tema-esmeralda .bg-rose-50\/30 { background-color: rgba(12,120,78,.32) !important; }
         .tema-esmeralda .border, .tema-esmeralda .border-slate-100, .tema-esmeralda .border-slate-200 { border-color: rgba(52,211,153,.25) !important; }
     </style>
-    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=209">
+    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=211">
 </head>
 <body class="prumo-production">
     <!-- 🎨 Tema do sistema (Claro/Escuro/Sakura/Oceano/Esmeralda). Escolha salva em friganso_tema.
@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 210;
+        const APP_BUILD_VERSION = 211;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -757,7 +757,8 @@
                     .map(i => ({ code: String(i.code), name: i.name || i.nome || ('Produto ' + i.code), qty: Number(i.qty != null ? i.qty : i.quantity), peso: Number(i.peso) || 0, valorKg: Number(i.valorKg) || 0 }))
                     .filter(i => i.code && i.qty > 0);
                 if (!clienteCode || !itensSafe.length) return;
-                const sig = String(clienteCode) + '|' + itensSafe.map(i => i.code + 'x' + i.qty).sort().join(',');
+                // o preço entra na assinatura: mudar só o desconto/preço e copiar de novo TEM que atualizar a venda
+                const sig = String(clienteCode) + '|' + itensSafe.map(i => i.code + 'x' + i.qty + '@' + i.valorKg).sort().join(',');
                 const agora = Date.now();
                 if (_ultimaCompraReg.sig === sig && (agora - _ultimaCompraReg.ts) < 5 * 60 * 1000) return;
                 _ultimaCompraReg = { sig, ts: agora };
@@ -852,6 +853,26 @@
             const { unitFinalPrice } = checkDiscountRules(p.code, p.name, p.originalPrice);
             return unitFinalPrice || 0;
         };
+
+        // 🎚️ Desconto AJUSTÁVEL por item (Fila de Pedidos, v2.30.0): de 0 a 3%, em passos de 1%.
+        // Devolve a base do preço, o desconto padrão e se o item pode ter desconto. Os padrões batem
+        // EXATAMENTE com precoParaCondicao (3% no à vista/prazo, 0% no parcelado, cartão fixo), então
+        // pedido que ninguém mexeu sai igualzinho a antes. Diferença: parcelado começa em 0% mas fica
+        // LIBERADO (o vendedor às vezes consegue desconto); cartão, item sem desconto e preço fixo
+        // (Valor Máximo) ficam TRAVADOS.
+        const DESCONTO_MAX = 3;
+        const regraDescontoItem = (p, condicao) => {
+            const cat = normalizarCondicaoPagamento(condicao);
+            const orig = Number(p.originalPrice) || 0;
+            const r = checkDiscountRules(p.code, p.name, p.originalPrice);
+            const vm = window.__valorMaximo && window.__valorMaximo[String(p.code)];
+            if (vm != null && Number(vm) > 0) return { base: r.unitFinalPrice, padrao: 0, bloqueado: true, motivo: 'preço fixo' };
+            if (cat === 'cartao') return { base: p.precoCartao != null ? Number(p.precoCartao) : orig, padrao: 0, bloqueado: true, motivo: 'cartão' };
+            if (!r.hasDiscount) return { base: orig, padrao: 0, bloqueado: true, motivo: 'sem desconto' };
+            if (cat === 'parcelado') return { base: orig, padrao: 0, bloqueado: false, motivo: '' };
+            return { base: orig, padrao: DESCONTO_MAX, bloqueado: false, motivo: '' };
+        };
+        const aplicarDescontoPct = (base, pct) => Math.round((Number(base) || 0) * (1 - (Number(pct) || 0) / 100) * 100) / 100;
 
         // 📝 Texto do resumo pro WhatsApp. Também global e pelo mesmo motivo: é ele que o Resumo de
         // Pedido manda e é ele que a Fila mostra — tem que ser o mesmo texto, letra por letra.
@@ -7948,6 +7969,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.30.0', data: '21/09/2026', areas: ['site'], itens: [
+                '🎚️ NOVO na Fila de Pedidos: cada item tem botões − e + pra escolher o desconto de 0 a 3%, e o preço pode ser digitado à mão (↺ volta pro calculado)',
+                'Padrão continua o mesmo: à vista e a prazo já vêm com 3%; Prazo Parcelado vem sem desconto, mas agora dá pra dar desconto se você conseguir',
+                '🔒 Itens que não aceitam desconto (grupos 16/27/90, Fraldinha Ramax, preço fixo) e pedidos no cartão ficam travados',
+                'O texto do resumo e a venda salva na ficha do cliente usam exatamente o preço ajustado; mexer num pedido já copiado faz ele voltar pra "a conferir"',
+            ]},
             { versao: '2.29.1', data: '21/09/2026', areas: ['site'], itens: [
                 '📄 PDF da tabela agora sai na ordem de CÓDIGO, alinhado com a tabela da Friganso (antes era por nome); os itens novos do PDF de mudanças também',
             ]},
@@ -9073,6 +9100,48 @@
             if (agora.getTime() < corte.getTime()) corte.setDate(corte.getDate() - 1);
             return corte.getTime();
         };
+        // 🎚️ Preço/desconto de um item da Fila. `info` vem de precoItemFila (dentro da FilaScreen).
+        // Nível de módulo de propósito: tem campo de digitação (ver lição da digitação ao contrário).
+        const ItemFilaAjuste = ({ code, info, onDesc, onPreco, onLimparPreco }) => {
+            const fmt = (v) => (Number(v) || 0).toFixed(2).replace('.', ',');
+            const [texto, setTexto] = useState(fmt(info.preco));
+            useEffect(() => { setTexto(fmt(info.preco)); }, [info.preco]);
+            const salvar = () => {
+                const num = parseFloat(String(texto).replace(/\./g, '').replace(',', '.'));
+                if (isNaN(num) || num <= 0) { setTexto(fmt(info.preco)); return; }
+                if (Math.abs(num - info.preco) >= 0.005) onPreco(Math.round(num * 100) / 100);
+            };
+            const riscado = !info.manual && !info.bloqueado && info.desc > 0;
+            return (
+                <div className={`prumo-fila-item ${info.manual ? 'is-manual' : ''}`}>
+                    <div className="pfi-produto">
+                        <span className="pfi-cod">{code}</span>
+                        <span className="pfi-nome" title={info.nome}>{info.nome}</span>
+                        <span className="pfi-qtd">{info.qty}x</span>
+                    </div>
+                    <div className="pfi-controles">
+                        {info.bloqueado ? (
+                            <span className="pfi-trava" title="Este item não aceita desconto">🔒 {info.motivo}</span>
+                        ) : (
+                            <div className="pfi-desc" role="group" aria-label="Desconto">
+                                <button type="button" onClick={() => onDesc(info.desc - 1)} disabled={info.desc <= 0} aria-label="Menos desconto">−</button>
+                                <span className={info.desc > 0 ? 'is-on' : ''}>{info.desc}%</span>
+                                <button type="button" onClick={() => onDesc(info.desc + 1)} disabled={info.desc >= DESCONTO_MAX} aria-label="Mais desconto">+</button>
+                            </div>
+                        )}
+                        <div className="pfi-preco">
+                            {riscado && <s>R$ {fmt(info.base)}</s>}
+                            <label>
+                                <span>R$</span>
+                                <input type="text" inputMode="decimal" value={texto} onChange={e => setTexto(e.target.value)} onBlur={salvar} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} aria-label={'Preço do item ' + code} />
+                            </label>
+                            {info.manual && <button type="button" className="pfi-reset" onClick={onLimparPreco} title="Voltar pro preço calculado">↺</button>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const FilaScreen = ({ showMessage, setActiveRoute, products, clients, user }) => {
             const [fila, setFila] = useState([]);
             const [selecionado, setSelecionado] = useState(null);
@@ -9238,14 +9307,47 @@
 
             // 📝 O texto sai da MESMA função que o Resumo de Pedido usa (montarTextoResumo global),
             // com os preços da Tabela do Dia e a condição de pagamento do próprio pedido.
+            // 🎚️ Preço de cada item com o desconto/preço que o vendedor ajustou nesta tela (f.ajustes,
+            // salvo junto da fila — vai pra nuvem e aparece no celular também). Sem ajuste = padrão da regra.
+            const precoItemFila = (f, it) => {
+                const aj = (f.ajustes && f.ajustes[String(it.code)]) || {};
+                const rp = (products || []).find(p => String(p.code) === String(it.code));
+                const nome = rp ? rp.name : (it.nome || ('Produto ' + it.code));
+                const qty = Number(it.qty) || 1;
+                if (!rp) {
+                    // fora da tabela do dia: sem base pra calcular desconto, só dá pra digitar o preço
+                    const fb = Number(it.valorUnit) || 0;
+                    return { nome, qty, base: fb, desc: 0, bloqueado: true, motivo: 'fora da tabela', preco: aj.preco != null ? aj.preco : fb, manual: aj.preco != null };
+                }
+                const r = regraDescontoItem(rp, f.pedido.condicaoPagamento);
+                const desc = r.bloqueado ? 0 : (aj.desc != null ? Math.max(0, Math.min(DESCONTO_MAX, aj.desc)) : r.padrao);
+                const calculado = r.bloqueado ? Math.round(r.base * 100) / 100 : aplicarDescontoPct(r.base, desc);
+                return { nome, qty, base: r.base, desc, bloqueado: r.bloqueado, motivo: r.motivo, preco: aj.preco != null ? aj.preco : calculado, manual: aj.preco != null };
+            };
+            // Mexer num pedido já copiado devolve ele pra "a conferir": o texto guardado pro balão ficaria velho
+            const ajustarItem = (i, code, mudanca) => {
+                const nova = fila.map((x, k) => {
+                    if (k !== i) return x;
+                    const ajustes = { ...(x.ajustes || {}) };
+                    const atual = { ...(ajustes[String(code)] || {}), ...mudanca };
+                    Object.keys(atual).forEach(key => { if (atual[key] == null) delete atual[key]; });
+                    if (Object.keys(atual).length) ajustes[String(code)] = atual; else delete ajustes[String(code)];
+                    return { ...x, ajustes, feito: false, texto: '' };
+                });
+                setFila(nova); salvar(nova);
+            };
+
             const textoDe = (f) => {
                 if (!f) return '';
+                const itens = f.pedido.itens || [];
+                const precos = {};
+                itens.forEach(it => { precos[it.code] = precoItemFila(f, it).preco; });
                 return montarTextoResumo({
                     clienteCode: f.pedido.cliente,
                     spamov: f.pedido.spamov,
                     condicao: f.pedido.condicaoPagamento,
-                    itens: (f.pedido.itens || []).map(it => ({ code: it.code, qty: it.qty, precoFallback: Number(it.valorUnit) || 0 }))
-                }, products);
+                    itens: itens.map(it => ({ code: it.code, qty: it.qty, precoFallback: Number(it.valorUnit) || 0 }))
+                }, products, { precos });
             };
             // Copiar aqui faz exatamente o que o "Copiar Resumo" fazia: copia E grava na ficha do
             // cliente. Sem isso a venda deixaria de entrar no histórico e o Radar/Painel ficariam cegos.
@@ -9255,10 +9357,10 @@
                 const txt = textoDe(f);
                 navigator.clipboard.writeText(txt);
                 try {
+                    // mesmo preço que foi pro texto (com o desconto/preço ajustado aqui) — a venda na ficha tem que bater com o resumo
                     const itens = (f.pedido.itens || []).map(it => {
-                        const rp = (products || []).find(p => String(p.code) === String(it.code));
-                        const preco = rp ? precoParaCondicao(rp, f.pedido.condicaoPagamento) : (Number(it.valorUnit) || 0);
-                        return { code: String(it.code), name: rp ? rp.name : (it.nome || ('Produto ' + it.code)), qty: Number(it.qty) || 1, peso: Number(it.peso) || 0, valorKg: preco };
+                        const info = precoItemFila(f, it);
+                        return { code: String(it.code), name: info.nome, qty: Number(it.qty) || 1, peso: Number(it.peso) || 0, valorKg: info.preco };
                     });
                     if (f.pedido.cliente) registrarCompra(f.pedido.cliente, itens, null, 'fila', clients, user, f.pedido.spamov, f.pedido.condicaoPagamento);
                 } catch (e) {}
@@ -9362,6 +9464,23 @@
                                                     </p>
                                                     {fila[selecionado].feito && <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full flex-shrink-0">já copiado</span>}
                                                 </div>
+                                                {/* 🎚️ Desconto (0–3%) e preço de cada item, direto na fila */}
+                                                <div className="prumo-fila-itens">
+                                                    <div className="pfi-topo">
+                                                        <span>Itens · desconto e preço</span>
+                                                        {fila[selecionado].pedido.condicaoPagamento && <span className="pfi-cond">{LABEL_CONDICAO[normalizarCondicaoPagamento(fila[selecionado].pedido.condicaoPagamento)] || fila[selecionado].pedido.condicaoPagamento}</span>}
+                                                    </div>
+                                                    {(fila[selecionado].pedido.itens || []).map((it, k) => {
+                                                        const info = precoItemFila(fila[selecionado], it);
+                                                        const idx = selecionado;
+                                                        return (
+                                                            <ItemFilaAjuste key={idx + '-' + it.code + '-' + k} code={it.code} info={info}
+                                                                onDesc={(d) => ajustarItem(idx, it.code, { desc: Math.max(0, Math.min(DESCONTO_MAX, d)), preco: null })}
+                                                                onPreco={(v) => ajustarItem(idx, it.code, { preco: v })}
+                                                                onLimparPreco={() => ajustarItem(idx, it.code, { preco: null })} />
+                                                        );
+                                                    })}
+                                                </div>
                                                 <div className="prumo-message-bubble p-3 rounded-xl flex-1 overflow-y-auto max-h-[300px]">
                                                     <pre className="font-mono text-sm whitespace-pre-wrap text-slate-800 font-medium">{textoDe(fila[selecionado])}</pre>
                                                 </div>
@@ -9374,7 +9493,7 @@
                                                     )}
                                                     <button onClick={() => abrirNoResumo(selecionado)} title="Abrir no Resumo pra editar preço ou quantidade" className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors">Editar</button>
                                                 </div>
-                                                <p className="text-[11px] text-slate-400 mt-2">Precisa mudar preço ou quantidade? Use o <b>Editar</b> — ele abre este pedido no Resumo completo.</p>
+                                                <p className="text-[11px] text-slate-400 mt-2">Desconto e preço você ajusta aqui mesmo. Pra mudar a <b>quantidade</b>, use o <b>Editar</b> — ele abre este pedido no Resumo completo.</p>
                                             </>
                                         )}
                                     </div>

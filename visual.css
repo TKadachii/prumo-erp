@@ -176,3 +176,35 @@ html.prumo-lite .prumo-precos .pt-avista,html.prumo-lite .prumo-precos .pt-chip.
 /* Fundos claros de alerta que o tema cósmico não convertia (ex.: botão "Fora da tabela") */
 .prumo-page .bg-red-50{background:#ef444414!important}.prumo-page .hover\:bg-red-100:hover{background:#ef444422!important}
 .prumo-page .text-red-700{color:#fca5a5!important}.prumo-page .text-red-600{color:#f87171!important}
+/* Fila de Pedidos: desconto (0–3%) e preço por item */
+.prumo-fila-itens{margin-bottom:12px;border:1px solid #ffffff10;border-radius:14px;background:#08080cb3;overflow:hidden}
+.prumo-fila-itens .pfi-topo{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid #ffffff0b;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#777784}
+.prumo-fila-itens .pfi-cond{letter-spacing:.02em;text-transform:none;font-size:11px;color:#a99fff;background:#7c6cff14;border:1px solid #8b7cff33;border-radius:999px;padding:2px 9px}
+.prumo-fila-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-bottom:1px solid #ffffff08}
+.prumo-fila-item:last-child{border-bottom:0}
+.prumo-fila-item:hover{background:#8b7cff08}
+.prumo-fila-item.is-manual{box-shadow:inset 3px 0 #f59e0b}
+.pfi-produto{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.pfi-cod{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;font-weight:700;color:#a99fff;flex:none}
+.pfi-nome{font-size:12.5px;font-weight:600;color:#e6e6ec;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pfi-qtd{font-size:11px;font-weight:700;color:#8d8d99;background:#ffffff08;border-radius:6px;padding:1px 6px;flex:none}
+.pfi-controles{display:flex;align-items:center;gap:10px;flex:none}
+.pfi-desc{display:inline-flex;align-items:center;border:1px solid #ffffff14;border-radius:10px;background:#0c0c12;overflow:hidden}
+.pfi-desc button{width:30px;height:30px;font-size:16px;font-weight:800;color:#c4bdff;background:transparent;line-height:1}
+.pfi-desc button:hover:not(:disabled){background:#8b7cff22;color:#fff}
+.pfi-desc button:disabled{color:#44444f;cursor:default}
+.pfi-desc span{min-width:38px;text-align:center;font-size:12.5px;font-weight:800;color:#8d8d99;font-variant-numeric:tabular-nums}
+.pfi-desc span.is-on{color:#8df5bd}
+.pfi-trava{font-size:10.5px;font-weight:700;color:#9d9daa;background:#ffffff07;border:1px solid #ffffff10;border-radius:8px;padding:6px 9px;white-space:nowrap}
+.pfi-preco{display:flex;align-items:center;gap:6px}
+.pfi-preco s{font-size:10.5px;color:#6f6f7b;white-space:nowrap}
+.pfi-preco label{display:inline-flex;align-items:center;gap:3px;border:1px solid #8b7cff40;border-radius:10px;background:linear-gradient(135deg,#7c6cff1f,#22d3ee0d);padding:0 8px}
+.pfi-preco label span{font-size:11px;font-weight:700;color:#a99fff}
+.prumo-page .pfi-preco input{width:64px;min-height:30px!important;height:30px;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;color:#f1efff!important;font-weight:800;font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
+.prumo-fila-item.is-manual .pfi-preco label{border-color:#f59e0b77;background:#f59e0b12}
+.prumo-fila-item.is-manual .pfi-preco input{color:#fcd34d!important}
+.pfi-reset{width:26px;height:26px;border-radius:8px;color:#fcd34d;background:#f59e0b14;border:1px solid #f59e0b33;font-size:13px;font-weight:800}
+.pfi-reset:hover{background:#f59e0b2a}
+@media(max-width:767px){.prumo-fila-item{flex-direction:column;align-items:stretch;gap:8px}.pfi-controles{justify-content:space-between}.prumo-page .pfi-preco input{font-size:16px}}
+/* Verdes-claros de botão (ex.: "abrir no WhatsApp") viravam um clarão no tema escuro */
+.prumo-page .bg-emerald-100{background:#34d3991f!important;color:#6ee7b7!important}.prumo-page .hover\:bg-emerald-200:hover{background:#34d39933!important}
