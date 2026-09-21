@@ -367,7 +367,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 206;
+        const APP_BUILD_VERSION = 207;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2886,8 +2886,13 @@
 
             cabecalho();
             lista.forEach((p, i) => {
-                if (y + ALTURA > FUNDO) { doc.addPage(); cabecalho(); }
-                if (i % 2 === 0) { doc.setFillColor(244, 243, 251); doc.rect(10, y, 277, ALTURA, 'F'); }
+                // Nome NUNCA é cortado: quebra em quantas linhas precisar e a linha da tabela cresce junto
+                // (nome cortado pode esconder justamente o que diferencia dois produtos parecidos).
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+                const linhasNome = doc.splitTextToSize(String(p.name || ''), COLS[1].w - 2);
+                const altura = Math.max(ALTURA, linhasNome.length * 3.2 + 1.8);
+                if (y + altura > FUNDO) { doc.addPage(); cabecalho(); }
+                if (i % 2 === 0) { doc.setFillColor(244, 243, 251); doc.rect(10, y, 277, altura, 'F'); }
                 const pz = p.precosPrazo || {};
                 const vals = [String(p.code), p.name, String(p.tipo || ''), String(p.pesoItem || ''),
                               brl(p.originalPrice), brl(p.precoCartao),
@@ -2898,10 +2903,11 @@
                     doc.setFont('helvetica', destaque || k === 1 ? 'bold' : 'normal');
                     doc.setFontSize(destaque ? 8 : 7.5);
                     if (destaque) doc.setTextColor(75, 63, 209); else if (k === 0) doc.setTextColor(120, 120, 135); else doc.setTextColor(30, 30, 40);
+                    if (k === 1) { doc.text(linhasNome, c.x + 1, base, { lineHeightFactor: 1.2 }); return; }
                     const texto = corta(vals[k], c.w - 2);
                     c.dir ? doc.text(texto, c.x + c.w - 1, base, { align: 'right' }) : doc.text(texto, c.x + 1, base);
                 });
-                y += ALTURA;
+                y += altura;
             });
 
             const n = doc.internal.getNumberOfPages();
@@ -7823,6 +7829,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.28.1', data: '21/09/2026', areas: ['site'], itens: [
+                '📄 PDF da tabela: nome comprido não é mais cortado — quebra em duas linhas e aparece inteiro',
+            ]},
             { versao: '2.28.0', data: '21/09/2026', areas: ['site'], itens: [
                 '📄 NOVO: botão "Baixar PDF" na Tabela de Preços — a tabela de hoje inteira, com todos os preços de cada produto (à vista, cartão e 7/14/21/28/30/35/45 dias), em ordem alfabética',
                 'O preço à vista vem em destaque; itens "fora da tabela" (com preço antigo) ficam de fora pra ninguém receber preço vencido',
