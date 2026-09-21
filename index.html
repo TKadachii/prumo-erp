@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 213;
+        const APP_BUILD_VERSION = 214;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -7986,6 +7986,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.31.0', data: '21/09/2026', areas: ['site'], itens: [
+                '🔎 Novo Pedido → "Tudo que já comprou": barra de pesquisa (código ou nome) e itens na ordem das ÚLTIMAS compras, com a data de cada um (Hoje, Ontem, 12/09…)',
+                '🏷️ "Compras deste cliente → Por dia" agora mostra o nome do produto junto do código (e o nome completo ao passar o mouse)',
+            ]},
             { versao: '2.30.2', data: '21/09/2026', areas: ['site'], itens: [
                 '🔎 PDFs mais fáceis de ler e de pesquisar (Ctrl+F): código em negrito e bem claro, faixas alternadas mais marcadas e linhas separando os itens mais visíveis',
             ]},
@@ -10150,17 +10154,34 @@
             }, [purchases, clienteId]);
 
             // Tudo que o cliente já comprou alguma vez (histórico antigo da planilha + tudo que aparecer nas compras por dia)
+            // Ordem: o que ele comprou por ÚLTIMO vem primeiro (é o que ele tende a repetir). Quem só está no
+            // histórico antigo da planilha não tem data — vai pro fim, por código.
             const jaComprou = useMemo(() => {
                 const q = clienteId.trim();
                 if (!q) return [];
-                const codes = new Set();
+                const ultima = new Map(); // code -> { ts, dia, nome }
+                purchases.filter(p => String(p.clienteCode) === q && !p.devolucao && Number(p.valor || 0) >= 0).forEach(p => {
+                    const ts = Number(p.ts) || (p.dia ? new Date(p.dia + 'T12:00:00').getTime() : 0);
+                    (p.itens || []).forEach(it => {
+                        const code = String(it.code);
+                        const atual = ultima.get(code);
+                        if (!atual || ts > atual.ts) ultima.set(code, { ts, dia: p.dia, nome: it.name });
+                    });
+                });
+                const codes = new Set(ultima.keys());
                 if (clienteInfo && Array.isArray(clienteInfo.history)) clienteInfo.history.forEach(c => codes.add(String(c)));
-                purchases.filter(p => String(p.clienteCode) === q).forEach(p => (p.itens || []).forEach(it => codes.add(String(it.code))));
                 return Array.from(codes).map(code => {
                     const prod = products.find(p => String(p.code) === code);
-                    return { code: code, name: prod ? prod.name : ('Produto ' + code), naTabela: !!prod };
-                });
+                    const u = ultima.get(code);
+                    return { code: code, name: prod ? prod.name : ((u && u.nome) || ('Produto ' + code)), naTabela: !!prod, ts: u ? u.ts : 0, dia: u ? u.dia : null };
+                }).sort((a, b) => (b.ts - a.ts) || a.code.localeCompare(b.code, 'pt-BR', { numeric: true }));
             }, [clienteInfo, purchases, clienteId, products]);
+            const [buscaJaComprou, setBuscaJaComprou] = useState('');
+            const jaComprouFiltrado = useMemo(() => {
+                const q = normalizeForSearch(buscaJaComprou.trim());
+                if (!q) return jaComprou;
+                return jaComprou.filter(it => it.code.includes(buscaJaComprou.trim()) || normalizeForSearch(it.name).includes(q));
+            }, [jaComprou, buscaJaComprou]);
             const rotuloDia = (dia, ts) => {
                 const hoje = diaISO(Date.now());
                 const ontem = diaISO(Date.now() - 86400000);
@@ -10378,11 +10399,16 @@
                                                     <span className="text-[10px] text-slate-400">{(p.itens || []).length} item(ns){p.via ? ' · ' + p.via : ''}</span>
                                                 </div>
                                                 <div className="flex flex-wrap gap-1">
-                                                    {(p.itens || []).map((it, idx) => (
-                                                        <button key={idx} type="button" onClick={() => addItem({ code: String(it.code), name: it.name })} title="Tocar pra adicionar ao pedido" className="text-[11px] bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-600 hover:border-rose-300 hover:bg-rose-50 transition-colors">
-                                                            <span className="font-mono font-bold text-rose-700">{it.code}</span> ×{it.qty}
-                                                        </button>
-                                                    ))}
+                                                    {(p.itens || []).map((it, idx) => {
+                                                        // nome da tabela de hoje; se o produto saiu dela, o nome que foi gravado na compra
+                                                        const prod = products.find(pr => String(pr.code) === String(it.code));
+                                                        const nome = (prod && prod.name) || it.name || ('Produto ' + it.code);
+                                                        return (
+                                                            <button key={idx} type="button" onClick={() => addItem({ code: String(it.code), name: nome })} title={nome + ' — toque pra adicionar ao pedido'} className="text-[11px] bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-600 hover:border-rose-300 hover:bg-rose-50 transition-colors text-left">
+                                                                <span className="font-mono font-bold text-rose-700">{it.code}</span> <span>{nome.length > 24 ? nome.slice(0, 24) + '…' : nome}</span> <span className="font-bold text-slate-400">×{it.qty}</span>
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         ))}
@@ -10392,14 +10418,28 @@
 
                             {jaComprou.length > 0 && (
                                 <div>
-                                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Tudo que já comprou ({jaComprou.length})</p>
-                                    <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto">
-                                        {jaComprou.map((it, idx) => (
-                                            <button key={idx} type="button" onClick={() => addItem({ code: it.code, name: it.name })} title={it.name} className={`text-[11px] rounded-lg px-2 py-1 border transition-colors ${it.naTabela ? 'bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Tudo que já comprou ({jaComprou.length})</p>
+                                        <span className="text-[10px] text-slate-400">mais recentes primeiro</span>
+                                    </div>
+                                    <div className="relative mb-2">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"><IconSearch/></div>
+                                        <input type="text" value={buscaJaComprou} onChange={e => setBuscaJaComprou(e.target.value)} placeholder="Pesquisar no que ele já comprou (código ou nome)..."
+                                            className="w-full pl-9 pr-9 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-500" />
+                                        {buscaJaComprou && <button type="button" onClick={() => setBuscaJaComprou('')} title="Limpar" className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500"><div className="h-3 w-3"><IconX/></div></button>}
+                                    </div>
+                                    {jaComprouFiltrado.length === 0 ? (
+                                        <p className="text-xs text-slate-400 py-3 text-center">Nada com "{buscaJaComprou}" no que ele já comprou.</p>
+                                    ) : (
+                                    <div className="flex flex-wrap gap-1 max-h-48 overflow-y-auto">
+                                        {jaComprouFiltrado.map((it) => (
+                                            <button key={it.code} type="button" onClick={() => addItem({ code: it.code, name: it.name })} title={it.name + (it.dia ? ' · última compra: ' + rotuloDia(it.dia, it.ts) : '')} className={`text-[11px] rounded-lg px-2 py-1 border transition-colors ${it.naTabela ? 'bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:bg-rose-50' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
                                                 <span className="font-mono font-bold text-rose-700">{it.code}</span> <span className="truncate">{it.name.length > 22 ? it.name.slice(0, 22) + '…' : it.name}</span>
+                                                {it.dia && <span className="ml-1 text-[9.5px] font-bold text-slate-400">· {rotuloDia(it.dia, it.ts)}</span>}
                                             </button>
                                         ))}
                                     </div>
+                                    )}
                                 </div>
                             )}
 
