@@ -367,7 +367,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 207;
+        const APP_BUILD_VERSION = 208;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2846,7 +2846,7 @@
         // do Debug (que despeja até os inativos, pra caçar bug), este é pra usar/mandar: só a tabela
         // atual, em ordem alfabética, legível. Folha branca de propósito (impressão/WhatsApp); a
         // identidade escura do Prumo vai no cabeçalho. Sem dado pessoal no rodapé (ver v2.16.1).
-        const gerarPdfTabelaPrecos = (produtos) => {
+        const gerarPdfTabelaPrecos = (produtos, dataTabela) => {
             const JsPDF = window.jspdf && window.jspdf.jsPDF;
             if (!JsPDF) throw new Error('sem-lib');
             const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
@@ -2875,7 +2875,8 @@
                 doc.setTextColor(169, 159, 255); doc.setFontSize(11);
                 doc.text('TABELA DE PREÇOS', 34, 12);
                 doc.setTextColor(170, 170, 185); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-                doc.text(lista.length + ' produtos  ·  gerada em ' + hoje.toLocaleDateString('pt-BR') + ' às ' + hoje.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), 10, 18.5);
+                const quando = dataTabela || hoje;
+                doc.text(lista.length + ' produtos  ·  ' + (dataTabela ? 'tabela distribuída em ' : 'gerada em ') + quando.toLocaleDateString('pt-BR') + ' às ' + quando.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), 10, 18.5);
                 doc.text('Valores em R$ por kg/unidade', 287, 18.5, { align: 'right' });
                 doc.setFillColor(28, 26, 46); doc.rect(10, 29, 277, 7, 'F');
                 doc.setTextColor(230, 228, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
@@ -2952,20 +2953,29 @@
                 }
             };
 
-            // 📄 Tabela completa em PDF: só os produtos da tabela de HOJE (os "fora da tabela" guardam o
-            // último preço visto, que pode estar velho — num PDF que vai pro cliente isso vira promessa).
-            const baixarPdfTabela = () => {
-                const ativos = (products || []).filter(p => p.ativo !== false);
-                if (!ativos.length) { showMessage('Carregue a tabela primeiro (Nuvem ou Ler PDF).', 'error'); return; }
+            // 📄 Tabela completa em PDF: SEMPRE a última tabela DISTRIBUÍDA (nuvem), nunca a lista local —
+            // a local mescla tabelas antigas e cada aparelho pode estar num ponto diferente. Da distribuída,
+            // saem só os itens que vieram nela: os marcados `ativo: false` são os que o admin tinha de
+            // tabelas anteriores e não apareceram na última (preço velho num PDF de cliente vira promessa).
+            const [gerandoPdf, setGerandoPdf] = useState(false);
+            const baixarPdfTabela = async () => {
+                if (gerandoPdf) return;
+                setGerandoPdf(true);
                 try {
-                    const doc = gerarPdfTabelaPrecos(ativos);
-                    const d = new Date();
+                    const snap = await db.collection('system_data').doc('shared_pdf').get();
+                    const dados = snap.exists ? snap.data() : null;
+                    const ativos = ((dados && dados.products) || []).filter(p => p && p.ativo !== false && Number(p.originalPrice) > 0);
+                    if (!ativos.length) { showMessage('Nenhuma tabela distribuída na nuvem ainda.', 'error'); return; }
+                    const ua = dados.updatedAt;
+                    const dataTabela = ua && typeof ua.toDate === 'function' ? ua.toDate() : (ua ? new Date(ua) : null);
+                    const doc = gerarPdfTabelaPrecos(ativos, dataTabela);
+                    const d = dataTabela || new Date();
                     doc.save('prumo-tabela-precos-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf');
-                    showMessage(ativos.length + ' produtos no PDF! Procure em Downloads. 📄', 'success');
+                    showMessage(ativos.length + ' produtos da última tabela distribuída no PDF! Procure em Downloads. 📄', 'success');
                 } catch (e) {
                     if (e && e.message === 'sem-lib') showMessage('O gerador de PDF não carregou. Conecte na internet e atualize a página uma vez.', 'error');
-                    else showMessage('Erro ao gerar o PDF: ' + (e && e.message ? e.message : e), 'error');
-                }
+                    else showMessage('Não consegui buscar a tabela da nuvem. Confira a internet e tente de novo.', 'error');
+                } finally { setGerandoPdf(false); }
             };
 
             useEffect(() => {
@@ -3234,11 +3244,9 @@
                             <button onClick={() => { fetchPdfVersions(); setShowCloudModal(true); }} disabled={isLoading} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
                                 <div className="h-5 w-5"><IconCloudDownload /></div> Nuvem
                             </button>
-                            {products.length > 0 && (
-                                <button onClick={baixarPdfTabela} title="Baixa a tabela de hoje com todos os preços: à vista, cartão e prazos" className="bg-rose-700 hover:bg-rose-800 text-white px-5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
-                                    📄 Baixar PDF
-                                </button>
-                            )}
+                            <button onClick={baixarPdfTabela} disabled={gerandoPdf} title="Baixa a última tabela distribuída com todos os preços: à vista, cartão e prazos" className="disabled:opacity-60 bg-rose-700 hover:bg-rose-800 text-white px-5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
+                                {gerandoPdf ? '⏳ Gerando…' : '📄 Baixar PDF'}
+                            </button>
                             {products.length > 0 && (
                                 <button onClick={compararComAnterior} disabled={isLoading} title="Compara a tabela atual com a anterior da nuvem" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
                                     📊 Comparar com anterior
@@ -7829,6 +7837,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.28.2', data: '21/09/2026', areas: ['site'], itens: [
+                '📄 O PDF da tabela agora sai SEMPRE da última tabela distribuída na nuvem (não da lista guardada no aparelho) — todo mundo baixa o mesmo PDF',
+                'Itens que não vieram na última tabela distribuída ficam de fora; o cabeçalho mostra a data e hora dessa tabela',
+            ]},
             { versao: '2.28.1', data: '21/09/2026', areas: ['site'], itens: [
                 '📄 PDF da tabela: nome comprido não é mais cortado — quebra em duas linhas e aparece inteiro',
             ]},
