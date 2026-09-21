@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 212;
+        const APP_BUILD_VERSION = 213;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2610,13 +2610,13 @@
             prumo: {
                 marca: 'PRUMO', rodape: 'Prumo', logo: null,
                 fundo: [9, 9, 13], faixa: [16, 16, 23], acento: [124, 108, 255], titulo: [255, 255, 255], sub: [169, 159, 255],
-                texto: [232, 232, 238], suave: [138, 138, 152], cod: [118, 118, 132], zebra: [15, 15, 21], linha: [38, 36, 54],
+                texto: [232, 232, 238], suave: [138, 138, 152], cod: [214, 209, 255], zebra: [26, 25, 38], linha: [66, 62, 96],
                 thead: [26, 23, 44], theadTexto: [222, 218, 255], destaque: [190, 182, 255], desce: [141, 245, 189], sobe: [252, 165, 165],
             },
             friganso: {
                 marca: 'FRIGANSO', rodape: 'Friganso', logo: null, // preenchida com a versão branca da logo logo abaixo; sem ela, sai o nome em texto
                 fundo: [12, 9, 10], faixa: [26, 12, 15], acento: [244, 63, 94], titulo: [255, 255, 255], sub: [253, 164, 175],
-                texto: [238, 232, 233], suave: [156, 138, 141], cod: [140, 118, 122], zebra: [21, 14, 16], linha: [56, 34, 39],
+                texto: [238, 232, 233], suave: [156, 138, 141], cod: [255, 214, 220], zebra: [36, 21, 25], linha: [96, 54, 63],
                 thead: [46, 17, 23], theadTexto: [255, 228, 230], destaque: [253, 164, 175], desce: [141, 245, 189], sobe: [252, 165, 165],
             },
         };
@@ -2705,7 +2705,7 @@
                 if (i % 2 === 0) { doc.setFillColor(...L.zebra); doc.rect(10, y, W - 20, altura, 'F'); }
                 doc.setDrawColor(...L.linha); doc.setLineWidth(0.2); doc.line(10, y + altura, W - 10, y + altura);
                 const base = y + 4.3;
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...L.cod);
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...L.cod);
                 doc.text(String(cod), 12, base);
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...L.texto);
                 doc.text(linhasNome, 30, base, { lineHeightFactor: 1.2 });
@@ -3000,8 +3000,8 @@
                 const base = y + 3.7;
                 COLS.forEach((c, k) => {
                     const destaque = k === 4; // à vista em destaque: é o preço de referência de toda venda
-                    doc.setFont('helvetica', destaque || k === 1 ? 'bold' : 'normal');
-                    doc.setFontSize(destaque ? 8 : 7.5);
+                    doc.setFont('helvetica', destaque || k <= 1 ? 'bold' : 'normal');
+                    doc.setFontSize(destaque || k === 0 ? 8 : 7.5); // código maior e claro: é o que se procura no Ctrl+F
                     doc.setTextColor(...(destaque ? L.destaque : k === 0 ? L.cod : (k === 1 || k >= 5) ? L.texto : L.suave));
                     if (k === 1) { doc.text(linhasNome, c.x + 1, base, { lineHeightFactor: 1.2 }); return; }
                     const texto = corta(vals[k], c.w - 2);
@@ -7986,6 +7986,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.30.2', data: '21/09/2026', areas: ['site'], itens: [
+                '🔎 PDFs mais fáceis de ler e de pesquisar (Ctrl+F): código em negrito e bem claro, faixas alternadas mais marcadas e linhas separando os itens mais visíveis',
+            ]},
             { versao: '2.30.1', data: '21/09/2026', areas: ['site'], itens: [
                 '🗂️ PDF da tabela separa os GRUPOS de código (2 primeiros dígitos: 16, 27, 40…) com um espaço e uma linha com o nome do grupo — igual à tabela da Friganso',
                 'Códigos agora na ordem da Friganso (06…, 12…, 15…, 16…), que deixa cada grupo todo junto',
