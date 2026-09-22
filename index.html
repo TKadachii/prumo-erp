@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 222;
+        const APP_BUILD_VERSION = 223;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -8054,6 +8054,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.34.4', data: '22/09/2026', areas: ['app'], itens: [
+                '🌌 Navegador interno redesenhado com a identidade cósmica do Prumo',
+                '🧭 Barra superior reorganizada com controles escuros, legíveis e próprios para toque',
+                '🧹 Console técnico oculto por padrão e botões de diagnóstico removidos da área do cliente',
+                '✨ Painel de ações do Prumo agora abre no tamanho correto mesmo dentro do site antigo do SPAmov',
+            ]},
             { versao: '2.34.3', data: '22/09/2026', areas: ['app', 'site'], itens: [
                 '✅ Corrigido o aviso de atualização do Android que voltava a aparecer toda vez que o app era aberto',
                 '📲 O Prumo agora reconhece quando uma versão já foi baixada e não insiste no mesmo aviso',

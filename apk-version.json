@@ -1,6 +1,6 @@
 {
-    "versionCode": 17,
-    "versionName": "4.2",
+    "versionCode": 18,
+    "versionName": "4.3",
     "url": "https://tkadachii.github.io/prumo-erp/PrumoERP.apk",
-    "novidades": "• Corrige o aviso de atualização que aparecia repetidamente\n• Navegação móvel com botão de voltar em todas as telas\n• Configurações com rolagem e saída sempre acessível\n• Modo Lite corrigido\n• Layout ajustado para o Galaxy A07 e outras telas estreitas"
+    "novidades": "• Navegador interno redesenhado no tema cósmico\n• Barra superior escura e organizada para celular\n• Console técnico oculto por padrão\n• Painel de ações maior, legível e recolhido quando não está em uso"
 }

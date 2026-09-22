@@ -1,4 +1,4 @@
-const CACHE = 'prumo-v222';
+const CACHE = 'prumo-v223';
 const BASE = '/prumo-erp';
 const ASSETS = [
     BASE + '/',

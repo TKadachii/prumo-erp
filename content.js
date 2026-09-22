@@ -2120,12 +2120,12 @@
         barra.id = 'friganso-mobile-toolbar';
         barra.setAttribute('role', 'region');
         barra.setAttribute('aria-label', 'Ações do Prumo ERP');
-        Object.assign(barra.style, { position: 'fixed', zIndex: '2147483647', boxSizing: 'border-box', padding: '8px', borderRadius: '12px', background: '#0f172a', color: '#fff', fontFamily: 'system-ui,sans-serif', boxShadow: '0 4px 20px #0005', transformOrigin: 'top left' });
+        Object.assign(barra.style, { position: 'fixed', zIndex: '2147483647', boxSizing: 'border-box', padding: '7px', border: '1px solid rgba(167,139,250,.38)', borderRadius: '16px', background: 'linear-gradient(145deg,rgba(16,16,22,.98),rgba(8,13,18,.98))', color: '#f5f5f7', fontFamily: 'system-ui,sans-serif', boxShadow: '0 18px 55px rgba(0,0,0,.55),0 0 28px rgba(124,108,255,.14)', transformOrigin: 'top left', backdropFilter: 'blur(18px)', overflow: 'hidden' });
         const acoes = document.createElement('div');
-        Object.assign(acoes.style, { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px' });
+        Object.assign(acoes.style, { display: 'none', gridTemplateColumns: '1fr 1fr', gap: '7px', marginTop: '7px' });
         const aviso = document.createElement('div');
         aviso.setAttribute('role', 'status');
-        Object.assign(aviso.style, { fontSize: '13px', lineHeight: '1.4', paddingTop: '6px' });
+        Object.assign(aviso.style, { display: 'none', fontSize: '12px', lineHeight: '1.4', marginTop: '7px', padding: '8px 10px', borderRadius: '10px', background: 'rgba(255,255,255,.06)', color: '#c9c9d1' });
         const avisar = txt => { aviso.textContent = txt; };
         const visitar = () => {
             const partes = [];
@@ -2142,18 +2142,18 @@
         const adicionar = (rotulo, fn, cor) => {
             const btn = document.createElement('button');
             btn.type = 'button'; btn.textContent = rotulo;
-            Object.assign(btn.style, { minHeight: '44px', padding: '8px', border: '0', borderRadius: '8px', font: '600 14px system-ui,sans-serif', background: cor || '#334155', color: '#fff', cursor: 'pointer' });
+            Object.assign(btn.style, { minHeight: '48px', padding: '8px 10px', border: '1px solid rgba(255,255,255,.10)', borderRadius: '11px', font: '700 13px system-ui,sans-serif', background: cor || '#1a1a24', color: '#f7f7fa', cursor: 'pointer', boxShadow: 'inset 0 1px rgba(255,255,255,.05)' });
             btn.addEventListener('click', () => { try { aviso.textContent = ''; fn(); } catch (e) { avisar('Não foi possível concluir. Tente novamente: ' + (e.message || e)); } });
             acoes.appendChild(btn); return btn;
         };
         const titulo = document.createElement('button');
-        titulo.type = 'button'; titulo.textContent = 'Prumo ERP · recolher ▴';
-        titulo.setAttribute('aria-expanded', 'true');
-        Object.assign(titulo.style, { width: '100%', minHeight: '44px', border: '0', borderRadius: '8px', background: '#1e293b', color: '#fff', font: '700 14px system-ui,sans-serif', cursor: 'pointer' });
+        titulo.type = 'button'; titulo.textContent = '✦  PRUMO · abrir ações';
+        titulo.setAttribute('aria-expanded', 'false');
+        Object.assign(titulo.style, { width: '100%', minHeight: '46px', padding: '0 13px', border: '1px solid rgba(124,108,255,.25)', borderRadius: '11px', background: 'linear-gradient(110deg,#211a37,#12232b)', color: '#fff', font: '800 13px system-ui,sans-serif', letterSpacing: '.02em', cursor: 'pointer', textAlign: 'left' });
         titulo.onclick = () => {
             const aberto = acoes.style.display === 'none';
             acoes.style.display = aberto ? 'grid' : 'none'; aviso.style.display = aberto ? '' : 'none';
-            titulo.textContent = aberto ? 'Prumo ERP · recolher ▴' : 'Prumo ERP · ações ▾';
+            titulo.textContent = aberto ? '✦  PRUMO · recolher ações' : '✦  PRUMO · abrir ações';
             titulo.setAttribute('aria-expanded', String(aberto));
         };
         adicionar('📥 Enviar tabela', () => {
@@ -2161,7 +2161,7 @@
             visitar().forEach(w => { if (w.__frigMobileActions) w.__frigMobileActions.tabela().forEach(p => produtos.set(String(p.code), p)); });
             if (!produtos.size) { avisar('Abra a Lista de Preços e carregue os produtos antes de enviar.'); return; }
             retornarAoAndroid({ frigansoRetorno: 1, tipo: 'tabela', produtos: Array.from(produtos.values()) });
-        }, '#7c3aed');
+        }, 'linear-gradient(135deg,#7c6cff,#5b4ce8)');
         adicionar('📋 Enviar resumo', () => {
             const pedido = { cliente: '', clienteNome: '', spamov: '', condicaoPagamento: '', itens: [] }, vistos = new Set();
             visitar().forEach(w => {
@@ -2172,7 +2172,7 @@
             });
             if (!pedido.itens.length) { avisar('Abra o pedido com a lista de itens antes de enviar o resumo.'); return; }
             retornarAoAndroid(pedido);
-        }, '#be123c');
+        }, 'linear-gradient(135deg,#0891b2,#0e7490)');
         adicionar('🔑 Login salvo', () => {
             if (!visitar().some(w => w.__frigMobileActions && w.__frigMobileActions.login())) avisar('Você já está logado ou a tela de login ainda não abriu.');
             else avisar('Login solicitado. Se faltarem credenciais, salve-as em Debug no ERP.');
@@ -2182,11 +2182,17 @@
         const posicionar = () => {
             const principal = visitar().sort((a, b) => (b.innerWidth * b.innerHeight) - (a.innerWidth * a.innerHeight))[0];
             barra.style.display = principal === window ? 'block' : 'none';
-            const v = window.visualViewport, escala = v && v.scale > 0 ? v.scale : 1;
-            const largura = Math.max(160, Math.min(360, (v ? v.width * escala : window.innerWidth) - 16));
-            barra.style.width = largura + 'px'; barra.style.transform = 'scale(' + (1 / escala) + ')';
-            barra.style.left = ((v ? v.offsetLeft + v.width : window.innerWidth) - (largura + 8) / escala) + 'px';
-            barra.style.top = ((v ? v.offsetTop : 0) + 8 / escala) + 'px';
+            const v = window.visualViewport;
+            const layoutW = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0, 360);
+            const telaW = Math.max(320, Math.min(screen.width || 360, v ? v.width : 360));
+            // O SPAmov usa um viewport antigo de desktop. Compensar essa redução mantém o painel
+            // com tamanho de toque real no celular sem alterar a escala da página da empresa.
+            const correcao = Math.max(1, Math.min(3, layoutW / telaW));
+            const largura = Math.max(250, Math.min(350, telaW - 20));
+            barra.style.width = largura + 'px';
+            barra.style.transform = 'scale(' + correcao + ')';
+            barra.style.left = Math.max(8, layoutW - (largura + 10) * correcao) + 'px';
+            barra.style.top = (10 * correcao) + 'px';
         };
         posicionar();
         window.addEventListener('resize', posicionar);
@@ -2201,6 +2207,9 @@
         const b = document.createElement("button");
         b.id = id; b.type = "button"; b.textContent = texto;
         Object.assign(b.style, { position: "fixed", right: "18px", bottom: bottom, zIndex: "2147483647", background: cor, color: "#fff", border: "none", borderRadius: "12px", padding: "12px 18px", fontSize: "14px", fontWeight: "bold", fontFamily: "system-ui,sans-serif", boxShadow: "0 6px 20px rgba(0,0,0,0.3)", cursor: "pointer" });
+        // No navegador Android essas ações continuam disponíveis para a automação e para a barra
+        // nativa, mas não ficam espalhadas por cima do site antigo.
+        if (ehNavegadorAndroid()) b.style.display = 'none';
         b.addEventListener("click", onClick);
         document.body.appendChild(b);
     }
