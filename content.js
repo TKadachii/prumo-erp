@@ -2116,6 +2116,16 @@
             pedido: function () { return montarPedidoLeitura(true); },
             login: function () { if (!document.querySelector('input[type=password]')) return false; forcarEtapaLogin(); return true; }
         };
+        // Frames internos apenas fornecem dados. A barra visual pertence à página principal de
+        // cada janela do Android, o que evita sobreposição e a mantém ao abrir um pedido.
+        if (window !== window.top || !document.body) return;
+        // O script pode ser reinjetado depois de navegações e reconexões. Preserve a barra
+        // existente para não acumular painéis, timers e eventos no mesmo documento.
+        const existente = document.getElementById('friganso-mobile-toolbar');
+        if (existente) {
+            existente.style.display = 'block';
+            return;
+        }
         const barra = document.createElement('div');
         barra.id = 'friganso-mobile-toolbar';
         barra.setAttribute('role', 'region');
@@ -2126,7 +2136,10 @@
         const aviso = document.createElement('div');
         aviso.setAttribute('role', 'status');
         Object.assign(aviso.style, { display: 'none', fontSize: '12px', lineHeight: '1.4', marginTop: '7px', padding: '8px 10px', borderRadius: '10px', background: 'rgba(255,255,255,.06)', color: '#c9c9d1' });
-        const avisar = txt => { aviso.textContent = txt; };
+        const avisar = txt => {
+            aviso.textContent = txt || '';
+            aviso.style.display = txt ? 'block' : 'none';
+        };
         const visitar = () => {
             const partes = [];
             function ler(w) {
@@ -2143,7 +2156,7 @@
             const btn = document.createElement('button');
             btn.type = 'button'; btn.textContent = rotulo;
             Object.assign(btn.style, { minHeight: '48px', padding: '8px 10px', border: '1px solid rgba(255,255,255,.10)', borderRadius: '11px', font: '700 13px system-ui,sans-serif', background: cor || '#1a1a24', color: '#f7f7fa', cursor: 'pointer', boxShadow: 'inset 0 1px rgba(255,255,255,.05)' });
-            btn.addEventListener('click', () => { try { aviso.textContent = ''; fn(); } catch (e) { avisar('Não foi possível concluir. Tente novamente: ' + (e.message || e)); } });
+            btn.addEventListener('click', () => { try { avisar(''); fn(); } catch (e) { avisar('Não foi possível concluir. Tente novamente: ' + (e.message || e)); } });
             acoes.appendChild(btn); return btn;
         };
         const titulo = document.createElement('button');
@@ -2152,7 +2165,8 @@
         Object.assign(titulo.style, { width: '100%', minHeight: '46px', padding: '0 13px', border: '1px solid rgba(124,108,255,.25)', borderRadius: '11px', background: 'linear-gradient(110deg,#211a37,#12232b)', color: '#fff', font: '800 13px system-ui,sans-serif', letterSpacing: '.02em', cursor: 'pointer', textAlign: 'left' });
         titulo.onclick = () => {
             const aberto = acoes.style.display === 'none';
-            acoes.style.display = aberto ? 'grid' : 'none'; aviso.style.display = aberto ? '' : 'none';
+            acoes.style.display = aberto ? 'grid' : 'none';
+            aviso.style.display = aberto && aviso.textContent ? 'block' : 'none';
             titulo.textContent = aberto ? '✦  PRUMO · recolher ações' : '✦  PRUMO · abrir ações';
             titulo.setAttribute('aria-expanded', String(aberto));
         };
@@ -2180,8 +2194,7 @@
         adicionar('↩ Voltar ao ERP', () => retornarAoAndroid({ frigansoRetorno: 1, tipo: 'voltar' }));
         barra.append(titulo, acoes, aviso); document.body.appendChild(barra);
         const posicionar = () => {
-            const principal = visitar().sort((a, b) => (b.innerWidth * b.innerHeight) - (a.innerWidth * a.innerHeight))[0];
-            barra.style.display = principal === window ? 'block' : 'none';
+            barra.style.display = 'block';
             const v = window.visualViewport;
             const layoutW = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0, 360);
             const telaW = Math.max(320, Math.min(screen.width || 360, v ? v.width : 360));

@@ -1,6 +1,6 @@
 {
-    "versionCode": 18,
-    "versionName": "4.3",
+    "versionCode": 19,
+    "versionName": "4.4",
     "url": "https://tkadachii.github.io/prumo-erp/PrumoERP.apk",
-    "novidades": "• Navegador interno redesenhado no tema cósmico\n• Barra superior escura e organizada para celular\n• Console técnico oculto por padrão\n• Painel de ações maior, legível e recolhido quando não está em uso"
+    "novidades": "• Navegador interno reconstruído para pedidos e popups\n• Voltar, avançar e início agora controlam a tela que está visível\n• Painel Abrir ações permanece disponível durante o pedido\n• Recuperação automática em conexões móveis instáveis\n• Menor consumo de memória ao fechar páginas"
 }
