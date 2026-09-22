@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 221;
+        const APP_BUILD_VERSION = 222;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -8054,6 +8054,15 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.34.3', data: '22/09/2026', areas: ['app', 'site'], itens: [
+                '✅ Corrigido o aviso de atualização do Android que voltava a aparecer toda vez que o app era aberto',
+                '📲 O Prumo agora reconhece quando uma versão já foi baixada e não insiste no mesmo aviso',
+                '⏰ A opção “Lembrar amanhã” respeita o prazo mesmo depois de fechar e abrir o aplicativo',
+                '↩️ Navegação móvel revisada com botão de voltar e saída segura das telas',
+                '⚙️ Configurações agora rolam corretamente e sempre exibem os botões de fechar e concluir',
+                '⚡ Modo Lite corrigido, com estado visível e controle estável',
+                '📱 Cabeçalho, menu e espaçamentos ajustados para telas estreitas como o Galaxy A07',
+            ]},
             { versao: '2.34.2', data: '22/09/2026', areas: ['app', 'site'], itens: [
                 '📱 APK Prumo 4.1 atualizado com todas as melhorias publicadas até a versão 2.34.1',
                 '🧭 Incluídas rotas de entrega, nova tabela de preços, PDFs completos, fila com desconto e preço editável',
@@ -11734,6 +11743,51 @@
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [messageBox, setMessageBox] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
+            const routeHistoryRef = useRef([]);
+            const lastRouteRef = useRef(activeRoute);
+            const isHistoryNavigationRef = useRef(false);
+
+            // Mantém uma pilha de telas dentro do app. Assim cada tela tem uma saída clara e o
+            // botão voltar do Android/navegador retorna à tela anterior em vez de fechar o app.
+            useEffect(() => {
+                if (activeRoute === lastRouteRef.current) return;
+                if (!isHistoryNavigationRef.current) {
+                    routeHistoryRef.current.push(lastRouteRef.current);
+                    if (routeHistoryRef.current.length > 30) routeHistoryRef.current.shift();
+                    if (isCapacitor) { try { window.history.pushState({ prumoRoute: activeRoute }, ''); } catch (e) {} }
+                }
+                isHistoryNavigationRef.current = false;
+                lastRouteRef.current = activeRoute;
+            }, [activeRoute]);
+            const voltarTela = () => {
+                if (showSettings) { setShowSettings(false); return true; }
+                if (isSidebarOpen) { setIsSidebarOpen(false); return true; }
+                const anterior = routeHistoryRef.current.pop();
+                if (anterior) {
+                    isHistoryNavigationRef.current = true;
+                    setActiveRoute(anterior);
+                    return true;
+                }
+                if (activeRoute !== 'dashboard') {
+                    isHistoryNavigationRef.current = true;
+                    setActiveRoute('dashboard');
+                    return true;
+                }
+                return false;
+            };
+            const voltarTelaRef = useRef(voltarTela);
+            voltarTelaRef.current = voltarTela;
+            useEffect(() => {
+                if (!isCapacitor) return;
+                const onBack = (event) => {
+                    if (voltarTelaRef.current && voltarTelaRef.current()) {
+                        try { window.history.pushState({ prumoRoute: lastRouteRef.current }, ''); } catch (e) {}
+                    }
+                };
+                try { window.history.replaceState({ prumoRoute: activeRoute }, ''); } catch (e) {}
+                window.addEventListener('popstate', onBack);
+                return () => window.removeEventListener('popstate', onBack);
+            }, []);
             // 🔔 LEMBRETES — vivem no App (não na aba) porque o pop-up e o ⚠️ têm que aparecer em
             // QUALQUER tela. O relógio bate de minuto em minuto pra pegar a hora marcada sem F5.
             const [lembretes, setLembretes] = useState([]);
@@ -11843,8 +11897,8 @@
                 window.location.reload();
             };
 
-            // 📲 AUTO-ATUALIZAÇÃO do APK (estilo Discord): ao abrir, compara a versão instalada
-            // com o apk-version.json publicado no site. Se tem nova, mostra o aviso com botão de baixar.
+            // 📲 AUTO-ATUALIZAÇÃO do APK: compara a versão instalada com a publicada.
+            // O aviso é persistido por versão para não voltar em todo início depois de baixar ou adiar.
             const [apkUpdate, setApkUpdate] = useState(null);
             useEffect(() => {
                 if (!isCapacitor) return;
@@ -11855,15 +11909,44 @@
                         const local = await P.versao();
                         const resp = await fetch('https://tkadachii.github.io/prumo-erp/apk-version.json?t=' + Date.now(), { cache: 'no-store' });
                         const remoto = await resp.json();
-                        if (Number(remoto.versionCode) > Number(local.versionCode)) setApkUpdate(remoto);
+                        const localCode = Number(local && local.versionCode);
+                        const remotoCode = Number(remoto && remoto.versionCode);
+                        const jaBaixada = Number(window.localStorage.getItem('prumo_apk_versao_baixada') || 0);
+                        let adiada = null;
+                        try { adiada = JSON.parse(window.localStorage.getItem('prumo_apk_atualizacao_adiada') || 'null'); } catch (e) {}
+
+                        // Só avisa quando o plugin retornou uma versão instalada confiável.
+                        // Isso evita o loop em APKs antigos que respondiam com o valor padrão 1.
+                        if (!Number.isFinite(localCode) || localCode < 2 || !Number.isFinite(remotoCode)) return;
+                        if (localCode >= remotoCode) {
+                            window.localStorage.removeItem('prumo_apk_versao_baixada');
+                            window.localStorage.removeItem('prumo_apk_atualizacao_adiada');
+                            return;
+                        }
+                        if (jaBaixada >= remotoCode) return;
+                        if (adiada && Number(adiada.versionCode) === remotoCode && Number(adiada.ate) > Date.now()) return;
+                        setApkUpdate(remoto);
                     } catch (e) { /* sem internet ou arquivo ausente — segue normal */ }
                 })();
             }, []);
             const baixarApkNovo = () => {
                 try {
+                    const remotoCode = Number(apkUpdate && apkUpdate.versionCode);
+                    if (Number.isFinite(remotoCode)) window.localStorage.setItem('prumo_apk_versao_baixada', String(remotoCode));
+                    window.localStorage.removeItem('prumo_apk_atualizacao_adiada');
                     const P = window.Capacitor.Plugins.SpamovAuto;
                     P.abrirLink({ url: (apkUpdate && apkUpdate.url) || 'https://tkadachii.github.io/prumo-erp/PrumoERP.apk' });
                 } catch (e) {}
+                setApkUpdate(null);
+            };
+            const adiarAtualizacaoApk = () => {
+                try {
+                    window.localStorage.setItem('prumo_apk_atualizacao_adiada', JSON.stringify({
+                        versionCode: Number(apkUpdate && apkUpdate.versionCode),
+                        ate: Date.now() + 24 * 60 * 60 * 1000,
+                    }));
+                } catch (e) {}
+                setApkUpdate(null);
             };
             // 🎨 Tema escolhido: auto | claro | escuro | sakura | oceano | esmeralda
             const [tema, setTema] = useState(() => { try { return window.localStorage.getItem('friganso_tema') || 'auto'; } catch (e) { return 'auto'; } });
@@ -11969,6 +12052,11 @@
             // Aplica o tema escolhido (e salva). aplicarTema cuida das classes + pétalas.
             useEffect(() => { try { window.aplicarTema(tema); } catch (e) {} }, [tema]);
             useEffect(() => { try { window.aplicarModoLite(modoLite, true); } catch (e) {} }, [modoLite]);
+            const alternarModoLite = () => {
+                const novoValor = !modoLite;
+                try { window.aplicarModoLite(novoValor, true); } catch (e) {}
+                setModoLite(novoValor);
+            };
             const [clients, setClients] = useState([]);
 
             useEffect(() => {
@@ -12143,6 +12231,7 @@
                     <div className="h-5 w-5"><Icon /></div> {label}
                 </button>
             );
+            const routeLabels = { dashboard:'Visão geral', clients:'Clientes', rotas:'Rotas', pdf:'Preços', pedido:'Novo pedido', resumo:'Resumo', radar:'Radar', historico:'Histórico', orcamentos:'Ofertas', disparos:'Campanhas', lembretes:'Lembretes', profile:'Minha conta', tutorial:'Tutorial', changelog:'Atualizações', support:'Suporte', navegador:'Site da Prumo', fila:'Fila de pedidos' };
 
             return (
                 <div className="prumo-shell flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -12170,7 +12259,7 @@
                                 <div className="p-5 space-y-3">
                                     {apkUpdate.novidades && <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3 whitespace-pre-wrap">{apkUpdate.novidades}</p>}
                                     <button onClick={baixarApkNovo} className="w-full bg-rose-700 hover:bg-rose-800 text-white font-black py-3.5 rounded-xl transition-colors">⬇️ Baixar agora</button>
-                                    <button onClick={() => setApkUpdate(null)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2.5 rounded-xl transition-colors text-sm">Depois</button>
+                                    <button onClick={adiarAtualizacaoApk} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2.5 rounded-xl transition-colors text-sm">Lembrar amanhã</button>
                                     <p className="text-[10px] text-slate-400 text-center">Baixa no navegador → toque no arquivo baixado → Instalar. Seus dados não se perdem.</p>
                                 </div>
                             </div>
@@ -12179,13 +12268,13 @@
 
                     {/* Modal de Configurações */}
                     {showSettings && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[90] animate-in fade-in" onClick={() => setShowSettings(false)}>
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-                                <div className="p-5 border-b border-slate-200 flex justify-between items-center">
+                        <div className="prumo-settings-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[90] animate-in fade-in" onClick={() => setShowSettings(false)}>
+                            <div className="prumo-settings-panel bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                <div className="prumo-settings-header p-5 border-b border-slate-200 flex justify-between items-center">
                                     <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">⚙️ Configurações</h2>
-                                    <button onClick={() => setShowSettings(false)} className="h-9 w-9 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500"><div className="h-4 w-4"><IconX/></div></button>
+                                    <button aria-label="Fechar configurações" onClick={() => setShowSettings(false)} className="prumo-settings-close h-10 w-10 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center text-slate-500"><div className="h-4 w-4"><IconX/></div></button>
                                 </div>
-                                <div className="p-5 space-y-4">
+                                <div className="prumo-settings-body p-5 space-y-4">
                                     <div>
                                         <p className="text-sm font-bold text-slate-700 mb-1">Escolha o visual do sistema</p>
                                         <p className="text-xs text-slate-400 mb-3">Toque pra trocar na hora. Fica salvo neste aparelho.</p>
@@ -12216,11 +12305,11 @@
                                                 </div>
                                                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">Mantém todas as funções e deixa o app mais rápido, reduzindo animações, transparências, brilhos e efeitos visuais.</p>
                                             </div>
-                                            <button type="button" role="switch" aria-checked={modoLite} onClick={() => setModoLite(v => !v)} className={`relative h-8 w-14 shrink-0 rounded-full border transition-colors ${modoLite ? 'bg-rose-700 border-rose-500' : 'bg-slate-200 border-slate-300'}`}>
-                                                <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${modoLite ? 'translate-x-5' : 'translate-x-1'}`}></span>
+                                            <button type="button" role="switch" aria-label="Ativar ou desativar Modo Lite" aria-checked={modoLite} onClick={alternarModoLite} className={`prumo-lite-switch ${modoLite ? 'is-on' : ''}`}>
+                                                <span></span>
                                             </button>
                                         </div>
-                                        <p className="text-[11px] text-slate-400 mt-2">Em celulares mais fracos, o Prumo ativa esse modo automaticamente na primeira utilização.</p>
+                                        <p className="text-[11px] text-slate-400 mt-2"><b>{modoLite ? 'Ativado:' : 'Desativado:'}</b> {modoLite ? 'efeitos pesados foram reduzidos para melhorar a velocidade.' : 'o visual completo está em uso.'}</p>
                                     </div>
 
                                     <div className="border-t border-slate-200 pt-4">
@@ -12258,6 +12347,7 @@
                                             mas o app conta quantas vezes você pulou no dia.
                                         </p>
                                     </div>
+                                    <button type="button" onClick={() => setShowSettings(false)} className="prumo-settings-done">Concluir e voltar</button>
                                 </div>
                             </div>
                         </div>
@@ -12265,11 +12355,10 @@
 
                     {/* Barra de topo do celular (cara de app) */}
                     <div className="prumo-mobile-topbar friganso-mobile-topbar md:hidden fixed top-0 inset-x-0 z-50 h-14 bg-slate-950 text-white flex items-center gap-3 px-3 shadow-lg">
-                        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1.5 rounded-lg hover:bg-slate-800 active:bg-slate-800">
-                            <div className="h-6 w-6"><IconMenu/></div>
-                        </button>
+                        {activeRoute !== 'dashboard' ? <button aria-label="Voltar para a tela anterior" onClick={voltarTela} className="prumo-mobile-back">←</button> : <span className="prumo-mobile-back-placeholder" aria-hidden="true"></span>}
                         <PrumoLogo className="h-8 w-8 rounded-lg bg-black/40 p-1 border border-slate-700" />
-                        <span className="font-black tracking-tight text-base">PRUMO</span>
+                        <span className="prumo-mobile-title"><strong>PRUMO</strong><small>{routeLabels[activeRoute] || 'Gestão comercial'}</small></span>
+                        <button aria-label="Abrir mais opções" aria-expanded={isSidebarOpen} onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="prumo-mobile-more">⋮</button>
                     </div>
 
                     <div className={`prumo-sidebar fixed inset-y-0 left-0 z-40 w-72 bg-slate-950 text-slate-300 transform transition-transform duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static border-r border-slate-800 shadow-2xl`}>
@@ -12337,7 +12426,7 @@
                     </div>
 
                     <div data-route={activeRoute} className="prumo-main friganso-mobile-content flex-1 overflow-y-auto relative z-0 p-3 pt-[68px] sm:p-4 md:p-8 md:pt-8 bg-slate-100">
-                        <div className="prumo-topline"><span className="prumo-breadcrumb">Workspace <span className="prumo-separator">›</span> <strong>{({dashboard:'Visão geral',clients:'Clientes',rotas:'Rotas de entrega',pdf:'Tabela de preços',pedido:'Novo pedido',resumo:'Resumo de pedido',radar:'Radar de clientes',historico:'Histórico de vendas',orcamentos:'Ofertas',disparos:'Campanhas',lembretes:'Lembretes'})[activeRoute] || 'Gestão comercial'}</strong></span><div className="prumo-top-actions"><button className="prumo-command" onClick={() => setIsSidebarOpen(true)}><span>⌕</span> Buscar ou navegar <kbd>⌘ K</kbd></button><button onClick={() => setActiveRoute('profile')} className="prumo-profile"><span className="prumo-avatar">{user.name.charAt(0)}</span><span className="prumo-profile-name">{user.name}</span><span className="prumo-profile-role">Conta</span></button></div></div>
+                        <div className="prumo-topline"><span className="prumo-breadcrumb">Workspace <span className="prumo-separator">›</span> <strong>{routeLabels[activeRoute] || 'Gestão comercial'}</strong></span><div className="prumo-top-actions"><button className="prumo-command" onClick={() => setIsSidebarOpen(true)}><span>⌕</span> Buscar ou navegar <kbd>⌘ K</kbd></button><button onClick={() => setActiveRoute('profile')} className="prumo-profile"><span className="prumo-avatar">{user.name.charAt(0)}</span><span className="prumo-profile-name">{user.name}</span><span className="prumo-profile-role">Conta</span></button></div></div>
                         {isSidebarOpen && <button aria-label="Fechar menu" className="prumo-scrim md:hidden" onClick={() => setIsSidebarOpen(false)} />}
                         <nav className="prumo-bottomnav" aria-label="Navegação principal">
                             {[['dashboard',IconDashboard,'Início'],['clients',IconUsers,'Clientes'],['pedido',IconReceipt,'Pedido'],['pdf',IconTag,'Preços']].map(([r,I,l]) => <button key={r} aria-current={activeRoute===r?'page':undefined} onClick={()=>{setActiveRoute(r);setIsSidebarOpen(false);}}><I/><span>{l}</span></button>)}

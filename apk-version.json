@@ -1,6 +1,6 @@
 {
-    "versionCode": 16,
-    "versionName": "4.1",
+    "versionCode": 17,
+    "versionName": "4.2",
     "url": "https://tkadachii.github.io/prumo-erp/PrumoERP.apk",
-    "novidades": "• Todas as melhorias publicadas até a versão 2.34.1\n• Rotas de entrega e nova tabela de preços\n• PDF completo, fila com desconto e preço editável\n• Busca por últimas compras e novos resumos para clientes\n• Identidade Prumo e Modo Lite preservados"
+    "novidades": "• Corrige o aviso de atualização que aparecia repetidamente\n• Navegação móvel com botão de voltar em todas as telas\n• Configurações com rolagem e saída sempre acessível\n• Modo Lite corrigido\n• Layout ajustado para o Galaxy A07 e outras telas estreitas"
 }
