@@ -1,6 +1,6 @@
 {
-    "versionCode": 15,
-    "versionName": "4.0",
+    "versionCode": 16,
+    "versionName": "4.1",
     "url": "https://tkadachii.github.io/prumo-erp/PrumoERP.apk",
-    "novidades": "• Novo aplicativo Prumo com nome, ícone e tema cósmico atualizados\n• Endereço interno migrado para prumo-erp\n• Modo Lite disponível nas configurações\n• Tabela de preços e navegador móvel mantidos com as melhorias mais recentes"
+    "novidades": "• Todas as melhorias publicadas até a versão 2.34.1\n• Rotas de entrega e nova tabela de preços\n• PDF completo, fila com desconto e preço editável\n• Busca por últimas compras e novos resumos para clientes\n• Identidade Prumo e Modo Lite preservados"
 }
