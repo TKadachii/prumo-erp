@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 224;
+        const APP_BUILD_VERSION = 225;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -8054,7 +8054,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
-            { versao: '2.34.5', data: '22/09/2026', areas: ['app'], itens: [
+            { versao: '2.34.6', data: '23/09/2026', areas: ['extensao', 'site'], itens: [
+                '✅ Corrigido o ciclo infinito de recargas no envio automático pelo WhatsApp Web',
+                '🧭 A extensão agora grava o cliente de destino antes de abrir a conversa e continua mesmo quando o WhatsApp remove o telefone da URL',
+                '🛡️ Impedidas duas cópias simultâneas do motor de campanha, evitando mensagens duplicadas e disputa pela fila',
+                '💻 WhatsApp Desktop continua disponível no modo passo a passo: a mensagem abre pronta e basta confirmar o envio',
+            ]},            { versao: '2.34.5', data: '22/09/2026', areas: ['app'], itens: [
                 '🧭 Navegação reconstruída: voltar, avançar e início agora atuam na janela que está realmente visível',
                 '✨ O painel Abrir ações permanece disponível ao entrar no pedido e depois de recargas do SPAmov',
                 '📶 Em conexões móveis instáveis, o navegador preserva a última tela utilizável e permite tentar novamente',
@@ -11077,7 +11082,7 @@
                                 <button onClick={() => window.__frigZap && window.__frigZap.abrir()} className="w-full mt-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-bold">💬 Abrir WhatsApp (conectar / ver QR)</button>
                             )}
                         </div>
-                        <p className="text-center text-xs text-slate-400 mt-4">{isElectron ? <><b>🤖 Enviar todos sozinho</b> = dispara um por um sem você clicar (pode parar quando quiser). <b>Enviar só este</b> = manda só o atual.</> : <>Clica em <b>Abrir WhatsApp</b> → <b>Enter</b> no app. Usa as setas <b>← →</b> pra navegar.</>}</p>
+                        <p className="text-center text-xs text-slate-400 mt-4">{isElectron ? <><b>🤖 Enviar todos sozinho</b> = dispara um por um sem você clicar (pode parar quando quiser). <b>Enviar só este</b> = manda só o atual.</> : <><b>WhatsApp Desktop:</b> clique em <b>Abrir WhatsApp e Enviar</b>; a mensagem abre pronta e você confirma com <b>Enter</b>. Use as setas <b>← →</b> para navegar. O envio totalmente automático fica disponível pela extensão no WhatsApp Web ou pelo Prumo para PC.</>}</p>
                     </div>
                 );
             }

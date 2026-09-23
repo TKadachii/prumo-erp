@@ -2116,17 +2116,30 @@
             pedido: function () { return montarPedidoLeitura(true); },
             login: function () { if (!document.querySelector('input[type=password]')) return false; forcarEtapaLogin(); return true; }
         };
+        // Frames internos apenas fornecem dados. A barra visual pertence à página principal de
+        // cada janela do Android, o que evita sobreposição e a mantém ao abrir um pedido.
+        if (window !== window.top || !document.body) return;
+        // O script pode ser reinjetado depois de navegações e reconexões. Preserve a barra
+        // existente para não acumular painéis, timers e eventos no mesmo documento.
+        const existente = document.getElementById('friganso-mobile-toolbar');
+        if (existente) {
+            existente.style.display = 'block';
+            return;
+        }
         const barra = document.createElement('div');
         barra.id = 'friganso-mobile-toolbar';
         barra.setAttribute('role', 'region');
         barra.setAttribute('aria-label', 'Ações do Prumo ERP');
-        Object.assign(barra.style, { position: 'fixed', zIndex: '2147483647', boxSizing: 'border-box', padding: '8px', borderRadius: '12px', background: '#0f172a', color: '#fff', fontFamily: 'system-ui,sans-serif', boxShadow: '0 4px 20px #0005', transformOrigin: 'top left' });
+        Object.assign(barra.style, { position: 'fixed', zIndex: '2147483647', boxSizing: 'border-box', padding: '7px', border: '1px solid rgba(167,139,250,.38)', borderRadius: '16px', background: 'linear-gradient(145deg,rgba(16,16,22,.98),rgba(8,13,18,.98))', color: '#f5f5f7', fontFamily: 'system-ui,sans-serif', boxShadow: '0 18px 55px rgba(0,0,0,.55),0 0 28px rgba(124,108,255,.14)', transformOrigin: 'top left', backdropFilter: 'blur(18px)', overflow: 'hidden' });
         const acoes = document.createElement('div');
-        Object.assign(acoes.style, { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px' });
+        Object.assign(acoes.style, { display: 'none', gridTemplateColumns: '1fr 1fr', gap: '7px', marginTop: '7px' });
         const aviso = document.createElement('div');
         aviso.setAttribute('role', 'status');
-        Object.assign(aviso.style, { fontSize: '13px', lineHeight: '1.4', paddingTop: '6px' });
-        const avisar = txt => { aviso.textContent = txt; };
+        Object.assign(aviso.style, { display: 'none', fontSize: '12px', lineHeight: '1.4', marginTop: '7px', padding: '8px 10px', borderRadius: '10px', background: 'rgba(255,255,255,.06)', color: '#c9c9d1' });
+        const avisar = txt => {
+            aviso.textContent = txt || '';
+            aviso.style.display = txt ? 'block' : 'none';
+        };
         const visitar = () => {
             const partes = [];
             function ler(w) {
@@ -2142,18 +2155,19 @@
         const adicionar = (rotulo, fn, cor) => {
             const btn = document.createElement('button');
             btn.type = 'button'; btn.textContent = rotulo;
-            Object.assign(btn.style, { minHeight: '44px', padding: '8px', border: '0', borderRadius: '8px', font: '600 14px system-ui,sans-serif', background: cor || '#334155', color: '#fff', cursor: 'pointer' });
-            btn.addEventListener('click', () => { try { aviso.textContent = ''; fn(); } catch (e) { avisar('Não foi possível concluir. Tente novamente: ' + (e.message || e)); } });
+            Object.assign(btn.style, { minHeight: '48px', padding: '8px 10px', border: '1px solid rgba(255,255,255,.10)', borderRadius: '11px', font: '700 13px system-ui,sans-serif', background: cor || '#1a1a24', color: '#f7f7fa', cursor: 'pointer', boxShadow: 'inset 0 1px rgba(255,255,255,.05)' });
+            btn.addEventListener('click', () => { try { avisar(''); fn(); } catch (e) { avisar('Não foi possível concluir. Tente novamente: ' + (e.message || e)); } });
             acoes.appendChild(btn); return btn;
         };
         const titulo = document.createElement('button');
-        titulo.type = 'button'; titulo.textContent = 'Prumo ERP · recolher ▴';
-        titulo.setAttribute('aria-expanded', 'true');
-        Object.assign(titulo.style, { width: '100%', minHeight: '44px', border: '0', borderRadius: '8px', background: '#1e293b', color: '#fff', font: '700 14px system-ui,sans-serif', cursor: 'pointer' });
+        titulo.type = 'button'; titulo.textContent = '✦  PRUMO · abrir ações';
+        titulo.setAttribute('aria-expanded', 'false');
+        Object.assign(titulo.style, { width: '100%', minHeight: '46px', padding: '0 13px', border: '1px solid rgba(124,108,255,.25)', borderRadius: '11px', background: 'linear-gradient(110deg,#211a37,#12232b)', color: '#fff', font: '800 13px system-ui,sans-serif', letterSpacing: '.02em', cursor: 'pointer', textAlign: 'left' });
         titulo.onclick = () => {
             const aberto = acoes.style.display === 'none';
-            acoes.style.display = aberto ? 'grid' : 'none'; aviso.style.display = aberto ? '' : 'none';
-            titulo.textContent = aberto ? 'Prumo ERP · recolher ▴' : 'Prumo ERP · ações ▾';
+            acoes.style.display = aberto ? 'grid' : 'none';
+            aviso.style.display = aberto && aviso.textContent ? 'block' : 'none';
+            titulo.textContent = aberto ? '✦  PRUMO · recolher ações' : '✦  PRUMO · abrir ações';
             titulo.setAttribute('aria-expanded', String(aberto));
         };
         adicionar('📥 Enviar tabela', () => {
@@ -2161,7 +2175,7 @@
             visitar().forEach(w => { if (w.__frigMobileActions) w.__frigMobileActions.tabela().forEach(p => produtos.set(String(p.code), p)); });
             if (!produtos.size) { avisar('Abra a Lista de Preços e carregue os produtos antes de enviar.'); return; }
             retornarAoAndroid({ frigansoRetorno: 1, tipo: 'tabela', produtos: Array.from(produtos.values()) });
-        }, '#7c3aed');
+        }, 'linear-gradient(135deg,#7c6cff,#5b4ce8)');
         adicionar('📋 Enviar resumo', () => {
             const pedido = { cliente: '', clienteNome: '', spamov: '', condicaoPagamento: '', itens: [] }, vistos = new Set();
             visitar().forEach(w => {
@@ -2172,7 +2186,7 @@
             });
             if (!pedido.itens.length) { avisar('Abra o pedido com a lista de itens antes de enviar o resumo.'); return; }
             retornarAoAndroid(pedido);
-        }, '#be123c');
+        }, 'linear-gradient(135deg,#0891b2,#0e7490)');
         adicionar('🔑 Login salvo', () => {
             if (!visitar().some(w => w.__frigMobileActions && w.__frigMobileActions.login())) avisar('Você já está logado ou a tela de login ainda não abriu.');
             else avisar('Login solicitado. Se faltarem credenciais, salve-as em Debug no ERP.');
@@ -2180,13 +2194,18 @@
         adicionar('↩ Voltar ao ERP', () => retornarAoAndroid({ frigansoRetorno: 1, tipo: 'voltar' }));
         barra.append(titulo, acoes, aviso); document.body.appendChild(barra);
         const posicionar = () => {
-            const principal = visitar().sort((a, b) => (b.innerWidth * b.innerHeight) - (a.innerWidth * a.innerHeight))[0];
-            barra.style.display = principal === window ? 'block' : 'none';
-            const v = window.visualViewport, escala = v && v.scale > 0 ? v.scale : 1;
-            const largura = Math.max(160, Math.min(360, (v ? v.width * escala : window.innerWidth) - 16));
-            barra.style.width = largura + 'px'; barra.style.transform = 'scale(' + (1 / escala) + ')';
-            barra.style.left = ((v ? v.offsetLeft + v.width : window.innerWidth) - (largura + 8) / escala) + 'px';
-            barra.style.top = ((v ? v.offsetTop : 0) + 8 / escala) + 'px';
+            barra.style.display = 'block';
+            const v = window.visualViewport;
+            const layoutW = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0, 360);
+            const telaW = Math.max(320, Math.min(screen.width || 360, v ? v.width : 360));
+            // O SPAmov usa um viewport antigo de desktop. Compensar essa redução mantém o painel
+            // com tamanho de toque real no celular sem alterar a escala da página da empresa.
+            const correcao = Math.max(1, Math.min(3, layoutW / telaW));
+            const largura = Math.max(250, Math.min(350, telaW - 20));
+            barra.style.width = largura + 'px';
+            barra.style.transform = 'scale(' + correcao + ')';
+            barra.style.left = Math.max(8, layoutW - (largura + 10) * correcao) + 'px';
+            barra.style.top = (10 * correcao) + 'px';
         };
         posicionar();
         window.addEventListener('resize', posicionar);
@@ -2201,6 +2220,9 @@
         const b = document.createElement("button");
         b.id = id; b.type = "button"; b.textContent = texto;
         Object.assign(b.style, { position: "fixed", right: "18px", bottom: bottom, zIndex: "2147483647", background: cor, color: "#fff", border: "none", borderRadius: "12px", padding: "12px 18px", fontSize: "14px", fontWeight: "bold", fontFamily: "system-ui,sans-serif", boxShadow: "0 6px 20px rgba(0,0,0,0.3)", cursor: "pointer" });
+        // No navegador Android essas ações continuam disponíveis para a automação e para a barra
+        // nativa, mas não ficam espalhadas por cima do site antigo.
+        if (ehNavegadorAndroid()) b.style.display = 'none';
         b.addEventListener("click", onClick);
         document.body.appendChild(b);
     }
@@ -2285,16 +2307,20 @@
     // (origens diferentes, o navegador proíbe). O programa de PC dribla isso com uma <webview>
     // que ele controla. A extensão dribla porque roda DENTRO da página do WhatsApp.
     //
-    // ⚠️ Estratégia: navega pro chat de cada contato por URL (`/send?phone=...&text=...`), o que
-    // RECARREGA a página a cada envio. É de propósito: o content script morre e nasce a cada
-    // troca, então o estado NÃO pode viver em memória — vive todo no chrome.storage. Fica mais
-    // lento que mexer na busca interna do WhatsApp (jeito do PC), mas é muito mais resistente:
-    // não depende de adivinhar a navegação interna do app, que a Meta muda quando quer.
+    // Estratégia: navega pro chat por URL (`/send?phone=...&text=...`) e mantém a fila no
+    // chrome.storage. O WhatsApp pode recarregar a página e remover `phone` da URL; por isso o
+    // destino também fica gravado antes da navegação. Essa marca impede o ciclo de recargas e
+    // permite que a campanha retome do mesmo cliente depois que a conversa terminar de abrir.
     // ═══════════════════════════════════════════════════════════════════════════════════
     function iniciarZapAuto() {
+        // O content script pode ser reinjetado pelo próprio WhatsApp sem recarregar a aba.
+        // Uma única instância evita dois motores tentando enviar a mesma campanha.
+        if (window.__prumoZapAutoIniciado) return;
+        window.__prumoZapAutoIniciado = true;
         const CHAVE = "friganso_zap_campanha";
         const VALIDADE = 60 * 60 * 1000;   // campanha esquecida expira em 1h
         const TENTATIVAS_BOTAO = 60;       // 60 x 300ms = 18s esperando o botão Enviar aparecer
+        const VALIDADE_NAVEGACAO = 2 * 60 * 1000;
 
         const soDig = (s) => String(s || "").replace(/\D/g, "");
         const ler = (cb) => { try { chrome.storage.local.get([CHAVE], (r) => cb((r && r[CHAVE]) || null)); } catch (e) { cb(null); } };
@@ -2395,9 +2421,41 @@
         }
 
         // ── Motor ───────────────────────────────────────────────────────────────────────
-        function irPara(item) {
-            location.href = "https://web.whatsapp.com/send?phone=" + soDig(item.telefone) +
-                            "&text=" + encodeURIComponent(item.mensagem || "");
+        function irPara(item, c) {
+            const telefone = soDig(item.telefone);
+            const agora = Date.now();
+            // Grava o destino ANTES de navegar. O WhatsApp costuma remover ?phone= da URL
+            // durante a abertura da conversa; sem esta marca o script achava que estava no
+            // contato errado e recarregava a mesma página para sempre.
+            if (c.navegandoPara === telefone && agora - (c.navegouEm || 0) < VALIDADE_NAVEGACAO) {
+                pintar(c, "⏳ A conversa ainda está carregando. Não vou recarregar a página novamente.");
+                esperarEEnviar((ok) => concluirAtual(c, item, ok));
+                return;
+            }
+            c.navegandoPara = telefone;
+            c.navegouEm = agora;
+            gravar(c, () => {
+                location.assign("https://web.whatsapp.com/send?phone=" + telefone +
+                                "&text=" + encodeURIComponent(item.mensagem || ""));
+            });
+        }
+
+        function concluirAtual(c, item, ok) {
+            if (!c.itens[c.idx]) return;
+            c.itens[c.idx].status = ok ? "enviado" : "falhou";
+            c.idx++;
+            c.navegandoPara = "";
+            c.navegouEm = 0;
+            gravar(c, () => {
+                pintar(c, ok ? null : "⚠️ Não consegui enviar pra " + (item.nome || item.telefone) + " — pulei.");
+                const prox = c.itens[c.idx];
+                if (!prox) {
+                    c.rodando = false;
+                    gravar(c, () => pintar(c, "🎉 Campanha concluída!"));
+                    return;
+                }
+                setTimeout(() => { if (c.rodando) irPara(prox, c); }, Math.max(2, c.respiro || 8) * 1000);
+            });
         }
 
         function prosseguir(c) {
@@ -2410,21 +2468,16 @@
             }
             // Já estou no chat certo? Então envia. Senão, navega (a página recarrega e o
             // script roda de novo, agora com o número certo na URL).
-            if (numeroAberto() && numeroAberto() === soDig(item.telefone)) {
+            const telefone = soDig(item.telefone);
+            const aberto = numeroAberto();
+            const navegacaoRecente = c.navegandoPara === telefone &&
+                Date.now() - (c.navegouEm || 0) < VALIDADE_NAVEGACAO;
+            if ((aberto && aberto === telefone) || navegacaoRecente) {
                 pintar(c);
-                esperarEEnviar((ok) => {
-                    c.itens[c.idx].status = ok ? "enviado" : "falhou";
-                    c.idx++;
-                    gravar(c, () => {
-                        pintar(c, ok ? null : "⚠️ Não consegui enviar pra " + (item.nome || item.telefone) + " — pulei.");
-                        const prox = c.itens[c.idx];
-                        if (!prox) { c.rodando = false; gravar(c, () => pintar(c, "🎉 Campanha concluída!")); return; }
-                        setTimeout(() => { if (c.rodando) irPara(prox); }, Math.max(2, c.respiro || 8) * 1000);
-                    });
-                });
+                esperarEEnviar((ok) => concluirAtual(c, item, ok));
             } else {
                 pintar(c);
-                irPara(item);
+                irPara(item, c);
             }
         }
 

@@ -2307,16 +2307,20 @@
     // (origens diferentes, o navegador proíbe). O programa de PC dribla isso com uma <webview>
     // que ele controla. A extensão dribla porque roda DENTRO da página do WhatsApp.
     //
-    // ⚠️ Estratégia: navega pro chat de cada contato por URL (`/send?phone=...&text=...`), o que
-    // RECARREGA a página a cada envio. É de propósito: o content script morre e nasce a cada
-    // troca, então o estado NÃO pode viver em memória — vive todo no chrome.storage. Fica mais
-    // lento que mexer na busca interna do WhatsApp (jeito do PC), mas é muito mais resistente:
-    // não depende de adivinhar a navegação interna do app, que a Meta muda quando quer.
+    // Estratégia: navega pro chat por URL (`/send?phone=...&text=...`) e mantém a fila no
+    // chrome.storage. O WhatsApp pode recarregar a página e remover `phone` da URL; por isso o
+    // destino também fica gravado antes da navegação. Essa marca impede o ciclo de recargas e
+    // permite que a campanha retome do mesmo cliente depois que a conversa terminar de abrir.
     // ═══════════════════════════════════════════════════════════════════════════════════
     function iniciarZapAuto() {
+        // O content script pode ser reinjetado pelo próprio WhatsApp sem recarregar a aba.
+        // Uma única instância evita dois motores tentando enviar a mesma campanha.
+        if (window.__prumoZapAutoIniciado) return;
+        window.__prumoZapAutoIniciado = true;
         const CHAVE = "friganso_zap_campanha";
         const VALIDADE = 60 * 60 * 1000;   // campanha esquecida expira em 1h
         const TENTATIVAS_BOTAO = 60;       // 60 x 300ms = 18s esperando o botão Enviar aparecer
+        const VALIDADE_NAVEGACAO = 2 * 60 * 1000;
 
         const soDig = (s) => String(s || "").replace(/\D/g, "");
         const ler = (cb) => { try { chrome.storage.local.get([CHAVE], (r) => cb((r && r[CHAVE]) || null)); } catch (e) { cb(null); } };
@@ -2417,9 +2421,41 @@
         }
 
         // ── Motor ───────────────────────────────────────────────────────────────────────
-        function irPara(item) {
-            location.href = "https://web.whatsapp.com/send?phone=" + soDig(item.telefone) +
-                            "&text=" + encodeURIComponent(item.mensagem || "");
+        function irPara(item, c) {
+            const telefone = soDig(item.telefone);
+            const agora = Date.now();
+            // Grava o destino ANTES de navegar. O WhatsApp costuma remover ?phone= da URL
+            // durante a abertura da conversa; sem esta marca o script achava que estava no
+            // contato errado e recarregava a mesma página para sempre.
+            if (c.navegandoPara === telefone && agora - (c.navegouEm || 0) < VALIDADE_NAVEGACAO) {
+                pintar(c, "⏳ A conversa ainda está carregando. Não vou recarregar a página novamente.");
+                esperarEEnviar((ok) => concluirAtual(c, item, ok));
+                return;
+            }
+            c.navegandoPara = telefone;
+            c.navegouEm = agora;
+            gravar(c, () => {
+                location.assign("https://web.whatsapp.com/send?phone=" + telefone +
+                                "&text=" + encodeURIComponent(item.mensagem || ""));
+            });
+        }
+
+        function concluirAtual(c, item, ok) {
+            if (!c.itens[c.idx]) return;
+            c.itens[c.idx].status = ok ? "enviado" : "falhou";
+            c.idx++;
+            c.navegandoPara = "";
+            c.navegouEm = 0;
+            gravar(c, () => {
+                pintar(c, ok ? null : "⚠️ Não consegui enviar pra " + (item.nome || item.telefone) + " — pulei.");
+                const prox = c.itens[c.idx];
+                if (!prox) {
+                    c.rodando = false;
+                    gravar(c, () => pintar(c, "🎉 Campanha concluída!"));
+                    return;
+                }
+                setTimeout(() => { if (c.rodando) irPara(prox, c); }, Math.max(2, c.respiro || 8) * 1000);
+            });
         }
 
         function prosseguir(c) {
@@ -2432,21 +2468,16 @@
             }
             // Já estou no chat certo? Então envia. Senão, navega (a página recarrega e o
             // script roda de novo, agora com o número certo na URL).
-            if (numeroAberto() && numeroAberto() === soDig(item.telefone)) {
+            const telefone = soDig(item.telefone);
+            const aberto = numeroAberto();
+            const navegacaoRecente = c.navegandoPara === telefone &&
+                Date.now() - (c.navegouEm || 0) < VALIDADE_NAVEGACAO;
+            if ((aberto && aberto === telefone) || navegacaoRecente) {
                 pintar(c);
-                esperarEEnviar((ok) => {
-                    c.itens[c.idx].status = ok ? "enviado" : "falhou";
-                    c.idx++;
-                    gravar(c, () => {
-                        pintar(c, ok ? null : "⚠️ Não consegui enviar pra " + (item.nome || item.telefone) + " — pulei.");
-                        const prox = c.itens[c.idx];
-                        if (!prox) { c.rodando = false; gravar(c, () => pintar(c, "🎉 Campanha concluída!")); return; }
-                        setTimeout(() => { if (c.rodando) irPara(prox); }, Math.max(2, c.respiro || 8) * 1000);
-                    });
-                });
+                esperarEEnviar((ok) => concluirAtual(c, item, ok));
             } else {
                 pintar(c);
-                irPara(item);
+                irPara(item, c);
             }
         }
 
