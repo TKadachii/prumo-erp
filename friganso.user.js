@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
-// @version      2026.9.23.1716
+// @version      2026.9.24.0903
 // @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
 // @author       Prumo
 // @match        https://tkadachii.github.io/*
@@ -2346,192 +2346,183 @@
     // (origens diferentes, o navegador proíbe). O programa de PC dribla isso com uma <webview>
     // que ele controla. A extensão dribla porque roda DENTRO da página do WhatsApp.
     //
-    // Estratégia: navega pro chat por URL (`/send?phone=...&text=...`) e mantém a fila no
-    // chrome.storage. O WhatsApp pode recarregar a página e remover `phone` da URL; por isso o
-    // destino também fica gravado antes da navegação. Essa marca impede o ciclo de recargas e
-    // permite que a campanha retome do mesmo cliente depois que a conversa terminar de abrir.
+    // Navega pela interface já aberta: Nova conversa → pesquisa do número → mensagem → Enviar.
+    // Nenhum contato usa /send?phone e a página do WhatsApp permanece carregada durante a fila.
     // ═══════════════════════════════════════════════════════════════════════════════════
     function iniciarZapAuto() {
-        // O content script pode ser reinjetado pelo próprio WhatsApp sem recarregar a aba.
-        // Uma única instância evita dois motores tentando enviar a mesma campanha.
         if (window.__prumoZapAutoIniciado) return;
         window.__prumoZapAutoIniciado = true;
         const CHAVE = "friganso_zap_campanha";
-        const VALIDADE = 60 * 60 * 1000;   // campanha esquecida expira em 1h
-        const TENTATIVAS_BOTAO = 60;       // 60 x 300ms = 18s esperando o botão Enviar aparecer
-        const VALIDADE_NAVEGACAO = 2 * 60 * 1000;
-
+        const VALIDADE = 60 * 60 * 1000;
+        const ESPERA_INTERFACE = 90;
         const soDig = (s) => String(s || "").replace(/\D/g, "");
+        const dormir = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         const ler = (cb) => { try { chrome.storage.local.get([CHAVE], (r) => cb((r && r[CHAVE]) || null)); } catch (e) { cb(null); } };
         const gravar = (c, cb) => { try { const o = {}; o[CHAVE] = c; chrome.storage.local.set(o, () => cb && cb()); } catch (e) { cb && cb(); } };
         const limpar = () => { try { chrome.storage.local.remove(CHAVE); } catch (e) {} };
 
-        /** Número que está aberto agora, lido da própria URL. */
-        function numeroAberto() {
-            try { return soDig(new URLSearchParams(location.search).get("phone") || ""); } catch (e) { return ""; }
+        function visivel(el) {
+            if (!el || !el.isConnected) return false;
+            const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+            return r.width > 5 && r.height > 5 && s.display !== "none" && s.visibility !== "hidden";
+        }
+        async function esperarAte(fn, tentativas) {
+            const max = tentativas || ESPERA_INTERFACE;
+            for (let i = 0; i < max; i++) {
+                try { const achou = fn(); if (achou) return achou; } catch (e) {}
+                await dormir(250);
+            }
+            return null;
+        }
+        function clicavel(el) {
+            if (!el) return null;
+            return el.closest('[role="listitem"], [role="button"], button, [tabindex="0"], [tabindex="-1"], [data-testid="cell-frame-container"]') || el;
+        }
+        function acharNovaConversa() {
+            const direto = document.querySelector('button[aria-label="Nova conversa"], button[aria-label="New chat"], [title="Nova conversa"], [title="New chat"]');
+            if (visivel(direto)) return direto;
+            const icone = document.querySelector('span[data-icon="new-chat-outline"], span[data-icon="new-chat-filled"], [data-testid="new-chat-button"]');
+            const botao = clicavel(icone);
+            return visivel(botao) ? botao : null;
+        }
+        function caixasDePesquisa() {
+            return Array.from(document.querySelectorAll([
+                'div[contenteditable="true"][data-tab="3"]',
+                'div[contenteditable="true"][role="textbox"][aria-label*="pesqui" i]',
+                'div[contenteditable="true"][role="textbox"][aria-label*="search" i]',
+                'div[contenteditable="true"][role="textbox"][aria-placeholder*="pesqui" i]',
+                'div[contenteditable="true"][role="textbox"][aria-placeholder*="search" i]',
+                'div[contenteditable="true"][role="textbox"]'
+            ].join(','))).filter((el) => visivel(el) && !el.closest('footer') && !el.closest('#friganso-zap-painel'));
+        }
+        function escreverNoEditor(el, texto) {
+            if (!el) return false;
+            el.focus();
+            try {
+                document.execCommand("selectAll", false, null);
+                document.execCommand("delete", false, null);
+                if (String(el.innerText || el.textContent || "").trim()) el.textContent = "";
+                document.execCommand("insertText", false, String(texto || ""));
+            } catch (e) {}
+            if (String(el.innerText || el.textContent || "").trim() !== String(texto || "").trim()) el.textContent = String(texto || "");
+            try { el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: String(texto || "") })); }
+            catch (e) { el.dispatchEvent(new Event("input", { bubbles: true })); }
+            return true;
+        }
+        function acharLinhaDoNumero(telefone) {
+            const alvo = soDig(telefone).slice(-8);
+            if (!alvo) return null;
+            const seletores = '[role="listitem"], [data-testid="cell-frame-container"], [role="button"], [tabindex="0"] span[title], [tabindex="-1"] span[title], span[title]';
+            const encontrados = [];
+            document.querySelectorAll(seletores).forEach((el) => {
+                if (!visivel(el) || el.isContentEditable || el.closest('[contenteditable="true"]') || el.closest('#friganso-zap-painel') || el.closest('footer')) return;
+                const texto = soDig((el.innerText || el.textContent || "") + " " + (el.getAttribute("title") || ""));
+                if (!texto.includes(alvo)) return;
+                const linha = clicavel(el);
+                if (visivel(linha)) encontrados.push(linha);
+            });
+            encontrados.sort((a, b) => {
+                const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+                return (ra.width * ra.height) - (rb.width * rb.height);
+            });
+            return encontrados[0] || null;
+        }
+        function acharEditorMensagem() {
+            const candidatos = Array.from(document.querySelectorAll([
+                'footer div[contenteditable="true"][role="textbox"]',
+                'div[contenteditable="true"][role="textbox"][aria-label*="mensagem" i]',
+                'div[contenteditable="true"][role="textbox"][aria-label*="message" i]',
+                'div[contenteditable="true"][data-tab="10"]'
+            ].join(','))).filter((el) => visivel(el) && !el.closest('#friganso-zap-painel'));
+            return candidatos[candidatos.length - 1] || null;
+        }
+        function acharBotaoEnviar() {
+            const alvo = document.querySelector('button[aria-label="Enviar"], button[aria-label="Send"], span[data-icon="send"], [data-testid="send"]');
+            const botao = clicavel(alvo);
+            return visivel(botao) ? botao : null;
+        }
+        async function abrirConversa(item) {
+            const telefone = soDig(item.telefone);
+            if (!telefone) return null;
+            const nova = acharNovaConversa();
+            if (nova) { try { nova.click(); } catch (e) {} await dormir(300); }
+            const busca = await esperarAte(() => { const caixas = caixasDePesquisa(); return caixas[caixas.length - 1] || null; });
+            if (!busca) return null;
+            escreverNoEditor(busca, telefone);
+            const linha = await esperarAte(() => acharLinhaDoNumero(telefone));
+            if (!linha) return null;
+            try { linha.click(); } catch (e) { return null; }
+            await dormir(700);
+            return esperarAte(() => acharEditorMensagem());
+        }
+        async function enviarItem(item) {
+            const editor = await abrirConversa(item);
+            if (!editor) return false;
+            escreverNoEditor(editor, item.mensagem || "");
+            const botao = await esperarAte(() => acharBotaoEnviar(), 60);
+            if (!botao) return false;
+            try { botao.click(); return true; } catch (e) { return false; }
         }
 
-        // ── Painel flutuante ────────────────────────────────────────────────────────────
         let painel = null;
         function montarPainel() {
-            if (painel) return painel;
+            if (painel && painel.isConnected) return painel;
             painel = document.createElement("div");
             painel.id = "friganso-zap-painel";
             painel.style.cssText = [
-                "position:fixed", "right:16px", "bottom:16px", "z-index:2147483647",
-                "width:280px", "background:#0f172a", "color:#fff", "border-radius:16px",
-                "box-shadow:0 10px 40px rgba(0,0,0,.45)", "padding:14px",
-                "font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif", "font-size:13px",
+                "position:fixed", "right:16px", "bottom:16px", "z-index:2147483647", "width:290px",
+                "background:#0f172a", "color:#fff", "border-radius:16px", "box-shadow:0 10px 40px rgba(0,0,0,.45)",
+                "padding:14px", "font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif", "font-size:13px"
             ].join(";");
             document.documentElement.appendChild(painel);
             return painel;
         }
         function pintar(c, aviso) {
-            const p = montarPainel();
-            const total = c.itens.length;
+            const p = montarPainel(), total = c.itens.length;
             const feitos = c.itens.filter((i) => i.status).length;
             const ok = c.itens.filter((i) => i.status === "enviado").length;
             const falhas = c.itens.filter((i) => i.status === "falhou").length;
-            const atual = c.itens[c.idx];
-            const pct = total ? Math.round((feitos / total) * 100) : 0;
+            const atual = c.itens[c.idx], pct = total ? Math.round((feitos / total) * 100) : 0;
             p.innerHTML =
-                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-                    '<span style="font-size:18px">🥩</span>' +
-                    '<b style="flex:1">Prumo — Disparo</b>' +
-                    '<span id="frig-x" style="cursor:pointer;opacity:.6;font-size:16px" title="Fechar e cancelar">✕</span>' +
-                '</div>' +
-                '<div style="background:#1e293b;border-radius:999px;height:6px;overflow:hidden;margin-bottom:6px">' +
-                    '<div style="background:#10b981;height:100%;width:' + pct + '%;transition:width .3s"></div>' +
-                '</div>' +
-                '<div style="opacity:.75;margin-bottom:8px">' + feitos + " de " + total +
-                    " · ✅ " + ok + (falhas ? " · ⚠️ " + falhas : "") + "</div>" +
-                (atual && c.rodando
-                    ? '<div style="background:#1e293b;border-radius:10px;padding:8px;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">➡️ ' + (atual.nome || atual.telefone) + "</div>"
-                    : "") +
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:18px">✦</span><b style="flex:1">Prumo — Disparo</b><span id="frig-x" style="cursor:pointer;opacity:.6;font-size:16px" title="Fechar e cancelar">✕</span></div>' +
+                '<div style="background:#1e293b;border-radius:999px;height:6px;overflow:hidden;margin-bottom:6px"><div style="background:linear-gradient(90deg,#7c6cff,#22d3ee);height:100%;width:' + pct + '%;transition:width .3s"></div></div>' +
+                '<div style="opacity:.75;margin-bottom:8px">' + feitos + " de " + total + " · ✅ " + ok + (falhas ? " · ⚠️ " + falhas : "") + "</div>" +
+                (atual && c.rodando ? '<div style="background:#1e293b;border-radius:10px;padding:8px;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">➡️ ' + (atual.nome || atual.telefone) + "</div>" : "") +
                 (aviso ? '<div style="background:#7c2d12;border-radius:10px;padding:8px;margin-bottom:8px">' + aviso + "</div>" : "") +
-                '<button id="frig-btn" style="width:100%;border:0;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;background:' +
-                    (c.rodando ? "#dc2626" : "#10b981") + ';color:#fff">' +
-                    (c.rodando ? "⏸ Pausar" : (feitos ? "▶ Continuar" : "▶ Iniciar envio")) +
-                "</button>" +
-                '<div style="opacity:.5;font-size:11px;margin-top:8px;line-height:1.4">Não feche esta aba. Cada mensagem espera ' +
-                    (c.respiro || 8) + "s pra próxima.</div>";
-
+                '<button id="frig-btn" style="width:100%;border:0;border-radius:10px;padding:10px;font-weight:700;cursor:pointer;background:' + (c.rodando ? "#dc2626" : "#7c6cff") + ';color:#fff">' + (c.rodando ? "⏸ Pausar" : (feitos ? "▶ Continuar" : "▶ Iniciar envio")) + "</button>" +
+                '<div style="opacity:.55;font-size:11px;margin-top:8px;line-height:1.4">Sem recarregar: o Prumo pesquisa e abre cada conversa dentro desta tela. Respiro: ' + Math.max(2, c.respiro || 8) + "s.</div>";
             p.querySelector("#frig-x").onclick = () => { limpar(); p.remove(); painel = null; };
-            p.querySelector("#frig-btn").onclick = () => {
-                c.rodando = !c.rodando;
-                gravar(c, () => { pintar(c); if (c.rodando) prosseguir(c); });
-            };
+            p.querySelector("#frig-btn").onclick = () => { c.rodando = !c.rodando; gravar(c, () => { pintar(c); if (c.rodando) prosseguir(c); }); };
         }
-
-        // ── Achar e clicar no botão Enviar ──────────────────────────────────────────────
-        function acharBotaoEnviar() {
-            const alvo =
-                document.querySelector('button[aria-label="Enviar"], button[aria-label="Send"]') ||
-                document.querySelector('span[data-icon="send"]') ||
-                document.querySelector('[data-testid="send"]');
-            if (!alvo) return null;
-            // o ícone costuma estar dentro do botão — sobe até 4 níveis procurando o clicável
-            let b = alvo;
-            for (let i = 0; i < 4 && b; i++) {
-                if (b.tagName === "BUTTON" || (b.getAttribute && b.getAttribute("role") === "button")) return b;
-                b = b.parentElement;
-            }
-            return alvo;
-        }
-        /** Detecta a tela de "número inválido" pra não ficar 18s esperando à toa. */
-        function numeroInvalido() {
-            const t = (document.body && document.body.innerText || "").toLowerCase();
-            return t.indexOf("inválido") !== -1 && t.indexOf("telefone") !== -1;
-        }
-
-        function esperarEEnviar(cb) {
-            let tentativas = 0;
-            const iv = setInterval(() => {
-                tentativas++;
-                if (numeroInvalido()) { clearInterval(iv); cb(false); return; }
-                const btn = acharBotaoEnviar();
-                if (btn) {
-                    clearInterval(iv);
-                    try { btn.click(); cb(true); } catch (e) { cb(false); }
-                    return;
-                }
-                if (tentativas > TENTATIVAS_BOTAO) { clearInterval(iv); cb(false); }
-            }, 300);
-        }
-
-        // ── Motor ───────────────────────────────────────────────────────────────────────
-        function irPara(item, c) {
-            const telefone = soDig(item.telefone);
-            const agora = Date.now();
-            // Grava o destino ANTES de navegar. O WhatsApp costuma remover ?phone= da URL
-            // durante a abertura da conversa; sem esta marca o script achava que estava no
-            // contato errado e recarregava a mesma página para sempre.
-            if (c.navegandoPara === telefone && agora - (c.navegouEm || 0) < VALIDADE_NAVEGACAO) {
-                pintar(c, "⏳ A conversa ainda está carregando. Não vou recarregar a página novamente.");
-                esperarEEnviar((ok) => concluirAtual(c, item, ok));
-                return;
-            }
-            c.navegandoPara = telefone;
-            c.navegouEm = agora;
-            gravar(c, () => {
-                location.assign("https://web.whatsapp.com/send?phone=" + telefone +
-                                "&text=" + encodeURIComponent(item.mensagem || ""));
-            });
-        }
-
-        function concluirAtual(c, item, ok) {
+        function finalizarItem(c, item, ok) {
             if (!c.itens[c.idx]) return;
             c.itens[c.idx].status = ok ? "enviado" : "falhou";
             c.idx++;
-            c.navegandoPara = "";
-            c.navegouEm = 0;
             gravar(c, () => {
-                pintar(c, ok ? null : "⚠️ Não consegui enviar pra " + (item.nome || item.telefone) + " — pulei.");
-                const prox = c.itens[c.idx];
-                if (!prox) {
-                    c.rodando = false;
-                    gravar(c, () => pintar(c, "🎉 Campanha concluída!"));
-                    return;
-                }
-                setTimeout(() => { if (c.rodando) irPara(prox, c); }, Math.max(2, c.respiro || 8) * 1000);
+                pintar(c, ok ? null : "⚠️ Não encontrei ou não consegui enviar para " + (item.nome || item.telefone) + ". Pulei sem recarregar.");
+                if (!c.itens[c.idx]) { c.rodando = false; gravar(c, () => pintar(c, "🎉 Campanha concluída!")); return; }
+                setTimeout(() => { if (c.rodando) prosseguir(c); }, Math.max(2, c.respiro || 8) * 1000);
             });
         }
-
-        function prosseguir(c) {
-            if (!c.rodando) return;
+        async function prosseguir(c) {
+            if (!c.rodando || c.processando) return;
             const item = c.itens[c.idx];
-            if (!item) {                                   // acabou
-                c.rodando = false;
-                gravar(c, () => pintar(c, "🎉 Campanha concluída!"));
-                return;
-            }
-            // Já estou no chat certo? Então envia. Senão, navega (a página recarrega e o
-            // script roda de novo, agora com o número certo na URL).
-            const telefone = soDig(item.telefone);
-            const aberto = numeroAberto();
-            const navegacaoRecente = c.navegandoPara === telefone &&
-                Date.now() - (c.navegouEm || 0) < VALIDADE_NAVEGACAO;
-            if ((aberto && aberto === telefone) || navegacaoRecente) {
-                pintar(c);
-                esperarEEnviar((ok) => concluirAtual(c, item, ok));
-            } else {
-                pintar(c);
-                irPara(item, c);
-            }
+            if (!item) { c.rodando = false; gravar(c, () => pintar(c, "🎉 Campanha concluída!")); return; }
+            c.processando = true; gravar(c); pintar(c, "🔎 Abrindo a conversa sem recarregar o WhatsApp…");
+            const ok = await enviarItem(item);
+            c.processando = false;
+            finalizarItem(c, item, ok);
         }
-
-        // ── Arranque ────────────────────────────────────────────────────────────────────
         function arrancar() {
             ler((c) => {
-                if (!c || !c.itens || !c.itens.length) return;          // sem campanha: nem aparece
+                if (!c || !Array.isArray(c.itens) || !c.itens.length) return;
                 if (Date.now() - (c.ts || 0) > VALIDADE) { limpar(); return; }
+                c.processando = false;
                 pintar(c);
                 if (c.rodando) prosseguir(c);
             });
         }
-        // o WhatsApp Web demora pra montar; espera o corpo existir antes de pendurar o painel
-        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => setTimeout(arrancar, 1500));
-        else setTimeout(arrancar, 1500);
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => setTimeout(arrancar, 1000), { once: true });
+        else setTimeout(arrancar, 1000);
     }
-
 })();

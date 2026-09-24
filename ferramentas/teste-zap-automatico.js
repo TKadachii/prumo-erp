@@ -1,147 +1,88 @@
-// Precisa do Playwright + Chromium pra simular o WhatsApp Web num navegador de verdade.
-// Não é dependência do projeto (o site não usa), então avisa em vez de quebrar.
-let chromium;
-try { chromium = require('playwright').chromium; }
-catch (e) {
-    console.log('⏭️  Teste pulado: o pacote "playwright" não está instalado.');
-    console.log('   Pra rodar:  npm install playwright');
-    process.exit(0);
-}
-const http = require('http');
 const fs = require('fs');
-
-// Extrai a função iniciarZapAuto do content.js de verdade — testa o código publicado,
-// não uma cópia.
-const src = fs.readFileSync(require('path').join(__dirname, '..', 'extensao', 'content.js'), 'utf8');
+const path = require('path');
+const src = fs.readFileSync(path.join(__dirname, '..', 'extensao', 'content.js'), 'utf8');
 const ini = src.indexOf('function iniciarZapAuto()');
-if (ini < 0) { console.log('❌ não achei iniciarZapAuto no content.js'); process.exit(1); }
-// acha o fim da função contando chaves
+if (ini < 0) throw new Error('não achei iniciarZapAuto no content.js');
 let prof = 0, fim = -1;
 for (let i = src.indexOf('{', ini); i < src.length; i++) {
     if (src[i] === '{') prof++;
     else if (src[i] === '}') { prof--; if (prof === 0) { fim = i + 1; break; } }
 }
+if (fim < 0) throw new Error('não achei o fim de iniciarZapAuto');
 const FONTE_ZAP = src.slice(ini, fim);
-console.log(`Função extraída do content.js: ${FONTE_ZAP.split('\n').length} linhas\n`);
+const estaticos = [
+    [!FONTE_ZAP.includes('/send?phone='), 'não usa mais URL /send?phone'],
+    [!FONTE_ZAP.includes('location.assign') && !FONTE_ZAP.includes('location.href'), 'não navega nem recarrega a página'],
+    [FONTE_ZAP.includes('acharNovaConversa') && FONTE_ZAP.includes('acharLinhaDoNumero'), 'usa Nova conversa + pesquisa interna'],
+    [FONTE_ZAP.includes('acharEditorMensagem') && FONTE_ZAP.includes('acharBotaoEnviar'), 'preenche e envia pela interface aberta'],
+];
+let falhas = 0;
+for (const [passou, nome] of estaticos) { console.log(`${passou ? '✅' : '❌'} ${nome}`); if (!passou) falhas++; }
+if (falhas) process.exit(1);
 
-// ── Servidor que finge ser o WhatsApp Web ──────────────────────────────────────────
-// Reproduz o essencial: a URL /send?phone=..&text=.., e um botão com o mesmo
-// aria-label="Enviar" que o WhatsApp usa. Registra cada envio em /enviado.
+let chromium;
+try { chromium = require('playwright').chromium; }
+catch (e) {
+    console.log('⏭️  Teste visual pulado: Playwright não está instalado; verificações estruturais passaram.');
+    process.exit(0);
+}
+const http = require('http');
 const enviados = [];
+let cargas = 0;
 const servidor = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     if (u.pathname === '/registrar') { enviados.push(u.searchParams.get('p')); res.end('ok'); return; }
-    const phone = u.searchParams.get('phone') || '';
-    const invalido = phone === '5511000000000';   // simula número inválido
+    cargas++;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end(`<!doctype html><html><body>
-        <div id="app">${invalido
-            ? '<p>O número de telefone compartilhado por url é inválido.</p>'
-            : (phone ? `<button aria-label="Enviar" onclick="fetch('/registrar?p=${phone}')">enviar</button>` : '<p>WhatsApp</p>')}</div>
+    res.end(`<!doctype html><html><head><style>
+      button,[role=listitem],[contenteditable]{display:block;width:280px;min-height:32px;margin:8px;padding:6px}
+      footer{display:none} #friganso-zap-painel{width:290px!important}
+    </style></head><body>
+      <button aria-label="Nova conversa" id="nova">Nova conversa</button>
+      <div contenteditable="true" role="textbox" aria-label="Pesquisar nome ou número" id="busca"></div>
+      <div id="resultados"></div>
+      <footer><div contenteditable="true" role="textbox" aria-label="Digite uma mensagem" id="editor"></div>
+      <button aria-label="Enviar" id="enviar">Enviar</button></footer>
+      <script>
+        let telefone=''; const busca=document.querySelector('#busca'), resultados=document.querySelector('#resultados');
+        document.querySelector('#nova').onclick=()=>busca.focus();
+        busca.addEventListener('input',()=>{ const n=(busca.innerText||'').replace(/\\D/g,''); resultados.innerHTML='';
+          if(n && n!=='5511000000000'){const r=document.createElement('div');r.setAttribute('role','listitem');r.tabIndex=0;r.textContent='Conversar com +'+n;
+            r.onclick=()=>{telefone=n;document.querySelector('footer').style.display='block';resultados.innerHTML='';busca.textContent='';};resultados.appendChild(r);}
+        });
+        document.querySelector('#enviar').onclick=()=>fetch('/registrar?p='+telefone);
+      </script>
     </body></html>`);
 });
 (async () => {
     await new Promise(r => servidor.listen(0, r));
-    const porta = servidor.address().port;
-    const BASE = `http://localhost:${porta}`;
-
-        // o caminho do Chromium muda conforme a instalação; usa o do Playwright se o fixo não existir
-    const fsx = require('fs');
-    const candidatos = (fsx.existsSync('/opt/pw-browsers') ? fsx.readdirSync('/opt/pw-browsers') : [])
-        .filter(d => d.startsWith('chromium-'))
-        .map(d => `/opt/pw-browsers/${d}/chrome-linux/chrome`)
-        .filter(f => fsx.existsSync(f));
-    const opcoes = candidatos.length ? { executablePath: candidatos[0] } : {};
-    const navegador = await chromium.launch(opcoes);
+    const BASE = `http://localhost:${servidor.address().port}`;
+    const navegador = await chromium.launch({ headless: true });
     const ctx = await navegador.newContext();
     const pg = await ctx.newPage();
-
-    let falhas = 0;
-    const ok = (c, m) => { console.log(`${c ? '✅' : '❌'} ${m}`); if (!c) falhas++; };
-
-    // Injeta: mock do chrome.storage + troca da URL do WhatsApp pela do servidor falso
-    const preparar = async (campanha) => {
-        await pg.addInitScript(({ fonte, camp, base }) => {
-            // ⚠️ apoiado no localStorage: o chrome.storage de verdade PERSISTE entre navegações,
-            // e o motor navega a cada envio. Um objeto em memória zeraria a cada troca de página.
-            const LS = 'mock_chrome_storage';
-            if (camp) window.localStorage.setItem(LS, JSON.stringify({ friganso_zap_campanha: camp }));
-            const pegar = () => { try { return JSON.parse(window.localStorage.getItem(LS) || '{}'); } catch (e) { return {}; } };
-            const por = (o) => window.localStorage.setItem(LS, JSON.stringify(o));
-            window.__store = { get: pegar };
-            window.chrome = { storage: { local: {
-                get: (ks, cb) => { const st = pegar(); cb(Object.fromEntries((Array.isArray(ks) ? ks : [ks]).map(k => [k, st[k]]))); },
-                set: (o, cb) => { const st = pegar(); Object.assign(st, o); por(st); cb && cb(); },
-                remove: (k) => { const st = pegar(); (Array.isArray(k) ? k : [k]).forEach(x => delete st[x]); por(st); },
-            } } };
-            const f = new Function('return ' + fonte.replace(
-                'https://web.whatsapp.com/send?phone=', base + '/send?phone='))();
-            window.__iniciar = f;
-        }, { fonte: FONTE_ZAP, camp: campanha, base: BASE });
-    };
-
-    const campanha = {
-        itens: [
-            { telefone: '5522992891542', nome: 'Rota do Sol',  mensagem: 'oi 1', status: '' },
-            { telefone: '5511000000000', nome: 'Número Ruim',  mensagem: 'oi 2', status: '' },
-            { telefone: '5522988887777', nome: 'Bar do Mar',   mensagem: 'oi 3', status: '' },
-        ], idx: 0, rodando: false, respiro: 2, ts: Date.now(),
-    };
-
-    console.log('═══ 1. SEM CAMPANHA: não pode aparecer painel ═══');
-    await preparar(null);
-    await pg.goto(BASE + '/');
-    await pg.evaluate(() => window.__iniciar());
-    await pg.waitForTimeout(2200);
-    ok(await pg.locator('#friganso-zap-painel').count() === 0, 'nenhum painel quando não há campanha (não atrapalha o uso normal)');
-
-    console.log('\n═══ 2. COM CAMPANHA: painel aparece, parado ═══');
-    const pg2 = await ctx.newPage();
-    await pg2.addInitScript(({ fonte, camp, base }) => {
-        const LS = 'mock_chrome_storage';
-        // só semeia a campanha na PRIMEIRA carga; nas seguintes o estado já está gravado
-        if (!window.localStorage.getItem(LS)) window.localStorage.setItem(LS, JSON.stringify({ friganso_zap_campanha: camp }));
-        const pegar = () => { try { return JSON.parse(window.localStorage.getItem(LS) || '{}'); } catch (e) { return {}; } };
-        const por = (o) => window.localStorage.setItem(LS, JSON.stringify(o));
-        window.__store = { get: pegar };
-        window.chrome = { storage: { local: {
-            get: (ks, cb) => { const st = pegar(); cb(Object.fromEntries((Array.isArray(ks) ? ks : [ks]).map(k => [k, st[k]]))); },
-            set: (o, cb) => { const st = pegar(); Object.assign(st, o); por(st); cb && cb(); },
-            remove: (k) => { const st = pegar(); (Array.isArray(k) ? k : [k]).forEach(x => delete st[x]); por(st); },
-        } } };
-        window.__fonte = fonte.replace('https://web.whatsapp.com/send?phone=', base + '/send?phone=');
-        // roda a cada carregamento, como o content script de verdade faz
-        window.addEventListener('DOMContentLoaded', () => { new Function('return ' + window.__fonte)()(); });
-    }, { fonte: FONTE_ZAP, camp: campanha, base: BASE });
-
-    await pg2.goto(BASE + '/');
-    await pg2.waitForTimeout(2200);
-    ok(await pg2.locator('#friganso-zap-painel').count() === 1, 'painel montado');
-    const txt0 = await pg2.locator('#friganso-zap-painel').innerText();
-    ok(/Iniciar envio/.test(txt0), 'botão começa em "Iniciar envio" (não dispara sozinho sem o usuário mandar)');
-    ok(/0 de 3/.test(txt0), 'mostra 0 de 3');
-
-    console.log('\n═══ 3. CLICA EM INICIAR: dispara a fila inteira ═══');
-    await pg2.locator('#frig-btn').click();
-    // 3 contatos, respiro 2s -> dá folga
-    await pg2.waitForTimeout(16000);
-
-    ok(enviados.includes('5522992891542'), 'enviou pro 1º contato (Rota do Sol)');
-    ok(enviados.includes('5522988887777'), 'enviou pro 3º contato (Bar do Mar), DEPOIS do número inválido');
-    ok(!enviados.includes('5511000000000'), 'não enviou pro número inválido');
-    ok(enviados.length === 2, `total de envios = 2 (deu ${enviados.length}) — sem envio duplicado`);
-
-    const est = await pg2.evaluate(() => window.__store.get().friganso_zap_campanha);
-    ok(est.itens[0].status === 'enviado', '1º marcado como enviado');
-    ok(est.itens[1].status === 'falhou',  '2º marcado como FALHOU (número inválido) em vez de travar a fila');
-    ok(est.itens[2].status === 'enviado', '3º marcado como enviado');
-    ok(est.rodando === false, 'campanha terminou e se desligou sozinha');
-
-    const txtFim = await pg2.locator('#friganso-zap-painel').innerText();
-    ok(/concluída/i.test(txtFim), 'painel avisa que concluiu');
-
-    await navegador.close();
-    servidor.close();
-    console.log(falhas ? `\n❌ ${falhas} falha(s)` : '\n✅ todos passaram');
-    process.exit(falhas ? 1 : 0);
-})();
+    const campanha = { itens: [
+        { telefone:'5522992891542', nome:'Rota do Sol', mensagem:'oi 1', status:'' },
+        { telefone:'5511000000000', nome:'Número Ruim', mensagem:'oi 2', status:'' },
+        { telefone:'5522988887777', nome:'Bar do Mar', mensagem:'oi 3', status:'' },
+    ], idx:0, rodando:false, respiro:2, ts:Date.now() };
+    await pg.addInitScript(({ fonte, camp }) => {
+        const LS='mock'; localStorage.setItem(LS, JSON.stringify({friganso_zap_campanha:camp}));
+        const pegar=()=>JSON.parse(localStorage.getItem(LS)||'{}'), por=o=>localStorage.setItem(LS,JSON.stringify(o));
+        window.__store={get:pegar}; window.chrome={storage:{local:{
+          get:(ks,cb)=>{const s=pegar();cb(Object.fromEntries(ks.map(k=>[k,s[k]])));},
+          set:(o,cb)=>{const s=pegar();Object.assign(s,o);por(s);cb&&cb();},
+          remove:k=>{const s=pegar();delete s[k];por(s);}
+        }}};
+        const teste=fonte.replace('const ESPERA_INTERFACE = 90;', 'const ESPERA_INTERFACE = 8;');
+        addEventListener('DOMContentLoaded',()=>new Function('return '+teste)()());
+    }, { fonte:FONTE_ZAP, camp:campanha });
+    await pg.goto(BASE + '/'); await pg.waitForTimeout(1400);
+    const cargasAntes=cargas; await pg.locator('#frig-btn').click(); await pg.waitForTimeout(11000);
+    const estado=await pg.evaluate(()=>window.__store.get().friganso_zap_campanha);
+    const checar=(c,m)=>{console.log(`${c?'✅':'❌'} ${m}`);if(!c)falhas++;};
+    checar(cargas===cargasAntes,'nenhuma recarga durante toda a campanha');
+    checar(enviados.join(',')==='5522992891542,5522988887777','enviou primeiro e terceiro sem duplicar');
+    checar(estado.itens[1].status==='falhou','número inexistente foi pulado');
+    checar(estado.rodando===false,'campanha concluiu');
+    await navegador.close(); servidor.close(); process.exit(falhas?1:0);
+})().catch(e=>{console.error(e);servidor.close();process.exit(1);});

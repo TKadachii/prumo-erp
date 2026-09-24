@@ -503,9 +503,9 @@ Fluxo: o site entrega a lista pronta (`postMessage` `ZAP_CAMPANHA` → `chrome.s
 `web.whatsapp.com`, e o `content.js` que roda lá dentro dispara um por um. Vale nos Disparos e na
 Prospecção em Massa.
 
-- ⚠️ Navega por URL (`/send?phone=..&text=..`), o que **RECARREGA a página a cada envio** — então o
-  estado NÃO pode viver em memória, vive todo no `chrome.storage`. É mais lento que mexer na busca
-  interna do WhatsApp (jeito do PC), mas não depende de adivinhar a navegação interna do app.
+- ✅ Desde a v2.34.7, navega pela própria interface do WhatsApp Web: abre **Nova conversa**, pesquisa
+  o número, entra no resultado, preenche e envia. A aba não recarrega entre clientes. A fila continua
+  no `chrome.storage`, permitindo pausar e retomar sem perder o progresso.
 - O site **espera o ACK** (`ZAP_CAMPANHA_OK`) antes de abrir a aba: sem isso, quem não tem a
   extensão veria o WhatsApp abrir e nada acontecer, sem pista do motivo.
 - O painel **não começa sozinho** — mostra "Iniciar envio" e espera o clique.
