@@ -608,6 +608,15 @@ arquivo (Kpi, Badge, Cartao, NavButton...), todos SEM campo de digitação dentr
 não quebram nada visível. ✅ `ferramentas/teste-componentes-aninhados.js` varre e falha apontando a
 linha (verificado reintroduzindo o bug de propósito).
 
+## 🎨 Criador de arte individual (2026-09-25, v2.35.0)
+
+- Fica em **Catálogo**: cada produto possui o botão **Criar arte**.
+- Gera PNG 1080 × 1350 no próprio navegador, sem enviar a foto para serviços externos.
+- Aceita uma foto temporária recebida pelo WhatsApp ou reutiliza a foto compartilhada do produto.
+- Permite editar nome, linha, embalagem, peso, unidade, conservação, chamada, zoom e posição.
+- A foto comum é usada em modo `cover` com transições escuras nas bordas, então não precisa ter fundo transparente.
+- A foto escolhida só para a arte fica na memória do aparelho e não substitui a foto compartilhada no Cardápio.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

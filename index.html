@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 226;
+        const APP_BUILD_VERSION = 227;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -8054,6 +8054,13 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.35.0', data: '25/09/2026', areas: ['site'], itens: [
+                '✨ Novo Criador de Arte no Catálogo: transforma a foto comum do produto em uma divulgação profissional da Prumo',
+                '🥩 Funciona com qualquer carne e permite editar nome, linha, embalagem, peso e unidade',
+                '❄️ Escolha entre produto resfriado ou congelado, com selo próprio na imagem',
+                '📷 Aceita a foto recebida pelo WhatsApp e oferece controles de zoom e posição, sem exigir fundo transparente',
+                '⬇️ Gera PNG 1080 × 1350 pronto para Status, WhatsApp e Instagram',
+            ]},
             { versao: '2.34.7', data: '24/09/2026', areas: ['extensao', 'site'], itens: [
                 '⚡ O envio automático agora navega dentro do WhatsApp Web sem recarregar a página entre clientes',
                 '🔎 A extensão abre Nova conversa, pesquisa o número e preenche a mensagem mantendo a sessão carregada',
@@ -8913,6 +8920,114 @@
             return canvas;
         };
 
+        // 🎨 Arte individual de produto — usa a foto comum recebida pelo WhatsApp, sem exigir
+        // fundo transparente. O enquadramento preenche a área principal e os degradês integram
+        // caixa, balcão e outros elementos do ambiente ao visual cósmico da Prumo.
+        const gerarArteProdutoImagem = async (dados, fotoSrc) => {
+            const W = 1080, H = 1350;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d');
+
+            const fundo = ctx.createLinearGradient(0, 0, W, H);
+            fundo.addColorStop(0, '#060916'); fundo.addColorStop(.52, '#101536'); fundo.addColorStop(1, '#03050c');
+            ctx.fillStyle = fundo; ctx.fillRect(0, 0, W, H);
+
+            // formas e brilho cósmico
+            const brilho = ctx.createRadialGradient(850, 220, 0, 850, 220, 680);
+            brilho.addColorStop(0, 'rgba(124,58,237,.48)'); brilho.addColorStop(.48, 'rgba(34,211,238,.12)'); brilho.addColorStop(1, 'rgba(3,5,12,0)');
+            ctx.fillStyle = brilho; ctx.fillRect(0, 0, W, H);
+            ctx.save(); ctx.globalAlpha = .13; ctx.fillStyle = '#22d3ee';
+            ctx.beginPath(); ctx.moveTo(760, 0); ctx.lineTo(1080, 0); ctx.lineTo(1080, 330); ctx.lineTo(930, 220); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#8b5cf6'; ctx.beginPath(); ctx.moveTo(0, 210); ctx.lineTo(240, 0); ctx.lineTo(390, 0); ctx.lineTo(0, 390); ctx.closePath(); ctx.fill(); ctx.restore();
+
+            // marca
+            try {
+                const logo = await carregarImagemCanvas(PRUMO_LOGO_DATA_URI);
+                ctx.drawImage(logo, 54, 38, 92, 92);
+            } catch (e) {}
+            ctx.fillStyle = '#fff'; ctx.font = '900 54px system-ui, sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText('PRUMO', 166, 93);
+            ctx.fillStyle = '#a5b4fc'; ctx.font = '700 15px system-ui, sans-serif'; ctx.letterSpacing = '5px';
+            ctx.fillText('GESTÃO COMERCIAL', 169, 121);
+
+            const linha = String(dados.linha || 'SELEÇÃO ESPECIAL').toUpperCase();
+            ctx.fillStyle = '#67e8f9'; ctx.font = '800 18px system-ui, sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(linha, W / 2, 190);
+
+            // título com até duas linhas e redução automática de fonte
+            const nome = String(dados.nome || 'PRODUTO').trim().toUpperCase();
+            let tamanho = 82, linhasNome = [];
+            const montarLinhas = () => {
+                const palavras = nome.split(/\s+/); const ls = []; let atual = '';
+                palavras.forEach(p => { const teste = atual ? atual + ' ' + p : p; if (ctx.measureText(teste).width > 930 && atual) { ls.push(atual); atual = p; } else atual = teste; });
+                if (atual) ls.push(atual); return ls;
+            };
+            do { ctx.font = `900 ${tamanho}px system-ui, sans-serif`; linhasNome = montarLinhas(); if (linhasNome.length <= 2) break; tamanho -= 4; } while (tamanho > 48);
+            if (linhasNome.length > 2) { linhasNome = [linhasNome[0], linhasNome.slice(1).join(' ')]; while (ctx.measureText(linhasNome[1]).width > 930 && linhasNome[1].length > 5) linhasNome[1] = linhasNome[1].slice(0, -2) + '…'; }
+            ctx.textAlign = 'center'; ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(0,0,0,.42)'; ctx.fillStyle = '#fff';
+            const tituloY = 275;
+            linhasNome.forEach((txt, i) => { const y = tituloY + i * (tamanho * .92); ctx.strokeText(txt, W / 2, y); ctx.fillText(txt, W / 2, y); });
+
+            // foto recebida: cover com posição e zoom ajustáveis
+            const fx = 34, fy = 390, fw = 1012, fh = 760;
+            roundRectPath(ctx, fx, fy, fw, fh, 38); ctx.fillStyle = '#111827'; ctx.fill();
+            ctx.save(); roundRectPath(ctx, fx, fy, fw, fh, 38); ctx.clip();
+            if (fotoSrc) {
+                try {
+                    const img = await carregarImagemCanvas(fotoSrc, /^https?:/i.test(fotoSrc));
+                    const zoom = Math.max(1, Math.min(2.5, Number(dados.zoom) || 1));
+                    const s = Math.max(fw / img.width, fh / img.height) * zoom;
+                    const dw = img.width * s, dh = img.height * s;
+                    const sobraX = Math.max(0, dw - fw), sobraY = Math.max(0, dh - fh);
+                    const dx = fx + (fw - dw) / 2 + (Number(dados.posX) || 0) / 100 * sobraX / 2;
+                    const dy = fy + (fh - dh) / 2 + (Number(dados.posY) || 0) / 100 * sobraY / 2;
+                    ctx.drawImage(img, dx, dy, dw, dh);
+                } catch (e) {
+                    ctx.fillStyle = '#1e293b'; ctx.fillRect(fx, fy, fw, fh);
+                }
+            } else {
+                ctx.fillStyle = '#1e293b'; ctx.fillRect(fx, fy, fw, fh);
+                ctx.fillStyle = '#94a3b8'; ctx.font = '100px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🥩', W / 2, fy + fh / 2);
+            }
+            // transições escondem o fundo da foto sem cortar a carne
+            const topoFoto = ctx.createLinearGradient(0, fy, 0, fy + 220);
+            topoFoto.addColorStop(0, 'rgba(6,9,22,.94)'); topoFoto.addColorStop(1, 'rgba(6,9,22,0)');
+            ctx.fillStyle = topoFoto; ctx.fillRect(fx, fy, fw, 230);
+            const baseFoto = ctx.createLinearGradient(0, fy + fh - 170, 0, fy + fh);
+            baseFoto.addColorStop(0, 'rgba(3,5,12,0)'); baseFoto.addColorStop(1, 'rgba(3,5,12,.92)');
+            ctx.fillStyle = baseFoto; ctx.fillRect(fx, fy + fh - 180, fw, 180);
+            ctx.restore();
+            ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(196,181,253,.32)'; roundRectPath(ctx, fx, fy, fw, fh, 38); ctx.stroke();
+
+            // selos de conservação e peso
+            const selo = (cx, titulo, principal, detalhe, cor) => {
+                ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 22;
+                const sg = ctx.createRadialGradient(cx - 20, 520, 8, cx, 540, 112);
+                sg.addColorStop(0, cor); sg.addColorStop(1, '#111126'); ctx.fillStyle = sg;
+                ctx.beginPath(); ctx.arc(cx, 545, 108, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0; ctx.lineWidth = 5; ctx.strokeStyle = '#fff'; ctx.stroke();
+                ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = '800 22px system-ui, sans-serif'; ctx.fillText(titulo, cx, 505);
+                ctx.font = `900 ${String(principal).length >= 9 ? 31 : 38}px system-ui, sans-serif`; ctx.fillText(principal, cx, 555);
+                ctx.font = '700 16px system-ui, sans-serif'; ctx.fillStyle = '#cbd5e1'; ctx.fillText(detalhe, cx, 588); ctx.restore();
+            };
+            const congelado = dados.conservacao === 'congelada';
+            selo(160, congelado ? '❄  PRODUTO' : '✦  PRODUTO', congelado ? 'CONGELADO' : 'RESFRIADO', 'CONSERVAÇÃO', congelado ? '#2563eb' : '#7c3aed');
+            const peso = String(dados.peso || '').trim();
+            selo(920, String(dados.embalagem || 'CAIXA').toUpperCase(), peso ? `± ${peso} ${dados.unidade || 'kg'}` : 'VARIÁVEL', 'PESO APROXIMADO', '#e11d48');
+
+            // rodapé/CTA
+            const footer = ctx.createLinearGradient(0, 1170, W, H);
+            footer.addColorStop(0, '#6d28d9'); footer.addColorStop(.55, '#8b5cf6'); footer.addColorStop(1, '#0891b2');
+            ctx.fillStyle = footer; ctx.beginPath(); ctx.moveTo(0, 1195); ctx.quadraticCurveTo(W / 2, 1135, W, 1195); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,.14)'; roundRectPath(ctx, 510, 1230, 510, 78, 39); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = '900 34px system-ui, sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(String(dados.chamada || 'FAÇA SEU PEDIDO').toUpperCase(), 755, 1281);
+            ctx.font = '700 15px system-ui, sans-serif'; ctx.fillStyle = '#ddd6fe'; ctx.textAlign = 'left';
+            ctx.fillText('CONSULTE CONDIÇÕES COM SEU VENDEDOR', 54, 1279);
+            return canvas;
+        };
+
         // 📇 Cartão/portfólio do vendedor — imagem 9:16 (mesmo formato do Catálogo) pra mandar pro
         // cliente se apresentar: foto, nome, cargo, tempo de casa e especialidades.
         const gerarPortfolioImagem = async (user, dados) => {
@@ -9029,6 +9144,10 @@
             const [posterUrls, setPosterUrls] = useState(null); // array de URLs, uma por página
             const [paginaAtual, setPaginaAtual] = useState(0);
             const [presetId, setPresetId] = useState(8);
+            const [arteProduto, setArteProduto] = useState(null);
+            const [arteForm, setArteForm] = useState(null);
+            const [arteUrl, setArteUrl] = useState(null);
+            const [gerandoArte, setGerandoArte] = useState(false);
             const resultados = useMemo(() => {
                 const q = busca.trim();
                 const ativos = (products || []).filter(p => p.ativo !== false);
@@ -9037,6 +9156,55 @@
             }, [products, busca]);
 
             const toggleSelecionado = (code) => setSelecionados(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; });
+            const abrirArteProduto = (produto) => {
+                const nome = String(produto.name || '').trim();
+                const pesoNoNome = nome.match(/(\d+(?:[,.]\d+)?)\s*KG/i);
+                const congelada = /\bCONG(?:ELAD[AO])?\b/i.test(nome);
+                if (arteUrl) URL.revokeObjectURL(arteUrl);
+                setArteUrl(null); setArteProduto(produto);
+                setArteForm({
+                    nome,
+                    linha: 'SELEÇÃO ESPECIAL',
+                    conservacao: congelada ? 'congelada' : 'resfriada',
+                    peso: pesoNoNome ? pesoNoNome[1].replace('.', ',') : '20',
+                    unidade: 'kg', embalagem: 'CAIXA', chamada: 'FAÇA SEU PEDIDO',
+                    fotoLocal: null, zoom: 1.08, posX: 0, posY: -18,
+                });
+            };
+            const fecharArteProduto = () => {
+                if (arteUrl) URL.revokeObjectURL(arteUrl);
+                setArteUrl(null); setArteProduto(null); setArteForm(null);
+            };
+            const mudarArteCampo = (campo, valor) => {
+                if (arteUrl) URL.revokeObjectURL(arteUrl);
+                setArteUrl(null); setArteForm(f => ({ ...f, [campo]: valor }));
+            };
+            const escolherFotoArte = (file) => {
+                if (!file) return;
+                if (!file.type.startsWith('image/')) { showMessage('Escolha uma imagem válida.', 'error'); return; }
+                const reader = new FileReader();
+                reader.onload = () => { if (arteUrl) URL.revokeObjectURL(arteUrl); setArteUrl(null); setArteForm(f => ({ ...f, fotoLocal: reader.result, zoom: 1, posX: 0, posY: 0 })); };
+                reader.onerror = () => showMessage('Não consegui abrir essa foto.', 'error');
+                reader.readAsDataURL(file);
+            };
+            const gerarArteProduto = async () => {
+                if (!arteProduto || !arteForm || !arteForm.nome.trim()) { showMessage('Informe o nome do produto.', 'error'); return; }
+                setGerandoArte(true);
+                try {
+                    let fotoSrc = arteForm.fotoLocal;
+                    if (!fotoSrc && produtoFotos && produtoFotos[String(arteProduto.code)]) {
+                        const doc = await db.collection('produto_fotos_thumbs').doc(String(arteProduto.code)).get();
+                        if (doc.exists) fotoSrc = doc.data().thumb;
+                    }
+                    if (!fotoSrc) { showMessage('Escolha uma foto do produto para criar a arte.', 'error'); return; }
+                    const canvas = await gerarArteProdutoImagem(arteForm, fotoSrc);
+                    const url = await new Promise(res => canvas.toBlob(b => res(b ? URL.createObjectURL(b) : null), 'image/png'));
+                    if (!url) throw new Error('Falha ao montar PNG');
+                    if (arteUrl) URL.revokeObjectURL(arteUrl);
+                    setArteUrl(url);
+                } catch (e) { showMessage('Erro ao gerar a arte do produto.', 'error'); }
+                finally { setGerandoArte(false); }
+            };
             const gerarCatalogo = async () => {
                 const lista = products.filter(p => selecionados.has(String(p.code)));
                 if (!lista.length) { showMessage('Escolha pelo menos 1 produto.', 'error'); return; }
@@ -9110,6 +9278,61 @@
             return (
                 <div className="animate-in fade-in space-y-6">
                     {crop && <CropFotoModal file={crop.file} onCancel={() => setCrop(null)} onConfirm={confirmarCrop} />}
+                    {arteProduto && arteForm && (
+                        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 z-[999]" onClick={fecharArteProduto}>
+                            <div className="w-full max-w-5xl max-h-[96vh] overflow-y-auto rounded-3xl border border-violet-400/20 bg-[#090b16] text-white shadow-2xl" onClick={e => e.stopPropagation()}>
+                                <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-white/10 bg-[#090b16]/95 px-4 py-4 sm:px-6 backdrop-blur-xl">
+                                    <div><h3 className="text-lg sm:text-xl font-black">✨ Criar arte do produto</h3><p className="text-xs text-slate-400">Foto comum, pronta para Status, Instagram e WhatsApp.</p></div>
+                                    <button onClick={fecharArteProduto} aria-label="Fechar" className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-xl">×</button>
+                                </div>
+                                <div className="grid md:grid-cols-[1fr_0.9fr] gap-5 p-4 sm:p-6">
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-300 mb-1">Nome que aparece na arte</label>
+                                            <input value={arteForm.nome} onChange={e => mudarArteCampo('nome', e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-white outline-none focus:border-violet-400" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-300 mb-1">Linha ou destaque</label>
+                                            <input value={arteForm.linha} onChange={e => mudarArteCampo('linha', e.target.value)} placeholder="Ex.: Linha Grill, Seleção Especial" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-white outline-none focus:border-cyan-400" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-300 mb-2">Conservação</label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button onClick={() => mudarArteCampo('conservacao', 'resfriada')} className={`rounded-xl border px-3 py-3 text-sm font-black ${arteForm.conservacao === 'resfriada' ? 'border-violet-400 bg-violet-500/25 text-white' : 'border-white/10 bg-white/5 text-slate-400'}`}>✦ Resfriada</button>
+                                                <button onClick={() => mudarArteCampo('conservacao', 'congelada')} className={`rounded-xl border px-3 py-3 text-sm font-black ${arteForm.conservacao === 'congelada' ? 'border-blue-400 bg-blue-500/25 text-white' : 'border-white/10 bg-white/5 text-slate-400'}`}>❄ Congelada</button>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-[1fr_1fr_90px] gap-2">
+                                            <div><label className="block text-xs font-bold text-slate-300 mb-1">Embalagem</label><input value={arteForm.embalagem} onChange={e => mudarArteCampo('embalagem', e.target.value)} placeholder="Caixa" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-white outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-300 mb-1">Peso aproximado</label><input inputMode="decimal" value={arteForm.peso} onChange={e => mudarArteCampo('peso', e.target.value)} placeholder="23" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-white outline-none" /></div>
+                                            <div><label className="block text-xs font-bold text-slate-300 mb-1">Unidade</label><select value={arteForm.unidade} onChange={e => mudarArteCampo('unidade', e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#111427] px-2 py-3 text-white outline-none"><option value="kg">kg</option><option value="g">g</option><option value="un">un</option></select></div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-300 mb-2">Foto do produto</label>
+                                            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                                                <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-slate-800">{(arteForm.fotoLocal || (produtoFotos && produtoFotos[String(arteProduto.code)])) ? <img src={arteForm.fotoLocal || produtoFotos[String(arteProduto.code)]} alt="Foto escolhida" className="h-full w-full object-cover" /> : <div className="h-full flex items-center justify-center text-3xl">🥩</div>}</div>
+                                                <div className="min-w-0 flex-1"><p className="text-xs text-slate-400 leading-relaxed">Pode selecionar diretamente a foto recebida no WhatsApp. Ela só será usada nesta arte.</p><label className="inline-flex mt-2 cursor-pointer rounded-lg bg-white/10 hover:bg-white/20 px-3 py-2 text-xs font-bold"><input type="file" accept="image/*" className="hidden" onChange={e => escolherFotoArte(e.target.files && e.target.files[0])} />📷 Escolher foto</label></div>
+                                            </div>
+                                        </div>
+                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 space-y-3">
+                                            <p className="text-xs font-bold text-slate-300">Ajustar enquadramento</p>
+                                            <label className="block text-[11px] text-slate-400">Zoom <input type="range" min="1" max="2.5" step="0.05" value={arteForm.zoom} onChange={e => mudarArteCampo('zoom', Number(e.target.value))} className="w-full accent-violet-500" /></label>
+                                            <div className="grid grid-cols-2 gap-3"><label className="block text-[11px] text-slate-400">Horizontal <input type="range" min="-100" max="100" value={arteForm.posX} onChange={e => mudarArteCampo('posX', Number(e.target.value))} className="w-full accent-cyan-500" /></label><label className="block text-[11px] text-slate-400">Vertical <input type="range" min="-100" max="100" value={arteForm.posY} onChange={e => mudarArteCampo('posY', Number(e.target.value))} className="w-full accent-cyan-500" /></label></div>
+                                        </div>
+                                        <div><label className="block text-xs font-bold text-slate-300 mb-1">Chamada final</label><input value={arteForm.chamada} onChange={e => mudarArteCampo('chamada', e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-white outline-none" /></div>
+                                    </div>
+                                    <div className="md:sticky md:top-24 self-start">
+                                        <div className="aspect-[4/5] overflow-hidden rounded-2xl border border-violet-400/25 bg-[#050711] flex items-center justify-center">
+                                            {arteUrl ? <img src={arteUrl} alt="Prévia da arte" className="h-full w-full object-contain" /> : <div className="px-8 text-center"><div className="text-5xl mb-3">✨</div><p className="font-black">Sua arte aparecerá aqui</p><p className="mt-2 text-xs leading-relaxed text-slate-400">Escolha a foto e toque em Gerar prévia. O degradê integra o fundo da foto ao tema da Prumo.</p></div>}
+                                        </div>
+                                        <button onClick={gerarArteProduto} disabled={gerandoArte} className="mt-3 w-full rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 py-3.5 font-black text-white shadow-lg disabled:opacity-50">{gerandoArte ? 'Montando a arte...' : (arteUrl ? '↻ Atualizar prévia' : '✨ Gerar prévia')}</button>
+                                        {arteUrl && <a href={arteUrl} download={`prumo-${String(arteProduto.code || 'produto')}-${diaStrGlobal(new Date())}.png`} className="mt-2 block w-full rounded-xl bg-white py-3.5 text-center font-black text-slate-950">⬇️ Baixar PNG</a>}
+                                        <p className="mt-2 text-center text-[10px] text-slate-500">Imagem 1080 × 1350, formato ideal para divulgação.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {editandoRodape && (
                         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-[999]">
                             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 flex flex-col max-h-[85vh]">
@@ -9150,10 +9373,10 @@
                                 )}
                                 <div className="flex gap-3 w-full mt-4">
                                     <button onClick={() => setPosterUrls(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 rounded-xl transition-colors">Fechar</button>
-                                    <a href={posterUrls[paginaAtual]} download={`friganso-ofertas-${diaStrGlobal(new Date())}-${paginaAtual + 1}.png`} className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-3 rounded-xl transition-colors text-center">⬇️ Baixar {posterUrls.length > 1 ? 'esta' : ''}</a>
+                                <a href={posterUrls[paginaAtual]} download={`prumo-ofertas-${diaStrGlobal(new Date())}-${paginaAtual + 1}.png`} className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-3 rounded-xl transition-colors text-center">⬇️ Baixar {posterUrls.length > 1 ? 'esta' : ''}</a>
                                 </div>
                                 {posterUrls.length > 1 && (
-                                    <button onClick={() => posterUrls.forEach((u, i) => { const a = document.createElement('a'); a.href = u; a.download = `friganso-ofertas-${diaStrGlobal(new Date())}-${i + 1}.png`; a.click(); })} className="w-full mt-2 text-xs font-bold text-rose-700 hover:text-rose-800">⬇️ Baixar todas as {posterUrls.length} páginas</button>
+                                    <button onClick={() => posterUrls.forEach((u, i) => { const a = document.createElement('a'); a.href = u; a.download = `prumo-ofertas-${diaStrGlobal(new Date())}-${i + 1}.png`; a.click(); })} className="w-full mt-2 text-xs font-bold text-rose-700 hover:text-rose-800">⬇️ Baixar todas as {posterUrls.length} páginas</button>
                                 )}
                             </div>
                         </div>
@@ -9161,11 +9384,14 @@
                     <header className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                             <h1 className="text-2xl font-bold text-rose-800 flex items-center gap-2"><span>🍽️</span> Cardápio</h1>
-                            <button onClick={() => { setModoCatalogo(v => !v); setSelecionados(new Set()); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoCatalogo ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
-                                {modoCatalogo ? '✕ Cancelar seleção' : '🖼️ Montar Catálogo'}
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                                <button onClick={() => abrirArteProduto({ code: 'avulso', name: '' })} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-sm">✨ Nova arte avulsa</button>
+                                <button onClick={() => { setModoCatalogo(v => !v); setSelecionados(new Set()); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoCatalogo ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+                                    {modoCatalogo ? '✕ Cancelar seleção' : '🖼️ Montar Catálogo'}
+                                </button>
+                            </div>
                         </div>
-                        <p className="text-slate-500 text-sm mb-4">{modoCatalogo ? 'Toque nos produtos que quer colocar no catálogo de ofertas.' : 'Foto de cada produto — qualquer conta pode subir ou trocar, e todo mundo vê.'}</p>
+                        <p className="text-slate-500 text-sm mb-4">{modoCatalogo ? 'Toque nos produtos que quer colocar no catálogo de ofertas.' : 'Cadastre as fotos e crie artes individuais de qualquer carne, peso e conservação.'}</p>
                         <input type="text" placeholder="Buscar por código ou nome..." value={busca} onChange={e => setBusca(e.target.value)} className="w-full p-4 rounded-xl border border-slate-200 outline-none focus:border-rose-500 font-bold bg-slate-50" />
                         {modoCatalogo && (
                             <div className="mt-3 bg-rose-50 border border-rose-200 rounded-xl p-3 space-y-3">
@@ -9209,6 +9435,7 @@
                                         <div className="p-3 flex-1 flex flex-col">
                                             <span className="text-[10px] font-mono font-bold text-slate-400">{p.code}</span>
                                             <p className="text-xs font-bold text-slate-700 leading-tight flex-1">{p.name}</p>
+                                            {!modoCatalogo && <button onClick={() => abrirArteProduto(p)} className="mt-2 w-full rounded-lg bg-slate-950 hover:bg-violet-950 px-2 py-2 text-[11px] font-black text-white transition-colors">✨ Criar arte</button>}
                                             {!modoCatalogo && foto && <button onClick={() => apagarFoto(p.code)} disabled={subindo} className="text-[10px] text-red-500 hover:text-red-700 font-bold mt-1 text-left">🗑️ remover foto</button>}
                                         </div>
                                     </div>
@@ -12256,7 +12483,7 @@
                     <div className="h-5 w-5"><Icon /></div> {label}
                 </button>
             );
-            const routeLabels = { dashboard:'Visão geral', clients:'Clientes', rotas:'Rotas', pdf:'Preços', pedido:'Novo pedido', resumo:'Resumo', radar:'Radar', historico:'Histórico', orcamentos:'Ofertas', disparos:'Campanhas', lembretes:'Lembretes', profile:'Minha conta', tutorial:'Tutorial', changelog:'Atualizações', support:'Suporte', navegador:'Site da Prumo', fila:'Fila de pedidos' };
+            const routeLabels = { dashboard:'Visão geral', clients:'Clientes', rotas:'Rotas', pdf:'Preços', cardapio:'Catálogo e artes', pedido:'Novo pedido', resumo:'Resumo', radar:'Radar', historico:'Histórico', orcamentos:'Ofertas', disparos:'Campanhas', lembretes:'Lembretes', profile:'Minha conta', tutorial:'Tutorial', changelog:'Atualizações', support:'Suporte', navegador:'Site da Prumo', fila:'Fila de pedidos' };
 
             return (
                 <div className="prumo-shell flex h-screen bg-slate-50 overflow-hidden font-sans">
