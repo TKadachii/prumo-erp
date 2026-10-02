@@ -178,6 +178,10 @@ depois de rodar `precompile.js`, verificar `(Select-String index-compiled.html -
 deve ser **1** (se vier 2+, o arquivo está corrompido de novo).
 
 ## Recursos já feitos (resumo)
+
+> **Preferência visual permanente:** evitar branco puro e cartões claros ofuscantes. Em telas novas,
+> usar superfícies cósmicas escuras; quando uma área precisar ser clara, preferir cinza suave com
+> contraste de texto suficiente. Botões secundários também não devem virar blocos brancos.
 - Login por código+senha (Google bloqueia OAuth em webview → no app/PC escondido; conta sem senha
   é obrigada a criar uma). Botão "Alterar senha" no perfil.
 - Tabela de Preços lê PDF (pdf.js) por POSIÇÃO X das colunas (código x~33, nome x~70, tipo x~311,

@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 228;
+        const APP_BUILD_VERSION = 229;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -5015,33 +5015,33 @@
                 <div className="animate-in fade-in space-y-6">
                     {configPerfil && (
                         <div className="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => setConfigPerfil(null)}>
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                                <div className="p-5 border-b flex items-start justify-between gap-3">
-                                    <div><h3 className="text-lg font-black text-slate-800">{configPerfil.emoji} Itens para {configPerfil.label}</h3><p className="text-xs text-slate-500 mt-1">As sugestões são um começo. Marque os itens que sua experiência mostra que funcionam para este comércio.</p></div>
-                                    <button onClick={() => setConfigPerfil(null)} className="h-9 w-9 rounded-full bg-slate-100 text-slate-500 text-xl">×</button>
+                            <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                                <div className="p-5 border-b border-slate-800 flex items-start justify-between gap-3">
+                                    <div><h3 className="text-lg font-black text-white">{configPerfil.emoji} Itens para {configPerfil.label}</h3><p className="text-xs text-slate-400 mt-1">As sugestões são um começo. Marque os itens que sua experiência mostra que funcionam para este comércio.</p></div>
+                                    <button onClick={() => setConfigPerfil(null)} className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xl">×</button>
                                 </div>
-                                <div className="p-4 border-b bg-slate-50 space-y-3">
-                                    <input autoFocus value={configBusca} onChange={e => setConfigBusca(e.target.value)} placeholder="Buscar qualquer produto da tabela..." className="w-full p-3 rounded-xl border border-slate-200 outline-none focus:border-violet-500 font-semibold" />
-                                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-bold text-slate-600">{configCodes.size} itens escolhidos</span><button onClick={() => setConfigCodes(new Set(sugestoesPorPerfil[configPerfil.id] || []))} className="text-xs font-bold text-violet-700 bg-violet-50 px-3 py-2 rounded-lg">↻ Voltar às sugestões</button></div>
+                                <div className="p-4 border-b border-slate-800 bg-[#10131f] space-y-3">
+                                    <input autoFocus value={configBusca} onChange={e => setConfigBusca(e.target.value)} placeholder="Buscar qualquer produto da tabela..." className="w-full p-3 rounded-xl border border-violet-500/50 bg-[#070912] text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-400 font-semibold" />
+                                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-bold text-slate-300">{configCodes.size} itens escolhidos</span><button onClick={() => setConfigCodes(new Set(sugestoesPorPerfil[configPerfil.id] || []))} className="text-xs font-bold text-violet-200 bg-violet-500/15 hover:bg-violet-500/25 border border-violet-400/20 px-3 py-2 rounded-lg">↻ Voltar às sugestões</button></div>
                                 </div>
-                                <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                                <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#080a12]">
                                     {configResultados.map(p => {
                                         const code = String(p.code), marcado = configCodes.has(code), vendas = vendasPorProduto[code] || 0;
-                                        return <label key={code} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer ${marcado ? 'border-violet-400 bg-violet-50' : 'border-transparent hover:bg-slate-50'}`}>
+                                        return <label key={code} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${marcado ? 'border-violet-500 bg-violet-950/45' : 'border-slate-800 bg-[#111420] hover:border-slate-700 hover:bg-[#171b2b]'}`}>
                                             <input type="checkbox" checked={marcado} onChange={() => toggleConfigCode(code)} className="h-5 w-5 accent-violet-600" />
-                                            <span className="font-mono text-xs font-black text-violet-700">{code}</span><span className="flex-1 text-sm font-bold text-slate-700">{p.name}</span>
-                                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${vendas ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>{vendas ? `${vendas}× vendido` : 'sem venda'}</span>
+                                            <span className="font-mono text-xs font-black text-violet-300">{code}</span><span className="flex-1 text-sm font-bold text-slate-200">{p.name}</span>
+                                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${vendas ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/15' : 'bg-slate-800 text-slate-500'}`}>{vendas ? `${vendas}× vendido` : 'sem venda'}</span>
                                         </label>;
                                     })}
                                 </div>
-                                <div className="p-4 border-t flex gap-3"><button onClick={() => setConfigPerfil(null)} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold">Cancelar</button><button onClick={salvarConfigPerfil} disabled={salvandoPerfil} className="flex-1 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-black">{salvandoPerfil ? 'Salvando...' : 'Salvar perfil'}</button></div>
+                                <div className="p-4 border-t border-slate-800 bg-[#0b0d17] flex gap-3"><button onClick={() => setConfigPerfil(null)} className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-bold">Cancelar</button><button onClick={salvarConfigPerfil} disabled={salvandoPerfil} className="flex-1 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-black shadow-[0_0_24px_rgba(124,58,237,.22)]">{salvandoPerfil ? 'Salvando...' : 'Salvar perfil'}</button></div>
                             </div>
                         </div>
                     )}
 
-                    <header className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 sm:p-6 space-y-5">
+                    <header className="bg-[#0b0d17] rounded-3xl shadow-sm border border-slate-800 p-5 sm:p-6 space-y-5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div><h1 className="text-2xl font-bold text-rose-800 flex items-center gap-2"><div className="h-6 w-6"><IconTag /></div> Criar ofertas</h1><p className="text-sm text-slate-500 mt-1">Escolha manualmente ou comece por um tipo de comércio.</p></div>
+                            <div><h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2"><div className="h-6 w-6 text-violet-400"><IconTag /></div> Criar ofertas</h1><p className="text-sm text-slate-400 mt-1">Escolha manualmente ou comece por um tipo de comércio.</p></div>
                             <SeletorEstiloZap estilo={estiloZap} setEstilo={setEstiloZap} />
                         </div>
 
@@ -5050,7 +5050,7 @@
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                                 {OFERTA_PERFIS_COMERCIO.map(perfil => {
                                     const qtd = codigosDoPerfil(perfil.id).length, ativo = perfilAtivo === perfil.id;
-                                    return <button key={perfil.id} onClick={() => aplicarPerfil(perfil)} className={`relative rounded-2xl border p-3 text-left transition-all ${ativo ? 'bg-slate-950 border-violet-400 text-white shadow-lg' : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-violet-300 hover:bg-violet-50'}`}>
+                                    return <button key={perfil.id} onClick={() => aplicarPerfil(perfil)} className={`relative rounded-2xl border p-3 text-left transition-all ${ativo ? 'bg-violet-950/60 border-violet-400 text-white shadow-lg' : 'bg-[#111420] border-slate-800 text-slate-200 hover:border-violet-500/60 hover:bg-[#171b2d]'}`}>
                                         <span className="text-2xl block">{perfil.emoji}</span><span className="block text-xs font-black leading-tight mt-1">{perfil.label}</span><span className={`block text-[10px] mt-1 ${ativo ? 'text-slate-300' : 'text-slate-400'}`}>{qtd} itens</span>
                                     </button>;
                                 })}
@@ -5058,42 +5058,42 @@
                         </div>
 
                         {perfilInfo && (
-                            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
-                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2"><span className="font-black text-violet-900">{perfilInfo.emoji} Oferta para {perfilInfo.label}</span><button onClick={() => abrirConfigPerfil(perfilInfo)} className="text-xs font-bold bg-white border border-violet-200 text-violet-700 px-3 py-2 rounded-lg">⚙️ Ajustar itens deste perfil</button></div>
-                                <label className="text-[11px] font-bold text-violet-700">Introdução da mensagem</label>
-                                <textarea value={introMensagem} onChange={e => setIntroMensagem(e.target.value)} rows="2" className="mt-1 w-full resize-none rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-violet-500" />
-                                <p className="text-[10px] text-violet-600 mt-1">Você pode editar este texto antes de copiar. A lista de itens fica salva para toda a equipe.</p>
+                            <div className="rounded-2xl border border-violet-500/30 bg-violet-950/25 p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2"><span className="font-black text-violet-200">{perfilInfo.emoji} Oferta para {perfilInfo.label}</span><button onClick={() => abrirConfigPerfil(perfilInfo)} className="text-xs font-bold bg-violet-500/15 hover:bg-violet-500/25 border border-violet-400/20 text-violet-200 px-3 py-2 rounded-lg">⚙️ Ajustar itens deste perfil</button></div>
+                                <label className="text-[11px] font-bold text-violet-300">Introdução da mensagem</label>
+                                <textarea value={introMensagem} onChange={e => setIntroMensagem(e.target.value)} rows="2" className="mt-1 w-full resize-none rounded-xl border border-violet-500/30 bg-[#080a12] px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-400" />
+                                <p className="text-[10px] text-violet-300/70 mt-1">Você pode editar este texto antes de copiar. A lista de itens fica salva para toda a equipe.</p>
                             </div>
                         )}
 
-                        <div className="relative"><div className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400"><IconSearch/></div><input type="text" placeholder="Busque qualquer produto por código ou nome..." value={search} onChange={e => setSearch(e.target.value)} disabled={products.length===0} className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-200 outline-none focus:border-rose-500 font-bold bg-slate-50"/></div>
+                        <div className="relative"><div className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500"><IconSearch/></div><input type="text" placeholder="Busque qualquer produto por código ou nome..." value={search} onChange={e => setSearch(e.target.value)} disabled={products.length===0} className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-800 outline-none focus:border-violet-500 font-bold bg-[#070912] text-slate-100 placeholder:text-slate-600"/></div>
                     </header>
 
                     {(search || selectedCodes.size > 0) && (
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                            <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 flex flex-col h-[650px] overflow-hidden">
-                                <div className="p-4 border-b bg-slate-50 flex flex-wrap justify-between items-center gap-2 font-bold text-slate-700">
+                            <div className="lg:col-span-5 bg-[#0b0d17] rounded-3xl border border-slate-800 flex flex-col h-[650px] overflow-hidden">
+                                <div className="p-4 border-b border-slate-800 bg-[#10131f] flex flex-wrap justify-between items-center gap-2 font-bold text-slate-200">
                                     <div><span>Produtos</span><span className="ml-2 text-xs text-slate-400">ordenados pelos mais vendidos</span></div>
                                     <div className="flex gap-2">{selectedCodes.size > 0 && <button onClick={() => setSelectedCodes(new Set())} className="text-xs bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-1.5 rounded-lg font-bold">Desmarcar</button>}<button onClick={() => setSelectedCodes(new Set(filtered.map(f => String(f.code))))} className="text-xs bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg font-bold">Marcar todos</button></div>
                                 </div>
                                 <div className="overflow-y-auto p-2 space-y-1">
                                     {filtered.map(p => {
                                         const code = String(p.code), vendas = vendasPorProduto[code] || 0, marcado = selectedCodes.has(code);
-                                        return <label key={code} className={`prumo-product-option flex items-start gap-3 p-3 rounded-xl cursor-pointer border-2 transition-all ${marcado ? 'is-selected border-rose-500 bg-rose-50 shadow-sm' : 'border-transparent hover:bg-slate-50'}`}>
+                                        return <label key={code} className={`prumo-product-option flex items-start gap-3 p-3 rounded-xl cursor-pointer border transition-all ${marcado ? 'is-selected border-violet-500 bg-violet-950/40 shadow-sm' : 'border-slate-800 bg-[#111420] hover:border-slate-700 hover:bg-[#171b2b]'}`}>
                                             <input type="checkbox" checked={marcado} onChange={() => toggleCode(code)} className="mt-1 h-5 w-5 accent-rose-700 rounded flex-shrink-0"/>
-                                            <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-1.5 mb-1"><span className="text-[10px] font-bold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-full border border-slate-200">Cód: {code}</span><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${vendas ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>{vendas ? `${vendas}× vendido` : 'sem venda registrada'}</span></div><p className="font-bold text-slate-800 text-sm leading-tight">{p.name}</p></div>
+                                            <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-1.5 mb-1"><span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">Cód: {code}</span><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${vendas ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/15' : 'bg-slate-800 text-slate-500'}`}>{vendas ? `${vendas}× vendido` : 'sem venda registrada'}</span></div><p className="font-bold text-slate-200 text-sm leading-tight">{p.name}</p></div>
                                         </label>;
                                     })}
                                     {filtered.length === 0 && <div className="p-8 text-center text-sm text-slate-400">Nenhum produto encontrado.</div>}
                                 </div>
                             </div>
-                            <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 flex flex-col h-[650px] overflow-hidden">
-                                <div className="p-4 border-b bg-slate-50 flex flex-wrap justify-between items-center gap-2 font-bold text-slate-700">
+                            <div className="lg:col-span-7 bg-[#0b0d17] rounded-3xl border border-slate-800 flex flex-col h-[650px] overflow-hidden">
+                                <div className="p-4 border-b border-slate-800 bg-[#10131f] flex flex-wrap justify-between items-center gap-2 font-bold text-slate-200">
                                     <span className="flex items-center gap-2"><div className="h-5 w-5 text-emerald-600"><IconWhatsApp/></div> Prévia do WhatsApp · {produtosSelecionados.length} itens</span>
                                     <button disabled={!produtosSelecionados.length} onClick={() => { navigator.clipboard.writeText(generateText()); showMessage('Oferta copiada para o WhatsApp!', 'success'); }} className="bg-rose-700 hover:bg-rose-800 disabled:opacity-40 transition-colors text-white px-5 py-2.5 rounded-xl text-sm shadow-md">Copiar oferta</button>
                                 </div>
                                 <div className="prumo-message-stage p-4 sm:p-6 flex-1 overflow-y-auto">
-                                    {produtosSelecionados.length > 0 ? <div className="prumo-message-bubble p-5 rounded-2xl relative inline-block min-w-[280px] max-w-full"><pre className="font-mono text-sm whitespace-pre-wrap text-slate-800 font-medium">{generateText()}</pre></div> : <div className="h-full flex items-center justify-center text-center"><div className="bg-white/95 p-4 rounded-xl shadow-sm border border-slate-200"><p className="text-slate-600 font-medium">Selecione produtos na lista ao lado.</p></div></div>}
+                                    {produtosSelecionados.length > 0 ? <div className="prumo-message-bubble p-5 rounded-2xl relative inline-block min-w-[280px] max-w-full"><pre className="font-mono text-sm whitespace-pre-wrap font-medium">{generateText()}</pre></div> : <div className="h-full flex items-center justify-center text-center"><div className="bg-[#111420] p-4 rounded-xl shadow-sm border border-slate-800"><p className="text-slate-400 font-medium">Selecione produtos na lista ao lado.</p></div></div>}
                                 </div>
                             </div>
                         </div>
@@ -8214,6 +8214,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.36.1', data: '02/10/2026', areas: ['site'], itens: [
+                '🌙 Removidos fundos brancos ofuscantes do configurador de ofertas por comércio',
+                '🌌 Modal, busca, cartões, etiquetas e botões secundários agora usam superfícies cósmicas escuras',
+                '👁️ Contraste recalibrado para leitura confortável sem perder destaque nos produtos selecionados',
+                '🎨 A tela principal de Criar ofertas recebeu o mesmo tratamento para manter o visual consistente',
+            ]},
             { versao: '2.36.0', data: '02/10/2026', areas: ['site'], itens: [
                 '🏪 Criar ofertas agora monta seleções específicas para Padaria, Açougue, Mercado/Mercearia, Restaurante, Pizzaria e Lanchonete',
                 '📊 Cada produto mostra quantas vezes já foi vendido, usando a mesma contagem do Novo pedido',
