@@ -617,6 +617,16 @@ linha (verificado reintroduzindo o bug de propósito).
 - A foto comum é usada em modo `cover` com transições escuras nas bordas, então não precisa ter fundo transparente.
 - A foto escolhida só para a arte fica na memória do aparelho e não substitui a foto compartilhada no Cardápio.
 
+## 🏪 Ofertas por tipo de comércio (2026-10-02, v2.36.0)
+
+- A tela **Criar ofertas** consulta até 1.500 documentos recentes de `purchases` e mostra em cada produto quantos pedidos incluíram aquele código, igual ao Novo pedido.
+- Perfis iniciais: Padaria, Açougue, Mercado/Mercearia, Restaurante, Pizzaria e Lanchonete.
+- Cada perfil possui palavras-chave apenas para gerar a primeira sugestão; elas não são tratadas como decisão de IA.
+- O vendedor abre **Ajustar itens deste perfil**, procura qualquer item da tabela, marca/desmarca e salva.
+- As listas confirmadas ficam em `system_data/ofertas_perfis`, campo `codigos`, e são compartilhadas por toda a equipe.
+- Ao aplicar um perfil, o título e a introdução da mensagem mudam para o ramo escolhido. A introdução continua editável antes de copiar.
+- Itens da Lista Negra continuam excluídos das sugestões, da configuração e da mensagem final.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
