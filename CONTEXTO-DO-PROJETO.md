@@ -631,6 +631,14 @@ linha (verificado reintroduzindo o bug de propósito).
 - Ao aplicar um perfil, o título e a introdução da mensagem mudam para o ramo escolhido. A introdução continua editável antes de copiar.
 - Itens da Lista Negra continuam excluídos das sugestões, da configuração e da mensagem final.
 
+## ⚠️ Proteção de preço para itens fora da tabela (2026-10-13, v2.37.0)
+
+- Um produto com `ativo === false` permanece pesquisável por causa do histórico, mas seu último preço é considerado não confiável.
+- `montarBlocoProdutoZap` é a proteção central: ofertas, Novo pedido, campanhas e prospecção mostram **Preço sob consulta** para esses itens, sem enviar o número arquivado.
+- Sugestões automáticas de ofertas e campanhas ignoram itens inativos. O vendedor ainda pode escolhê-los manualmente, sempre com etiqueta e alerta.
+- No Resumo, item fora da tabela usa o preço lido do pedido atual (`precoFallback`/SPAmov); sem preço atual, o texto também informa preço sob consulta.
+- O gerador de Catálogo remove itens inativos antes de criar a arte e avisa quantos foram retirados.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

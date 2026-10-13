@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 229;
+        const APP_BUILD_VERSION = 230;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -699,10 +699,29 @@
             if (nameStr.includes('fraldinha ramax') || (nameStr.includes('fraldinha') && nameStr.includes('ramax'))) hasDiscount = false;
             return { hasDiscount, origPrice, unitFinalPrice: hasDiscount ? Math.round((origPrice * 0.97) * 100) / 100 : origPrice };
         };
+        // Um produto continua no histórico mesmo quando some da tabela atual. O último preço fica
+        // guardado para consulta, mas não pode ser apresentado ao cliente como se ainda fosse válido.
+        const produtoForaTabelaHoje = (p) => !!(p && p.ativo === false);
+        const ProdutoForaTabelaBadge = ({ compacto }) => (
+            <span title="O último preço deste item pode estar desatualizado" className={`inline-flex items-center rounded-full border border-amber-400/30 bg-[#2a200d] font-black text-amber-200 ${compacto ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[10px]'}`}>
+                ⚠️ Fora da tabela de hoje
+            </span>
+        );
+        const AlertaProdutosForaTabela = ({ produtos }) => {
+            const fora = (produtos || []).filter(produtoForaTabelaHoje);
+            if (!fora.length) return null;
+            return <div className="rounded-xl border border-amber-400/30 bg-amber-950/35 px-3 py-2 text-xs text-amber-100">
+                <b>⚠️ Atenção: {fora.length} item(ns) fora da tabela de hoje.</b> O último preço pode estar errado. Na mensagem para o cliente, o valor será trocado por <b>“Preço sob consulta”</b>.
+            </div>;
+        };
         // 📲 Bloco de um produto pro texto do WhatsApp (Gerador de Zap e Disparos). Dois estilos:
         // "novo" (padrão) — linha única de preço + Cartão/Parcelado combinados quando existir esse dado;
         // "antigo" — o formato de sempre, "(Com 3% de Desconto)" por extenso, sem Cartão/Parcelado.
         const montarBlocoProdutoZap = (p, estilo) => {
+            if (produtoForaTabelaHoje(p)) {
+                if (estilo === 'antigo') return `Cod: ${p.code}\n\n${p.name}\n💬 *Preço sob consulta — confirme comigo*\n`;
+                return `Cod: *${p.code}*\n*${p.name}*\n\n💬 *Preço sob consulta — confirme comigo*\n`;
+            }
             const { hasDiscount, origPrice, unitFinalPrice } = checkDiscountRules(p.code, p.name, p.originalPrice);
             if (estilo === 'antigo') {
                 let b = `Cod: ${p.code}\n\n${p.name}\n`;
@@ -888,10 +907,12 @@
             if (txt !== '') txt += '\n';
             (itens || []).forEach(it => {
                 const rp = (products || []).find(p => String(p.code) === String(it.code));
-                const calculado = rp ? precoParaCondicao(rp, condicao) : (Number(it.precoFallback) || 0);
+                // Fora da tabela: usa o preço lido do pedido atual, nunca o último preço arquivado.
+                const calculado = rp && !produtoForaTabelaHoje(rp) ? precoParaCondicao(rp, condicao) : (Number(it.precoFallback) || 0);
                 const preco = precos[it.code] !== undefined ? precos[it.code] : calculado;
                 const qty = qtds[it.code] !== undefined ? qtds[it.code] : it.qty;
-                txt += `${it.code} - ${qty}x - ${formatPrice(preco)}\n`;
+                const temPrecoConfiavel = precos[it.code] !== undefined || (rp && !produtoForaTabelaHoje(rp)) || Number(it.precoFallback) > 0;
+                txt += temPrecoConfiavel ? `${it.code} - ${qty}x - ${formatPrice(preco)}\n` : `${it.code} - ${qty}x - preço sob consulta\n`;
             });
             return txt.trim();
         };
@@ -4312,7 +4333,7 @@
                     try {
                         const data = JSON.parse(rawJson);
                         const processed = (data.itens || []).map(it => {
-                            const rp = products.find(p => String(p.code) === String(it.code));
+                            const rp = products.find(p => String(p.code) === String(it.code) && !produtoForaTabelaHoje(p));
                             const nome = rp ? rp.name : (it.nome || ('Produto ' + it.code));
                             const base = rp ? rp.originalPrice : 0;
                             const { hasDiscount, origPrice, unitFinalPrice } = checkDiscountRules(it.code, nome, base);
@@ -4326,7 +4347,7 @@
                         // do jeito que o SPAmov realmente calcula. Mostrado na aba 🐞 Debug pra comparar.
                         try {
                             const debugItens = (data.itens || []).map(it => {
-                                const rp = products.find(p => String(p.code) === String(it.code));
+                                const rp = products.find(p => String(p.code) === String(it.code) && !produtoForaTabelaHoje(p));
                                 const nome = rp ? rp.name : (it.nome || ('Produto ' + it.code));
                                 const base = rp ? rp.originalPrice : 0;
                                 const { unitFinalPrice } = checkDiscountRules(it.code, nome, base);
@@ -4367,7 +4388,8 @@
                 const validItems = pendingItems.filter(item => Number(item.quantity) > 0);
                 const processed = validItems.map(item => {
                     const rp = products.find(p => p.code === item.code);
-                    const { hasDiscount, origPrice, unitFinalPrice } = checkDiscountRules(item.code, rp.name, rp.originalPrice);
+                    const podeUsarTabela = rp && !produtoForaTabelaHoje(rp);
+                    const { hasDiscount, origPrice, unitFinalPrice } = checkDiscountRules(item.code, rp ? rp.name : item.name, podeUsarTabela ? rp.originalPrice : 0);
                     const qty = Number(item.quantity);
                     return { ...item, quantity: qty, unitFinalPrice, discountedPrice: unitFinalPrice * qty, originalPrice: origPrice * qty, hasDiscount };
                 });
@@ -4462,7 +4484,7 @@
             // 🔑 Reconsulta o item na Tabela do Dia (PDF) AGORA: nome e preço sempre iguais à tabela.
             const itemAtual = (it) => {
                 const rp = products.find(p => String(p.code) === String(it.code));
-                if (!rp) return { ...it, name: it.name, unitFinalPrice: it.unitFinalPrice || 0, naTabela: false, valorKg: it.precoKg || it.unitFinalPrice || 0 };
+                if (!rp || produtoForaTabelaHoje(rp)) return { ...it, name: (rp && rp.name) || it.name, unitFinalPrice: it.precoKg || 0, naTabela: false, valorKg: it.precoKg || 0 };
                 // 💳 Respeita a condição de pagamento do pedido (ex.: "7/14/21 Dias" = parcelado, sem
                 // desconto) em vez de sempre aplicar o preço à vista com -3%.
                 const unitFinalPrice = precoParaCondicaoMp(rp, condicaoAtual);
@@ -4925,7 +4947,7 @@
                 OFERTA_PERFIS_COMERCIO.forEach(perfil => {
                     const palavras = perfil.palavras.map(normalizeForSearch);
                     saida[perfil.id] = products
-                        .filter(p => !lnSet.has(String(p.code)) && palavras.some(k => normalizeForSearch(p.name).includes(k)))
+                        .filter(p => !produtoForaTabelaHoje(p) && !lnSet.has(String(p.code)) && palavras.some(k => normalizeForSearch(p.name).includes(k)))
                         .sort((a, b) => (vendasPorProduto[String(b.code)] || 0) - (vendasPorProduto[String(a.code)] || 0) || String(a.name).localeCompare(String(b.name), 'pt-BR'))
                         .slice(0, 36).map(p => String(p.code));
                 });
@@ -5030,6 +5052,7 @@
                                         return <label key={code} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${marcado ? 'border-violet-500 bg-violet-950/45' : 'border-slate-800 bg-[#111420] hover:border-slate-700 hover:bg-[#171b2b]'}`}>
                                             <input type="checkbox" checked={marcado} onChange={() => toggleConfigCode(code)} className="h-5 w-5 accent-violet-600" />
                                             <span className="font-mono text-xs font-black text-violet-300">{code}</span><span className="flex-1 text-sm font-bold text-slate-200">{p.name}</span>
+                                            {produtoForaTabelaHoje(p) && <ProdutoForaTabelaBadge compacto />}
                                             <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${vendas ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/15' : 'bg-slate-800 text-slate-500'}`}>{vendas ? `${vendas}× vendido` : 'sem venda'}</span>
                                         </label>;
                                     })}
@@ -5081,7 +5104,7 @@
                                         const code = String(p.code), vendas = vendasPorProduto[code] || 0, marcado = selectedCodes.has(code);
                                         return <label key={code} className={`prumo-product-option flex items-start gap-3 p-3 rounded-xl cursor-pointer border transition-all ${marcado ? 'is-selected border-violet-500 bg-violet-950/40 shadow-sm' : 'border-slate-800 bg-[#111420] hover:border-slate-700 hover:bg-[#171b2b]'}`}>
                                             <input type="checkbox" checked={marcado} onChange={() => toggleCode(code)} className="mt-1 h-5 w-5 accent-rose-700 rounded flex-shrink-0"/>
-                                            <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-1.5 mb-1"><span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">Cód: {code}</span><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${vendas ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/15' : 'bg-slate-800 text-slate-500'}`}>{vendas ? `${vendas}× vendido` : 'sem venda registrada'}</span></div><p className="font-bold text-slate-200 text-sm leading-tight">{p.name}</p></div>
+                                            <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-1.5 mb-1"><span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">Cód: {code}</span><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${vendas ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/15' : 'bg-slate-800 text-slate-500'}`}>{vendas ? `${vendas}× vendido` : 'sem venda registrada'}</span>{produtoForaTabelaHoje(p) && <ProdutoForaTabelaBadge compacto />}</div><p className="font-bold text-slate-200 text-sm leading-tight">{p.name}</p></div>
                                         </label>;
                                     })}
                                     {filtered.length === 0 && <div className="p-8 text-center text-sm text-slate-400">Nenhum produto encontrado.</div>}
@@ -5092,6 +5115,7 @@
                                     <span className="flex items-center gap-2"><div className="h-5 w-5 text-emerald-600"><IconWhatsApp/></div> Prévia do WhatsApp · {produtosSelecionados.length} itens</span>
                                     <button disabled={!produtosSelecionados.length} onClick={() => { navigator.clipboard.writeText(generateText()); showMessage('Oferta copiada para o WhatsApp!', 'success'); }} className="bg-rose-700 hover:bg-rose-800 disabled:opacity-40 transition-colors text-white px-5 py-2.5 rounded-xl text-sm shadow-md">Copiar oferta</button>
                                 </div>
+                                <div className="px-4 pt-3"><AlertaProdutosForaTabela produtos={produtosSelecionados} /></div>
                                 <div className="prumo-message-stage p-4 sm:p-6 flex-1 overflow-y-auto">
                                     {produtosSelecionados.length > 0 ? <div className="prumo-message-bubble p-5 rounded-2xl relative inline-block min-w-[280px] max-w-full"><pre className="font-mono text-sm whitespace-pre-wrap font-medium">{generateText()}</pre></div> : <div className="h-full flex items-center justify-center text-center"><div className="bg-[#111420] p-4 rounded-xl shadow-sm border border-slate-800"><p className="text-slate-400 font-medium">Selecione produtos na lista ao lado.</p></div></div>}
                                 </div>
@@ -6944,10 +6968,12 @@
                                         <label key={p.code} className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50">
                                             <input type="checkbox" checked={produtosVitrine.has(String(p.code))} onChange={() => { const s = new Set(produtosVitrine); const k = String(p.code); s.has(k) ? s.delete(k) : s.add(k); setProdutosVitrine(s); }} className="h-4 w-4 accent-rose-700" />
                                             <span className="font-mono text-slate-400">{p.code}</span>
-                                            <span className="text-slate-700 truncate">{p.name}</span>
+                                            <span className="text-slate-700 truncate flex-1">{p.name}</span>
+                                            {produtoForaTabelaHoje(p) && <ProdutoForaTabelaBadge compacto />}
                                         </label>
                                     ))}
                                 </div>
+                                <div className="mt-2"><AlertaProdutosForaTabela produtos={(products || []).filter(p => produtosVitrine.has(String(p.code)))} /></div>
                                 <p className="text-[11px] text-slate-400 mt-1">{produtosVitrine.size} produto(s) na vitrine. Itens da Lista Negra não entram.</p>
                             </div>
                         )}
@@ -8214,6 +8240,13 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.37.0', data: '13/10/2026', areas: ['site', 'app'], itens: [
+                '⚠️ Produtos fora da tabela do dia agora são identificados em Criar ofertas, Novo pedido, campanhas e vitrines de prospecção',
+                '🛡️ Mensagens para clientes não enviam mais o preço antigo desses itens: o valor vira “Preço sob consulta”',
+                '🎯 Sugestões automáticas usam apenas produtos ativos na tabela atual; itens antigos continuam disponíveis para escolha manual com aviso',
+                '🧾 Resumos de pedido priorizam o preço lido no pedido atual quando o produto não está na tabela do dia',
+                '🖼️ Catálogos impedem a publicação de itens inativos com preço arquivado',
+            ]},
             { versao: '2.36.1', data: '02/10/2026', areas: ['site'], itens: [
                 '🌙 Removidos fundos brancos ofuscantes do configurador de ofertas por comércio',
                 '🌌 Modal, busca, cartões, etiquetas e botões secundários agora usam superfícies cósmicas escuras',
@@ -9380,7 +9413,10 @@
                 finally { setGerandoArte(false); }
             };
             const gerarCatalogo = async () => {
-                const lista = products.filter(p => selecionados.has(String(p.code)));
+                const escolhidos = products.filter(p => selecionados.has(String(p.code)));
+                const foraTabela = escolhidos.filter(produtoForaTabelaHoje);
+                const lista = escolhidos.filter(p => !produtoForaTabelaHoje(p));
+                if (foraTabela.length) showMessage(`${foraTabela.length} item(ns) fora da tabela de hoje foram retirados do catálogo para não publicar preço antigo.`, 'error');
                 if (!lista.length) { showMessage('Escolha pelo menos 1 produto.', 'error'); return; }
                 setGerando(true);
                 try {
@@ -9872,7 +9908,7 @@
                 const rp = (products || []).find(p => String(p.code) === String(it.code));
                 const nome = rp ? rp.name : (it.nome || ('Produto ' + it.code));
                 const qty = Number(it.qty) || 1;
-                if (!rp) {
+                if (!rp || produtoForaTabelaHoje(rp)) {
                     // fora da tabela do dia: sem base pra calcular desconto, só dá pra digitar o preço
                     const fb = Number(it.valorUnit) || 0;
                     return { nome, qty, base: fb, desc: 0, bloqueado: true, motivo: 'fora da tabela', preco: aj.preco != null ? aj.preco : fb, manual: aj.preco != null };
@@ -10705,7 +10741,7 @@
                 return Array.from(codes).map(code => {
                     const prod = products.find(p => String(p.code) === code);
                     const u = ultima.get(code);
-                    return { code: code, name: prod ? prod.name : ((u && u.nome) || ('Produto ' + code)), naTabela: !!prod, ts: u ? u.ts : 0, dia: u ? u.dia : null };
+                    return { code: code, name: prod ? prod.name : ((u && u.nome) || ('Produto ' + code)), naTabela: !!prod && !produtoForaTabelaHoje(prod), ts: u ? u.ts : 0, dia: u ? u.dia : null };
                 }).sort((a, b) => (b.ts - a.ts) || a.code.localeCompare(b.code, 'pt-BR', { numeric: true }));
             }, [clienteInfo, purchases, clienteId, products]);
             const [buscaJaComprou, setBuscaJaComprou] = useState('');
@@ -10995,6 +11031,7 @@
                                     <button key={p.code} onClick={() => addItem(p)} className="w-full text-left px-3 py-2 bg-slate-50 hover:bg-rose-50 rounded-lg flex items-center gap-2 transition-colors border border-transparent hover:border-rose-200">
                                         <span className="bg-rose-700 text-white px-2 py-0.5 rounded font-mono font-black text-xs flex-shrink-0">{p.code}</span>
                                         <span className="text-sm text-slate-700 flex-1 truncate">{p.name}</span>
+                                        {produtoForaTabelaHoje(p) && <ProdutoForaTabelaBadge compacto />}
                                         {vendasPorProduto[String(p.code)] > 0 && (
                                             <span title={`Você já vendeu este item ${vendasPorProduto[String(p.code)]} vez(es)`} className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold text-[11px] flex-shrink-0">{vendasPorProduto[String(p.code)]}× vendido</span>
                                         )}
@@ -11008,18 +11045,20 @@
                     {/* Lista do pedido */}
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="p-3 sm:p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-800">Itens do Pedido</h3><span className="text-xs font-bold text-slate-400">{itens.length} item(ns)</span></div>
+                        <div className="px-3 pt-3"><AlertaProdutosForaTabela produtos={products.filter(p => itens.some(i => String(i.code) === String(p.code)))} /></div>
                         {itens.length === 0 ? (
                             <div className="p-8 text-center text-slate-400 text-sm">Nenhum item ainda. Busque e adicione produtos acima.</div>
                         ) : (
                             <div className="divide-y divide-slate-100">
-                                {itens.map(i => (
-                                    <div key={i.code} className="p-3 flex items-center gap-3">
+                                {itens.map(i => { const produtoAtual = products.find(p => String(p.code) === String(i.code)); return (
+                                    <div key={i.code} className="p-3 flex items-center gap-3 flex-wrap">
                                         <span className="bg-rose-700 text-white px-2 py-0.5 rounded font-mono font-black text-xs flex-shrink-0">{i.code}</span>
                                         <span className="text-sm text-slate-700 flex-1 truncate">{i.name}</span>
+                                        {produtoForaTabelaHoje(produtoAtual) && <ProdutoForaTabelaBadge compacto />}
                                         <input type="number" min="1" value={i.qty} onChange={e => setQty(i.code, e.target.value)} className="w-16 text-center font-bold text-slate-700 bg-slate-50 border rounded-lg px-1 py-1 outline-none focus:border-rose-500" />
                                         <button onClick={() => remover(i.code)} className="text-slate-300 hover:text-red-500 transition-colors h-7 w-7 flex items-center justify-center"><div className="h-4 w-4"><IconX /></div></button>
                                     </div>
-                                ))}
+                                ); })}
                             </div>
                         )}
                     </div>
@@ -11225,16 +11264,16 @@
 
                 if (ofertaModo === 'novos') {
                     // produtos que ele ainda NÃO comprou, alinhados ao que ele costuma comprar / perfil
-                    const histProds = histCodes.map(code => products.find(p => String(p.code) === code)).filter(Boolean);
+                    const histProds = histCodes.map(code => products.find(p => String(p.code) === code)).filter(p => p && !produtoForaTabelaHoje(p));
                     let cats = new Set(histProds.map(p => prodCategory(p.name)).filter(k => k && k !== 'geral'));
                     if (!cats.size) { const pc = categoryForClient(c); if (pc !== 'geral') cats.add(pc); }
                     const seen = new Set();
-                    const similares = products.filter(p => !histSet.has(String(p.code)) && cats.size && [...cats].some(cat => CAT_RE[cat] && CAT_RE[cat].test(p.name || '')));
+                    const similares = products.filter(p => !produtoForaTabelaHoje(p) && !histSet.has(String(p.code)) && cats.size && [...cats].some(cat => CAT_RE[cat] && CAT_RE[cat].test(p.name || '')));
                     for (const p of similares) { const k = String(p.code); if (!seen.has(k)) { seen.add(k); cands.push(p); } }
-                    for (const p of products) { const k = String(p.code); if (!histSet.has(k) && !seen.has(k)) { seen.add(k); cands.push(p); } }
+                    for (const p of products) { const k = String(p.code); if (!produtoForaTabelaHoje(p) && !histSet.has(k) && !seen.has(k)) { seen.add(k); cands.push(p); } }
                 } else {
                     // só o que ele JÁ comprou e ainda existe na tabela atual
-                    cands = histCodes.map(code => products.find(p => String(p.code) === code)).filter(Boolean);
+                    cands = histCodes.map(code => products.find(p => String(p.code) === code)).filter(p => p && !produtoForaTabelaHoje(p));
                 }
                 cands = cands.filter(p => p && !lnSet.has(String(p.code))); // 🚫 remove itens da lista negra
                 if (!cands.length) return [];
@@ -11447,6 +11486,7 @@
                                 </div>
                             </div>
                             {prodsRec.length > 0 && <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 mb-3 text-xs text-rose-700"><span className="font-bold">{prodsRec.length} oferta(s) incluídas:</span> {prodsRec.map(p => p.code).join(', ')}</div>}
+                            <div className="mb-3"><AlertaProdutosForaTabela produtos={prodsRec} /></div>
                             <div className="prumo-message-bubble rounded-2xl p-4 mb-4">
                                 <pre className="font-sans text-sm whitespace-pre-wrap text-slate-800">{personalizar(atual)}</pre>
                             </div>
@@ -11628,6 +11668,7 @@
                                             ); })}
                                         </div>
                                     )}
+                                    <AlertaProdutosForaTabela produtos={products.filter(p => produtosAlvo.has(String(p.code)))} />
                                     <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
                                         {products.length === 0 && <p className="text-center text-slate-400 text-xs py-3">Importe a tabela de produtos primeiro.</p>}
                                         {produtosOrdenados.filter(p => { const q = buscaProd.trim().toLowerCase(); return !q || (p.name || '').toLowerCase().includes(q) || String(p.code).includes(q); }).slice(0, 80).map(p => {
@@ -11637,6 +11678,7 @@
                                                     <input type="checkbox" readOnly checked={on} className="h-3.5 w-3.5 rounded text-rose-600 flex-shrink-0 pointer-events-none"/>
                                                     <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono font-bold text-[10px] flex-shrink-0">{p.code}</span>
                                                     <span className="text-xs font-bold text-slate-700 truncate flex-1">{p.name}</span>
+                                                    {produtoForaTabelaHoje(p) && <ProdutoForaTabelaBadge compacto />}
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${qtd > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`} title="Clientes que compram">{qtd} 👤</span>
                                                 </div>
                                             );
