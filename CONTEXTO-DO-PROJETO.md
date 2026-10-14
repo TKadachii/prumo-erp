@@ -646,6 +646,14 @@ linha (verificado reintroduzindo o bug de propósito).
 - Em **Campanhas WhatsApp**, `auditoriaPrecos` cruza os clientes selecionados com seus históricos e conta quantos costumam comprar cada produto inativo.
 - O painel da campanha mostra esses códigos antes do envio. As recomendações automáticas continuam excluindo-os; a confirmação permite seguir apenas com a campanha já protegida.
 
+## 💲 Conferência e correção dos preços antigos (2026-10-14, v2.39.0)
+
+- O modal de segurança permite digitar o preço à vista correto em cada item e salvá-lo sem sair da tela.
+- O botão de consulta abre um seletor de cliente. A extensão reaproveita a automação do Novo pedido para colocar todos os itens fora da tabela num pedido temporário, sem confirmar nem faturar.
+- Ao terminar, a extensão mostra **Atualizar preços no Prumo**. Ela só envia se a condição detectada for **À Vista** e se todos os códigos tiverem um `valorUnit` válido.
+- Os valores retornam por `friganso_precos_conferidos_pendente` e são gravados em `system_data/precos_conferidos`.
+- A confirmação fica marcada em `precoConfirmadoDia`; um item inativo é tratado como confiável somente naquele dia. No dia seguinte, a proteção volta automaticamente se o produto continuar fora da tabela.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

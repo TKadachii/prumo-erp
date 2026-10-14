@@ -28,7 +28,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- Chart.js (gráficos do Dashboard) — versão fixada pra não quebrar -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    
+
     <!-- FIREBASE (Banco de Dados e Auth) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -230,7 +230,7 @@
             appId: atob("MToxMzMzMjkyODQwNzp3ZWI6YjNiNTFkMWI4MjVjNTYwYjkwMTZkMg=="),
             measurementId: atob("Ry05NjNTVzNYU1lN")
         };
-        
+
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -337,7 +337,7 @@
 
         const normalizeForSearch = (str) => {
             if (!str) return '';
-            let s = str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); 
+            let s = str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             s = s.replace(/\bcong\.?\b/g, "congelado").replace(/\b(resf|ref)\.?\b/g, "resfriado").replace(/[-_./]/g, " ").replace(/\s+/g, " ").trim();
             return s;
         };
@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 231;
+        const APP_BUILD_VERSION = 232;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -701,7 +701,7 @@
         };
         // Um produto continua no histórico mesmo quando some da tabela atual. O último preço fica
         // guardado para consulta, mas não pode ser apresentado ao cliente como se ainda fosse válido.
-        const produtoForaTabelaHoje = (p) => !!(p && p.ativo === false);
+        const produtoForaTabelaHoje = (p) => !!(p && p.ativo === false && p.precoConfirmadoDia !== diaStrGlobal(new Date()));
         const ProdutoForaTabelaBadge = ({ compacto }) => (
             <span title="O último preço deste item pode estar desatualizado" className={`inline-flex items-center rounded-full border border-amber-400/30 bg-[#2a200d] font-black text-amber-200 ${compacto ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[10px]'}`}>
                 ⚠️ Fora da tabela de hoje
@@ -721,12 +721,22 @@
                 const code = String(it.code || '');
                 if (!code || unicos.has(code)) return;
                 const p = mapa.get(code);
-                if (!p || produtoForaTabelaHoje(p)) unicos.set(code, { code, name: (p && p.name) || it.name || it.nome || ('Produto ' + code), clientes: Number(it.clientes) || 0 });
+                if (!p || produtoForaTabelaHoje(p)) unicos.set(code, { code, name: (p && p.name) || it.name || it.nome || ('Produto ' + code), clientes: Number(it.clientes) || 0, originalPrice: Number(p && p.originalPrice) || 0 });
             });
             return Array.from(unicos.values());
         };
-        const ModalConfirmarPrecos = ({ itens, titulo, descricao, onCancelar, onConfirmar, confirmarLabel }) => (
-            <div className="fixed inset-0 z-[1300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-3">
+        const ModalConfirmarPrecos = ({ itens, titulo, descricao, onCancelar, onConfirmar, confirmarLabel }) => {
+            // Começa vazio de propósito: preencher com o preço arquivado permitiria confirmar o valor
+            // antigo por engano, justamente o risco que este aviso precisa eliminar.
+            const [precos, setPrecos] = useState(() => Object.fromEntries((itens || []).map(it => [String(it.code), ''])));
+            const preenchidos = (itens || []).length > 0 && (itens || []).every(it => Number(String(precos[String(it.code)] || '').replace(',', '.')) > 0);
+            const abrirConferencia = () => window.dispatchEvent(new CustomEvent('prumo:abrir-conferencia-precos', { detail: { itens: itens || [] } }));
+            const salvarDigitados = () => {
+                if (!preenchidos) return;
+                window.dispatchEvent(new CustomEvent('prumo:salvar-precos-conferidos', { detail: { itens: (itens || []).map(it => ({ ...it, originalPrice: Number(String(precos[String(it.code)]).replace(',', '.')) })) } }));
+                onCancelar && onCancelar();
+            };
+            return <div className="fixed inset-0 z-[1300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-3">
                 <div className="w-full max-w-xl max-h-[92vh] overflow-hidden rounded-3xl border border-amber-400/30 bg-[#0b0d17] text-slate-100 shadow-2xl flex flex-col">
                     <div className="p-5 border-b border-amber-400/20 bg-amber-950/25">
                         <div className="flex items-start gap-3"><span className="text-3xl">⚠️</span><div><h3 className="text-lg font-black text-amber-100">{titulo || 'Preço precisa ser conferido'}</h3><p className="text-sm text-amber-100/80 mt-1">{descricao || 'Estes produtos não estavam na tabela de hoje e podem estar com o último preço desatualizado.'}</p></div></div>
@@ -736,16 +746,51 @@
                             <span className="font-mono text-xs font-black text-amber-300 bg-amber-500/10 border border-amber-400/20 rounded-lg px-2 py-1">{it.code}</span>
                             <span className="text-sm font-bold text-slate-200 flex-1 min-w-0">{it.name}</span>
                             {it.clientes > 0 && <span className="text-[10px] font-black text-amber-200 bg-amber-500/10 rounded-full px-2 py-1">{it.clientes} cliente(s)</span>}
+                            <label title="Digite o preço de tabela à vista" className="flex items-center gap-1 rounded-lg border border-slate-700 bg-[#090b12] px-2 py-1.5 focus-within:border-cyan-400"><span className="text-[10px] font-bold text-slate-500">À vista R$</span><input value={precos[String(it.code)] || ''} onChange={e => setPrecos(v => ({ ...v, [String(it.code)]: e.target.value }))} inputMode="decimal" placeholder="0,00" className="w-16 bg-transparent text-right text-sm font-black text-cyan-200 outline-none" /></label>
                         </div>)}
                     </div>
                     <div className="p-4 border-t border-slate-800 bg-[#0b0d17] space-y-3">
                         <p className="text-xs text-slate-400">Confira o valor no site do vendedor antes de copiar ou enviar. O Prumo nunca colocará o preço antigo silenciosamente.</p>
-                        <a href="http://spd1.friganso.com.br/rdm-business/" target="_blank" rel="noreferrer" className="block w-full text-center rounded-xl border border-cyan-400/25 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 font-bold py-2.5 text-sm">🌐 Abrir site do vendedor para conferir</a>
+                        <button onClick={abrirConferencia} className="block w-full text-center rounded-xl border border-cyan-400/25 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 font-bold py-2.5 text-sm">🌐 Conferir no site usando um cliente à vista</button>
+                        <button disabled={!preenchidos} onClick={salvarDigitados} className="block w-full rounded-xl border border-emerald-400/25 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-35 disabled:cursor-not-allowed text-emerald-200 font-bold py-2.5 text-sm">✓ Salvar os preços digitados</button>
                         <div className="flex gap-2"><button onClick={onCancelar} className="flex-1 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold py-3">Voltar e corrigir</button><button onClick={onConfirmar} className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-black py-3">{confirmarLabel || 'Já conferi, continuar'}</button></div>
                     </div>
                 </div>
-            </div>
-        );
+            </div>;
+        };
+
+        const ConferenciaPrecosWizard = ({ itens, clients, onClose, showMessage }) => {
+            const [busca, setBusca] = useState('');
+            const [cliente, setCliente] = useState(null);
+            const q = normalizeForSearch(busca.trim());
+            const opcoes = (clients || []).filter(c => !q || String(c.code).includes(busca.trim()) || normalizeForSearch(c.name || '').includes(q)).slice(0, 30);
+            const iniciar = () => {
+                if (!cliente) { showMessage('Selecione um cliente para fazer a conferência.', 'error'); return; }
+                const usuario = window.localStorage.getItem('friganso_spamov_user') || '';
+                const senha = window.localStorage.getItem('friganso_spamov_pass') || '';
+                if (!usuario || !senha) { showMessage('Salve primeiro seu login do SPAmov na aba Debug.', 'error'); return; }
+                const pedido = { cliente: String(cliente.code), tipoPessoa: /f[ií]sica/i.test(cliente.tipo || '') ? 'fisica' : 'juridica', conferenciaPrecos: true, itens: (itens || []).map(it => ({ code: String(it.code), nome: it.name, qty: 1 })) };
+                let respondeu = false;
+                const onAck = e => {
+                    const d = e.data;
+                    if (!d || d.source !== 'friganso-ext' || d.type !== 'CONFERENCIA_SAVED') return;
+                    respondeu = true; window.removeEventListener('message', onAck); onClose();
+                    showMessage('Conferência preparada. Vou abrir o SPAmov e carregar os itens sem finalizar o pedido.', 'success');
+                    window.open('http://spd1.friganso.com.br/rdm-business/', 'spamov_conferencia');
+                };
+                window.addEventListener('message', onAck);
+                window.postMessage({ source: 'friganso-app', type: 'CONFERIR_PRECOS_AUTO', usuario, senha, pedido }, '*');
+                setTimeout(() => { if (!respondeu) { window.removeEventListener('message', onAck); showMessage('A extensão do Prumo não respondeu. Atualize a extensão e recarregue esta página.', 'error'); } }, 1800);
+            };
+            return <div className="fixed inset-0 z-[1400] bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-3">
+                <div className="w-full max-w-lg max-h-[92vh] rounded-3xl border border-cyan-400/25 bg-[#0b0d17] text-slate-100 shadow-2xl flex flex-col overflow-hidden">
+                    <div className="p-5 border-b border-slate-800"><h3 className="text-lg font-black text-cyan-100">Conferir {itens.length} preço(s) no SPAmov</h3><p className="mt-1 text-sm text-slate-400">Escolha um cliente que você usa com condição <b className="text-slate-200">À Vista</b>. Os itens serão colocados em um pedido de conferência e não serão finalizados.</p></div>
+                    <div className="p-4 border-b border-slate-800"><input autoFocus value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cliente por código ou nome..." className="w-full rounded-xl border border-slate-700 bg-[#080a12] px-4 py-3 text-slate-100 outline-none focus:border-cyan-400" /></div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#080a12]">{opcoes.map(c => <button key={c.id || c.code} onClick={() => setCliente(c)} className={`w-full rounded-xl border p-3 text-left flex gap-3 items-center ${cliente && String(cliente.code) === String(c.code) ? 'border-cyan-400 bg-cyan-500/10' : 'border-slate-800 bg-[#111420] hover:border-slate-600'}`}><span className="font-mono text-xs font-black text-cyan-300">{c.code}</span><span className="text-sm font-bold text-slate-200">{c.name || 'Cliente sem nome'}</span></button>)}</div>
+                    <div className="p-4 border-t border-slate-800 flex gap-2"><button onClick={onClose} className="flex-1 rounded-xl border border-slate-700 bg-slate-900 py-3 font-bold text-slate-300">Cancelar</button><button onClick={iniciar} disabled={!cliente} className="flex-1 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 py-3 font-black text-slate-950">Abrir conferência</button></div>
+                </div>
+            </div>;
+        };
         // 📲 Bloco de um produto pro texto do WhatsApp (Gerador de Zap e Disparos). Dois estilos:
         // "novo" (padrão) — linha única de preço + Cartão/Parcelado combinados quando existir esse dado;
         // "antigo" — o formato de sempre, "(Com 3% de Desconto)" por extenso, sem Cartão/Parcelado.
@@ -1185,7 +1230,7 @@
                 <div className="prumo-login min-h-screen flex items-center justify-center bg-slate-900 relative overflow-hidden p-4">
                     <img src={BG_IMAGE} className="absolute inset-0 w-full h-full object-cover opacity-20" />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-rose-950/80 to-transparent"></div>
-                    
+
                     <div className="w-full max-w-md p-8 glass rounded-3xl shadow-2xl relative z-10 border border-white/20 animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex flex-col items-center mb-6">
                             <PrumoLogo className="h-24 w-24 mb-5" />
@@ -3481,7 +3526,7 @@
                             <p className="text-slate-500 text-sm mt-1">Sincronizada automaticamente no seu dispositivo.</p>
                             {cloudInfo && <p className="text-xs font-bold text-emerald-600 mt-2 bg-emerald-50 inline-block px-2 py-1 rounded-md border border-emerald-100">Última Tabela da Nuvem: {cloudInfo.date}</p>}
                         </div>
-                        
+
                         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                             <button onClick={() => { fetchPdfVersions(); setShowCloudModal(true); }} disabled={isLoading} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
                                 <div className="h-5 w-5"><IconCloudDownload /></div> Nuvem
@@ -4900,7 +4945,7 @@
                                     </div>
                                 )}
                             </div>
-                            
+
                             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
                                 <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
                                     <h3 className="font-semibold text-slate-700 flex items-center gap-2"><div className="h-5 w-5 text-emerald-600"><IconWhatsApp /></div> Resumo WhatsApp</h3>
@@ -7849,7 +7894,7 @@
                     setRawProfileText('');
                 }
             }, [selectedClient ? selectedClient.id : null]);
-            
+
             const questionsDefinition = [{ id: 'q1', text: '1. Possui açougue interno e desossa carnes?' }, { id: 'q2', text: '2. Compra peças inteiras no osso (Dianteiro/Banda)?' }, { id: 'q3', text: '3. Prefere caixarias já limpas/porcionadas?' }, { id: 'q4', text: '4. Alta demanda por carnes resfriadas (não congeladas)?' }, { id: 'q5', text: '5. Possui setor de frios fatiados na hora?' }, { id: 'q6', text: '6. Compra grande volume de embutidos (Mortadela)?' }, { id: 'q7', text: '7. Serve refeições prontas (Restaurante)?' }, { id: 'q8', text: '8. Preferência por laticínios (Mussarela, Prato)?' }, { id: 'q9', text: '9. Fatia bifes para exposição em balcão?' }, { id: 'q10', text: '10. Busca padronização extrema nos cortes?' }, { id: 'q11', text: '11. Processa carne moída no estabelecimento?' }, { id: 'q12', text: '12. Possui câmara fria para estocagem?' }, { id: 'q13', text: '13. Preferência por produtos de giro rápido/validade curta?' }, { id: 'q14', text: '14. Compra complementos (Pão de alho, Batata)?' }, { id: 'q15', text: '15. Variedade grande de itens (mix amplo)?' }, { id: 'q16', text: '16. Concentra pedidos em poucos itens de volume altíssimo?' }, { id: 'q17', text: '17. Forte foco em churrasco (Picanha, Costela)?' }, { id: 'q18', text: '18. Demanda constante por miúdos/ossos?' }, { id: 'q19', text: '19. Decide compra baseado no menor preço?' }, { id: 'q20', text: '20. Exige marcas específicas para prateleira?' }];
             const initialFormState = { name: '', contactName: '', phone: '', code: '', cnpj: '', address: '' }; questionsDefinition.forEach(q => initialFormState[q.id] = 0);
             const [formData, setFormData] = useState(initialFormState);
@@ -7874,7 +7919,7 @@
                     const nameMatch = rawClientText.match(/(?:SUPERMERCADO|MERCADO|AÇOUGUE|RESTAURANTE)[\s\S]*?(?=\n|CNPJ)/i);
                     if (nameMatch) {
                         let cleanName = nameMatch[0].replace(/SUPERMERCADO OPCAO DO BAIRRO LTDA\/MERCADO OPCAO-\s*/i, '').trim();
-                        extracted.name = cleanName.substring(0, 40); 
+                        extracted.name = cleanName.substring(0, 40);
                     }
                     const cepMatch = rawClientText.match(/\b\d{5}-\d{3}\b/);
                     if (cepMatch) extracted.address = cepMatch[0];
@@ -7918,7 +7963,7 @@
                     }
                     const validCodes = [...new Set(foundCodes)].filter(code => products.some(p => p.code === code));
                     if (validCodes.length === 0) { showMessage('Nenhum código reconhecido.', 'error'); setIsExtractingHistory(false); return; }
-                    
+
                     const currentHistory = editForm.history || [];
                     const newHistory = [...new Set([...currentHistory, ...validCodes])];
                     await db.collection('clients').doc(selectedClient.id).update({ history: newHistory });
@@ -8271,7 +8316,7 @@
                 e.preventDefault();
                 const body = `Solicitante: ${user.name}\nID Vendedor: ${user.code}\nE-mail Contato: ${user.email}\n\nAssunto: ${subject}\n\n--- Mensagem ---\n${message}`;
                 window.location.href = `mailto:bruno.moura.f.silva@gmail.com?subject=Suporte Prumo ERP - ${subject}&body=${encodeURIComponent(body)}`;
-                setSubmitted(true); setTimeout(() => { setSubmitted(false); setMessage(''); }, 5000); 
+                setSubmitted(true); setTimeout(() => { setSubmitted(false); setMessage(''); }, 5000);
             };
 
             return (
@@ -8316,6 +8361,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.39.0', data: '14/10/2026', areas: ['site', 'extensao'], itens: [
+                '💲 NOVO: o aviso de preço antigo agora permite corrigir os valores diretamente, sem sair da tela',
+                '🔎 Conferência em lote no SPAmov: escolha um cliente à vista e o Prumo carrega todos os itens pendentes sem finalizar o pedido',
+                '✅ A extensão lê os preços à vista, exige que todos os códigos tenham sido encontrados e devolve os valores automaticamente ao Prumo',
+                '☁️ O preço conferido é compartilhado entre os aparelhos e vale somente para o dia da conferência',
+            ]},
             { versao: '2.38.0', data: '14/10/2026', areas: ['site', 'app'], itens: [
                 '🛑 Resumo e Fila de Pedidos agora interrompem a cópia antes de faturar quando há item fora da tabela do dia',
                 '🔎 A confirmação lista código e produto, abre o site do vendedor e exige uma decisão consciente antes de continuar',
@@ -9751,7 +9802,7 @@
                         <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 text-left mb-6">
                             <p className="text-sm text-slate-500 mb-1 uppercase tracking-wider font-bold">Desenvolvedor Oficial e CEO</p>
                             <p className="text-xl font-bold text-rose-800 mb-4 flex items-center flex-wrap gap-2">
-                                Bruno Moura 
+                                Bruno Moura
                                 <span className="bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-widest font-black">ID Admin Oficial: 99206</span>
                             </p>
                             <p className="text-sm text-slate-500 mb-1 uppercase tracking-wider font-bold">Contato Direto</p>
@@ -12738,7 +12789,7 @@
 
             // 🧾 O histórico de compras NÃO carrega mais no boot (era pesado).
             // Agora é carregado só dentro da tela "Fazer Pedido", quando você abre ela.
-            
+
             const [products, setProductsState] = useState(() => {
                 const savedProds = window.localStorage.getItem('friganso_products');
                 return savedProds ? JSON.parse(savedProds) : [];
@@ -12787,6 +12838,78 @@
             };
 
             const showMessage = (message, type = 'info') => setMessageBox({ message, type });
+
+            const [conferenciaPrecosItens, setConferenciaPrecosItens] = useState(null);
+            const aplicarPrecosConferidos = async (itensRecebidos, cliente) => {
+                const hoje = diaStrGlobal(new Date());
+                const validos = (itensRecebidos || []).map(it => {
+                    const code = String(it.code || ''); const nome = it.name || it.nome || '';
+                    const valorLido = Number(it.originalPrice != null ? it.originalPrice : it.valorUnit);
+                    // No pedido, valorUnit já é o valor final à vista. O catálogo guarda a base antes
+                    // dos 3%, então reconstrói essa base apenas quando a regra do produto dá desconto.
+                    const veioDoPedido = it.originalPrice == null && it.valorUnit != null;
+                    const regra = checkDiscountRules(code, nome, valorLido);
+                    const originalPrice = veioDoPedido && regra.hasDiscount ? Math.round((valorLido / 0.97) * 100) / 100 : valorLido;
+                    return { ...it, code, name: nome, originalPrice };
+                }).filter(it => it.code && it.originalPrice > 0);
+                if (!validos.length) { showMessage('Nenhum preço válido foi recebido.', 'error'); return; }
+                const porCodigo = new Map(validos.map(it => [it.code, it]));
+                setProductsState(prev => {
+                    const vistos = new Set();
+                    const novos = (prev || []).map(p => {
+                        const it = porCodigo.get(String(p.code)); if (!it) return p;
+                        vistos.add(String(p.code));
+                        const regra = checkDiscountRules(p.code, p.name || it.name, it.originalPrice);
+                        return { ...p, originalPrice: it.originalPrice, discountedPrice: regra.unitFinalPrice, precoCartao: null, precosPrazo: {}, precoConfirmadoDia: hoje, precoConfirmadoEm: Date.now(), precoConfirmadoCliente: String(cliente || ''), precoConfirmadoSomenteAvista: true };
+                    });
+                    validos.forEach(it => { if (!vistos.has(it.code)) { const regra = checkDiscountRules(it.code, it.name || '', it.originalPrice); novos.push({ code: it.code, name: it.name || ('Produto ' + it.code), originalPrice: it.originalPrice, discountedPrice: regra.unitFinalPrice, precoCartao: null, precosPrazo: {}, ativo: false, precoConfirmadoDia: hoje, precoConfirmadoEm: Date.now(), precoConfirmadoCliente: String(cliente || ''), precoConfirmadoSomenteAvista: true }); } });
+                    try { window.localStorage.setItem('friganso_products', JSON.stringify(novos)); } catch (e) {}
+                    return novos;
+                });
+                try {
+                    const ref = db.collection('system_data').doc('precos_conferidos');
+                    await db.runTransaction(async tx => {
+                        const snap = await tx.get(ref); const atuais = snap.exists && snap.data().itens ? snap.data().itens : {};
+                        const mesclados = { ...atuais };
+                        validos.forEach(it => { mesclados[it.code] = { code: it.code, name: it.name || '', originalPrice: it.originalPrice, dia: hoje, cliente: String(cliente || ''), ts: Date.now() }; });
+                        tx.set(ref, { itens: mesclados, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    });
+                } catch (e) { showMessage('Os preços foram atualizados neste aparelho, mas não consegui sincronizar na nuvem.', 'error'); return; }
+                showMessage(validos.length + ' preço(s) conferido(s) e atualizado(s) para hoje. ✅', 'success');
+            };
+            useEffect(() => {
+                const abrir = e => setConferenciaPrecosItens((e.detail && e.detail.itens) || []);
+                const salvar = e => aplicarPrecosConferidos((e.detail && e.detail.itens) || [], 'manual');
+                const receber = e => {
+                    const d = e.data;
+                    if (!d || d.source !== 'friganso-ext' || d.type !== 'PRECOS_CONFERIDOS_PENDENTE') return;
+                    try { window.sessionStorage.removeItem('friganso_precos_conferidos_json'); } catch (err) {}
+                    aplicarPrecosConferidos(d.itens || [], d.cliente || '');
+                };
+                window.addEventListener('prumo:abrir-conferencia-precos', abrir);
+                window.addEventListener('prumo:salvar-precos-conferidos', salvar);
+                window.addEventListener('message', receber);
+                try {
+                    const salvo = window.sessionStorage.getItem('friganso_precos_conferidos_json');
+                    if (salvo) { window.sessionStorage.removeItem('friganso_precos_conferidos_json'); const d = JSON.parse(salvo); aplicarPrecosConferidos(d.itens || [], d.cliente || ''); }
+                } catch (e) {}
+                return () => { window.removeEventListener('prumo:abrir-conferencia-precos', abrir); window.removeEventListener('prumo:salvar-precos-conferidos', salvar); window.removeEventListener('message', receber); };
+            }, []);
+            useEffect(() => {
+                const unsub = db.collection('system_data').doc('precos_conferidos').onSnapshot(snap => {
+                    if (!snap.exists) return;
+                    const hoje = diaStrGlobal(new Date()); const mapa = snap.data().itens || {};
+                    const validos = Object.values(mapa).filter(it => it && it.dia === hoje && Number(it.originalPrice) > 0);
+                    if (!validos.length) return;
+                    const porCodigo = new Map(validos.map(it => [String(it.code), it]));
+                    setProductsState(prev => {
+                        const novos = (prev || []).map(p => { const it = porCodigo.get(String(p.code)); if (!it) return p; const regra = checkDiscountRules(p.code, p.name, it.originalPrice); return { ...p, originalPrice: Number(it.originalPrice), discountedPrice: regra.unitFinalPrice, precoCartao: null, precosPrazo: {}, precoConfirmadoDia: hoje, precoConfirmadoEm: it.ts, precoConfirmadoCliente: it.cliente || '', precoConfirmadoSomenteAvista: true }; });
+                        try { window.localStorage.setItem('friganso_products', JSON.stringify(novos)); } catch (e) {}
+                        return novos;
+                    });
+                }, () => {});
+                return () => unsub();
+            }, []);
 
             if (!user) {
                 return (
@@ -12840,6 +12963,7 @@
                 <div className="prumo-shell flex h-screen bg-slate-50 overflow-hidden font-sans">
                     {messageBox && <CustomMessageBox {...messageBox} onClose={() => setMessageBox(null)} />}
                     {siteUpdate && <SiteUpdateModal siteUpdate={siteUpdate} onAtualizar={atualizarSiteAgora} />}
+                    {conferenciaPrecosItens && <ConferenciaPrecosWizard itens={conferenciaPrecosItens} clients={clients} onClose={() => setConferenciaPrecosItens(null)} showMessage={showMessage} />}
 
                     {/* 🔔 Lembretes: valem em todas as telas */}
                     <AlertaLembrete quantos={lembretesPendentes.length} onClick={reabrirLembretes} />
@@ -12985,7 +13109,7 @@
                             <NavButton route="leads" icon={IconUsers} label="Prospecção" />
                             <NavButton route="radar" icon={IconDashboard} label="Radar de Clientes" />
                             <NavButton route="profile" icon={IconSettings} label="Minha conta" />
-                            
+
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-8 ml-2">Vendas Diárias</p>
                             <NavButton route="pdf" icon={IconFileText} label="Tabela de preços" />
                             <NavButton route="cardapio" icon={IconTag} label="Catálogo" />
@@ -12997,7 +13121,7 @@
                             <NavButton route="importarVendas" icon={IconCloudUpload} label="Importar vendas" />
                             <NavButton route="orcamentos" icon={IconWhatsApp} label="Criar ofertas" />
                             <NavButton route="disparos" icon={IconWhatsApp} label="Campanhas WhatsApp" />
-                            
+
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 mt-8 ml-2">Sistema & Ajuda</p>
                             <button onClick={() => { setShowSettings(true); setIsSidebarOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold transition-all duration-200 text-slate-400 hover:text-white hover:bg-slate-800/50">
                                 <div className="h-5 w-5 flex items-center justify-center text-base">⚙️</div> Configurações
@@ -13196,6 +13320,12 @@
                     window.sessionStorage.setItem('friganso_clientes_json', JSON.stringify(d.clientes));
                     window.sessionStorage.setItem('friganso_initial_route', 'clients');
                 } catch (err) {}
+                return;
+            }
+            // 💲 Preços conferidos num pedido temporário do SPAmov. O App aplica somente os códigos
+            // devolvidos pela extensão e marca a conferência como válida apenas no dia atual.
+            if (d && d.source === 'friganso-ext' && d.type === 'PRECOS_CONFERIDOS_PENDENTE' && d.itens) {
+                try { window.sessionStorage.setItem('friganso_precos_conferidos_json', JSON.stringify({ itens: d.itens, cliente: d.cliente || '' })); } catch (err) {}
             }
         });
 

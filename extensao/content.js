@@ -58,6 +58,17 @@
                 try { window.postMessage({ source: "friganso-ext", type: "CLIENTES_PENDENTE", clientes: pend.clientes }, "*"); } catch (e) {}
             });
         } catch (e) {}
+        // 💲 Preços lidos numa conferência. A carga fica no storage porque atravessar todos os itens
+        // pela URL é frágil, principalmente em conexão móvel.
+        try {
+            chrome.storage.local.get(["friganso_precos_conferidos_pendente"], function (r) {
+                const pend = r && r.friganso_precos_conferidos_pendente;
+                if (!pend || !pend.itens || !pend.itens.length) return;
+                if (Date.now() - (pend.ts || 0) > 60 * 60 * 1000) { chrome.storage.local.remove("friganso_precos_conferidos_pendente"); return; }
+                chrome.storage.local.remove("friganso_precos_conferidos_pendente");
+                try { window.postMessage({ source: "friganso-ext", type: "PRECOS_CONFERIDOS_PENDENTE", itens: pend.itens, cliente: pend.cliente || "" }, "*"); } catch (e) {}
+            });
+        } catch (e) {}
         window.addEventListener("message", function (e) {
             const d = e.data;
             if (!d || d.source !== "friganso-app") return;
@@ -107,6 +118,19 @@
                         friganso_creds: { usuario: d.usuario || "", senha: d.senha || "", autoLogin: true, irVendas: true },
                         friganso_run_auto: { pedido: d.pedido, ts: Date.now() }
                     }, function () { try { window.postMessage({ source: "friganso-ext", type: "AUTO_SAVED" }, "*"); } catch (e) {} });
+                } catch (err) {}
+                return;
+            }
+            // 🔎 Conferência em lote: usa o mesmo robô de Fazer Pedido, mas guarda um marcador próprio.
+            // Ao terminar de colocar os itens, NÃO confirma o pedido: libera o botão que lê os valores.
+            if (d.type === "CONFERIR_PRECOS_AUTO" && d.pedido) {
+                try {
+                    const pedido = Object.assign({}, d.pedido, { conferenciaPrecos: true });
+                    chrome.storage.local.set({
+                        friganso_creds: { usuario: d.usuario || "", senha: d.senha || "", autoLogin: true, irVendas: true },
+                        friganso_conferencia_ativa: { pedido: pedido, cliente: pedido.cliente || "", pronto: false, ts: Date.now() },
+                        friganso_run_auto: { pedido: pedido, ts: Date.now() }
+                    }, function () { try { window.postMessage({ source: "friganso-ext", type: "CONFERENCIA_SAVED" }, "*"); } catch (e) {} });
                 } catch (err) {}
                 return;
             }
@@ -1704,6 +1728,13 @@
         }
 
         if (run.idx >= total) {
+            if (run.pedido && run.pedido.conferenciaPrecos) {
+                dlog("✓ todos os " + total + " itens de conferência carregados — aguardando leitura dos preços");
+                await clearRun();
+                try { chrome.storage.local.get(["friganso_conferencia_ativa"], function (r) { const c = r && r.friganso_conferencia_ativa; if (!c) return; c.pronto = true; c.ts = Date.now(); chrome.storage.local.set({ friganso_conferencia_ativa: c }, mostrarBotaoConferenciaPrecos); }); } catch (e) {}
+                status("✅ Itens carregados! Confira a condição À Vista e clique em “Atualizar preços no Prumo”.");
+                return;
+            }
             dlog("✓ todos os " + total + " itens lançados — PRONTO (agora você confere e clica no DP)");
             await clearRun();
             status("✅ Itens lançados! Agora confira e clique no DP/finalizar você mesmo. 👍");
@@ -1795,7 +1826,7 @@
             ov.appendChild(box); document.body.appendChild(ov);
         });
     }
-    function cancelarLancamento() { clearRun().then(function () { statusBox()("Lançamento cancelado."); }); }
+    function cancelarLancamento() { try { chrome.storage.local.remove("friganso_conferencia_ativa"); } catch (e) {} clearRun().then(function () { statusBox()("Lançamento cancelado."); }); }
 
     // ---------- 🪜 ETAPAS (retomar de um ponto específico) ----------
     // O lançamento tem 4 fases (login → menu Vendas → Novo+Cliente → itens) e cada uma recarrega o
@@ -2214,6 +2245,71 @@
         window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
     }
 
+    // ---------- CONFERÊNCIA DE PREÇOS EM LOTE ----------
+    function coletarDadosPedidoEmTodosFrames() {
+        const partes = [];
+        function visitar(w) {
+            try {
+                if (w.__frigDadosFrame) { const d = w.__frigDadosFrame(); if (d) partes.push(d); }
+                for (let i = 0; i < w.frames.length; i++) visitar(w.frames[i]);
+            } catch (e) {}
+        }
+        try { visitar(window.top); } catch (e) { visitar(window); }
+        const saida = { cliente: "", condicaoPagamento: "", itens: [] }, vistos = new Set();
+        partes.forEach(function (p) {
+            if (!saida.cliente && p.cliente) saida.cliente = p.cliente;
+            if (!saida.condicaoPagamento && p.condicaoPagamento) saida.condicaoPagamento = p.condicaoPagamento;
+            (p.itens || []).forEach(function (it) { const code = String(it.code || ""); if (code && !vistos.has(code)) { vistos.add(code); saida.itens.push(it); } });
+        });
+        return saida;
+    }
+    function concluirConferenciaPrecos(conf) {
+        const dados = coletarDadosPedidoEmTodosFrames();
+        if (!/(^|[^a-zà-ú])(?:a|à)\s*vista\b/i.test(dados.condicaoPagamento || "")) {
+            alert("A condição de pagamento desta conferência não está como À Vista.\n\nSelecione À Vista no pedido e clique novamente para evitar gravar o preço errado.");
+            return;
+        }
+        const lidos = new Map((dados.itens || []).map(function (it) { return [String(it.code), it]; }));
+        const alvo = (conf.pedido && conf.pedido.itens) || [];
+        const faltando = [], precos = [];
+        alvo.forEach(function (it) {
+            const achado = lidos.get(String(it.code));
+            const valor = Number(achado && achado.valorUnit) || 0;
+            if (!achado || valor <= 0) faltando.push(String(it.code));
+            else precos.push({ code: String(it.code), name: (achado.nome || it.nome || ""), valorUnit: valor });
+        });
+        if (faltando.length) {
+            alert("Ainda não consegui ler o preço de " + faltando.length + " item(ns):\n\n" + faltando.join(", ") + "\n\nConfira se todos aparecem no pedido e tente novamente.");
+            return;
+        }
+        const entregar = function () {
+            try { chrome.storage.local.remove("friganso_conferencia_ativa"); } catch (e) {}
+            const url = APP_URL + "?precosConferidos=pendente";
+            const ehCelular = (navigator.maxTouchPoints || 0) > 0;
+            if (ehCelular) { try { (window.top || window).location.href = url; } catch (e) { window.location.href = url; } return; }
+            try { const w = (window.top || window).open(url, "friganso_erp_app"); if (w && w.focus) w.focus(); } catch (e) { window.open(url, "friganso_erp_app"); }
+        };
+        try {
+            chrome.storage.local.set({ friganso_precos_conferidos_pendente: { itens: precos, cliente: conf.cliente || dados.cliente || "", ts: Date.now() } }, entregar);
+        } catch (e) { alert("Não consegui guardar os preços para enviar ao Prumo. Recarregue a extensão e tente de novo."); }
+    }
+    function mostrarBotaoConferenciaPrecos() {
+        if (!ehFramePrincipal() || !document.body) return;
+        try {
+            chrome.storage.local.get(["friganso_conferencia_ativa"], function (r) {
+                const conf = r && r.friganso_conferencia_ativa;
+                const antigo = document.getElementById("friganso-conferir-precos-btn");
+                if (!conf || !conf.pronto || Date.now() - (conf.ts || 0) > 30 * 60 * 1000) { if (antigo) antigo.remove(); return; }
+                if (antigo) { antigo.style.display = "block"; return; }
+                const b = document.createElement("button"); b.id = "friganso-conferir-precos-btn"; b.type = "button";
+                b.textContent = "💲 Atualizar preços no Prumo";
+                Object.assign(b.style, { position: "fixed", right: "18px", top: "18px", zIndex: "2147483647", background: "linear-gradient(135deg,#0891b2,#06b6d4)", color: "#02131a", border: "1px solid #67e8f9", borderRadius: "12px", padding: "13px 18px", fontSize: "14px", fontWeight: "900", fontFamily: "system-ui,sans-serif", boxShadow: "0 8px 28px rgba(6,182,212,.35)", cursor: "pointer" });
+                b.addEventListener("click", function () { concluirConferenciaPrecos(conf); });
+                document.body.appendChild(b);
+            });
+        } catch (e) {}
+    }
+
     // ---------- BOTÕES ----------
     function botao(id, texto, cor, bottom, onClick) {
         if (document.getElementById(id)) return;
@@ -2290,6 +2386,7 @@
 
     // Mostra o log salvo (passo a passo que sobrevive aos recarregamentos)
     if (ehFramePrincipal()) mostrarLogSalvo();
+    if (ehFramePrincipal()) mostrarBotaoConferenciaPrecos();
     // Retoma automaticamente um lançamento em andamento (após cada reload do site)
     if (ehFramePrincipal()) processarRun();
     // Login automático (se solicitado pelo Debug e estivermos na tela de login)
