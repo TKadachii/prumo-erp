@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 232;
+        const APP_BUILD_VERSION = 233;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -702,6 +702,7 @@
         // Um produto continua no histórico mesmo quando some da tabela atual. O último preço fica
         // guardado para consulta, mas não pode ser apresentado ao cliente como se ainda fosse válido.
         const produtoForaTabelaHoje = (p) => !!(p && p.ativo === false && p.precoConfirmadoDia !== diaStrGlobal(new Date()));
+        const produtoFoiExcluido = (code) => !!(window.__produtosExcluidos && window.__produtosExcluidos.has(String(code)));
         const ProdutoForaTabelaBadge = ({ compacto }) => (
             <span title="O último preço deste item pode estar desatualizado" className={`inline-flex items-center rounded-full border border-amber-400/30 bg-[#2a200d] font-black text-amber-200 ${compacto ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[10px]'}`}>
                 ⚠️ Fora da tabela de hoje
@@ -719,7 +720,7 @@
             const unicos = new Map();
             (itens || []).forEach(it => {
                 const code = String(it.code || '');
-                if (!code || unicos.has(code)) return;
+                if (!code || unicos.has(code) || produtoFoiExcluido(code)) return;
                 const p = mapa.get(code);
                 if (!p || produtoForaTabelaHoje(p)) unicos.set(code, { code, name: (p && p.name) || it.name || it.nome || ('Produto ' + code), clientes: Number(it.clientes) || 0, originalPrice: Number(p && p.originalPrice) || 0 });
             });
@@ -8361,6 +8362,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.39.1', data: '14/10/2026', areas: ['site', 'extensao'], itens: [
+                '🗑️ Item que não aparece mais no SPAmov agora pode ser marcado como produto encerrado e excluído do Prumo',
+                '✏️ Na mesma tela, um item ausente pode ser mantido com o preço à vista digitado manualmente',
+                '☁️ Produtos encerrados somem das tabelas, pesquisas, sugestões e ofertas em todos os aparelhos, mas as vendas antigas continuam preservadas',
+            ]},
             { versao: '2.39.0', data: '14/10/2026', areas: ['site', 'extensao'], itens: [
                 '💲 NOVO: o aviso de preço antigo agora permite corrigir os valores diretamente, sem sair da tela',
                 '🔎 Conferência em lote no SPAmov: escolha um cliente à vista e o Prumo carrega todos os itens pendentes sem finalizar o pedido',
@@ -10889,7 +10895,7 @@
                 });
                 const codes = new Set(ultima.keys());
                 if (clienteInfo && Array.isArray(clienteInfo.history)) clienteInfo.history.forEach(c => codes.add(String(c)));
-                return Array.from(codes).map(code => {
+                return Array.from(codes).filter(code => !produtoFoiExcluido(code)).map(code => {
                     const prod = products.find(p => String(p.code) === code);
                     const u = ultima.get(code);
                     return { code: code, name: prod ? prod.name : ((u && u.nome) || ('Produto ' + code)), naTabela: !!prod && !produtoForaTabelaHoje(prod), ts: u ? u.ts : 0, dia: u ? u.dia : null };
@@ -12794,6 +12800,19 @@
                 const savedProds = window.localStorage.getItem('friganso_products');
                 return savedProds ? JSON.parse(savedProds) : [];
             });
+            const [produtosExcluidos, setProdutosExcluidos] = useState([]);
+            useEffect(() => {
+                const unsub = db.collection('system_data').doc('produtos_excluidos').onSnapshot(snap => {
+                    const codes = snap.exists && Array.isArray(snap.data().codes) ? snap.data().codes.map(String) : [];
+                    window.__produtosExcluidos = new Set(codes); setProdutosExcluidos(codes);
+                    setProductsState(prev => {
+                        const novos = (prev || []).filter(p => !window.__produtosExcluidos.has(String(p.code)));
+                        try { window.localStorage.setItem('friganso_products', JSON.stringify(novos)); } catch (e) {}
+                        return novos;
+                    });
+                }, () => {});
+                return () => unsub();
+            }, []);
 
             // 🔴 Ao carregar uma tabela nova, MESCLA com a anterior em vez de substituir: produto que já
             // apareceu uma vez fica salvo pra sempre (nome/preço da última vez visto). Se ele não estiver
@@ -12802,10 +12821,10 @@
             const setProducts = (newProducts) => {
                 setProductsState(prev => {
                     const hoje = diaStrGlobal(new Date());
-                    const novosMap = new Map((newProducts || []).map(p => [String(p.code), p]));
+                    const novosMap = new Map((newProducts || []).filter(p => !produtoFoiExcluido(p.code)).map(p => [String(p.code), p]));
                     const mesclados = [];
                     novosMap.forEach((p, code) => mesclados.push({ ...p, code, ativo: true, ultimaVez: hoje }));
-                    (prev || []).forEach(p => { const code = String(p.code); if (!novosMap.has(code)) mesclados.push({ ...p, ativo: false }); });
+                    (prev || []).forEach(p => { const code = String(p.code); if (!produtoFoiExcluido(code) && !novosMap.has(code)) mesclados.push({ ...p, ativo: false }); });
                     try { window.localStorage.setItem('friganso_products', JSON.stringify(mesclados)); } catch (e) {}
                     return mesclados;
                 });
@@ -12840,7 +12859,7 @@
             const showMessage = (message, type = 'info') => setMessageBox({ message, type });
 
             const [conferenciaPrecosItens, setConferenciaPrecosItens] = useState(null);
-            const aplicarPrecosConferidos = async (itensRecebidos, cliente) => {
+            const aplicarPrecosConferidos = async (itensRecebidos, cliente, notificar = true) => {
                 const hoje = diaStrGlobal(new Date());
                 const validos = (itensRecebidos || []).map(it => {
                     const code = String(it.code || ''); const nome = it.name || it.nome || '';
@@ -12852,7 +12871,7 @@
                     const originalPrice = veioDoPedido && regra.hasDiscount ? Math.round((valorLido / 0.97) * 100) / 100 : valorLido;
                     return { ...it, code, name: nome, originalPrice };
                 }).filter(it => it.code && it.originalPrice > 0);
-                if (!validos.length) { showMessage('Nenhum preço válido foi recebido.', 'error'); return; }
+                if (!validos.length) { if (notificar) showMessage('Nenhum preço válido foi recebido.', 'error'); return 0; }
                 const porCodigo = new Map(validos.map(it => [it.code, it]));
                 setProductsState(prev => {
                     const vistos = new Set();
@@ -12874,24 +12893,50 @@
                         validos.forEach(it => { mesclados[it.code] = { code: it.code, name: it.name || '', originalPrice: it.originalPrice, dia: hoje, cliente: String(cliente || ''), ts: Date.now() }; });
                         tx.set(ref, { itens: mesclados, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
                     });
-                } catch (e) { showMessage('Os preços foram atualizados neste aparelho, mas não consegui sincronizar na nuvem.', 'error'); return; }
-                showMessage(validos.length + ' preço(s) conferido(s) e atualizado(s) para hoje. ✅', 'success');
+                } catch (e) { if (!notificar) throw e; showMessage('Os preços foram atualizados neste aparelho, mas não consegui sincronizar na nuvem.', 'error'); return validos.length; }
+                if (notificar) showMessage(validos.length + ' preço(s) conferido(s) e atualizado(s) para hoje. ✅', 'success');
+                return validos.length;
+            };
+            const excluirProdutosDoPrumo = async (codigos, notificar = true) => {
+                const excluir = Array.from(new Set((codigos || []).map(String).filter(Boolean)));
+                if (!excluir.length) return 0;
+                const setExcluir = new Set(excluir);
+                window.__produtosExcluidos = new Set([...(window.__produtosExcluidos || []), ...excluir]);
+                setProdutosExcluidos(Array.from(window.__produtosExcluidos));
+                setProductsState(prev => {
+                    const novos = (prev || []).filter(p => !setExcluir.has(String(p.code)));
+                    try { window.localStorage.setItem('friganso_products', JSON.stringify(novos)); } catch (e) {}
+                    return novos;
+                });
+                try {
+                    const ref = db.collection('system_data').doc('produtos_excluidos');
+                    await db.runTransaction(async tx => {
+                        const snap = await tx.get(ref); const atuais = snap.exists && Array.isArray(snap.data().codes) ? snap.data().codes.map(String) : [];
+                        tx.set(ref, { codes: Array.from(new Set([...atuais, ...excluir])), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    });
+                } catch (e) { if (!notificar) throw e; showMessage('Os produtos saíram deste aparelho, mas não consegui sincronizar a exclusão na nuvem.', 'error'); return excluir.length; }
+                if (notificar) showMessage(excluir.length + ' produto(s) removido(s) do Prumo em todos os aparelhos.', 'success');
+                return excluir.length;
             };
             useEffect(() => {
                 const abrir = e => setConferenciaPrecosItens((e.detail && e.detail.itens) || []);
                 const salvar = e => aplicarPrecosConferidos((e.detail && e.detail.itens) || [], 'manual');
-                const receber = e => {
+                const receber = async e => {
                     const d = e.data;
                     if (!d || d.source !== 'friganso-ext' || d.type !== 'PRECOS_CONFERIDOS_PENDENTE') return;
                     try { window.sessionStorage.removeItem('friganso_precos_conferidos_json'); } catch (err) {}
-                    aplicarPrecosConferidos(d.itens || [], d.cliente || '');
+                    try {
+                        const atualizados = await aplicarPrecosConferidos(d.itens || [], d.cliente || '', false);
+                        const excluidos = await excluirProdutosDoPrumo(d.excluidos || [], false);
+                        showMessage(`${atualizados || 0} preço(s) atualizado(s) e ${excluidos || 0} produto(s) excluído(s) do Prumo. ✅`, 'success');
+                    } catch (err) { showMessage('As alterações foram feitas neste aparelho, mas não consegui sincronizar tudo na nuvem. Tente novamente com internet estável.', 'error'); }
                 };
                 window.addEventListener('prumo:abrir-conferencia-precos', abrir);
                 window.addEventListener('prumo:salvar-precos-conferidos', salvar);
                 window.addEventListener('message', receber);
                 try {
                     const salvo = window.sessionStorage.getItem('friganso_precos_conferidos_json');
-                    if (salvo) { window.sessionStorage.removeItem('friganso_precos_conferidos_json'); const d = JSON.parse(salvo); aplicarPrecosConferidos(d.itens || [], d.cliente || ''); }
+                    if (salvo) { window.sessionStorage.removeItem('friganso_precos_conferidos_json'); const d = JSON.parse(salvo); (async () => { try { const a = await aplicarPrecosConferidos(d.itens || [], d.cliente || '', false); const x = await excluirProdutosDoPrumo(d.excluidos || [], false); showMessage(`${a || 0} preço(s) atualizado(s) e ${x || 0} produto(s) excluído(s) do Prumo. ✅`, 'success'); } catch (err) { showMessage('As alterações foram feitas neste aparelho, mas não consegui sincronizar tudo na nuvem. Tente novamente com internet estável.', 'error'); } })(); }
                 } catch (e) {}
                 return () => { window.removeEventListener('prumo:abrir-conferencia-precos', abrir); window.removeEventListener('prumo:salvar-precos-conferidos', salvar); window.removeEventListener('message', receber); };
             }, []);
@@ -13324,8 +13369,8 @@
             }
             // 💲 Preços conferidos num pedido temporário do SPAmov. O App aplica somente os códigos
             // devolvidos pela extensão e marca a conferência como válida apenas no dia atual.
-            if (d && d.source === 'friganso-ext' && d.type === 'PRECOS_CONFERIDOS_PENDENTE' && d.itens) {
-                try { window.sessionStorage.setItem('friganso_precos_conferidos_json', JSON.stringify({ itens: d.itens, cliente: d.cliente || '' })); } catch (err) {}
+            if (d && d.source === 'friganso-ext' && d.type === 'PRECOS_CONFERIDOS_PENDENTE' && (d.itens || d.excluidos)) {
+                try { window.sessionStorage.setItem('friganso_precos_conferidos_json', JSON.stringify({ itens: d.itens || [], excluidos: d.excluidos || [], cliente: d.cliente || '' })); } catch (err) {}
             }
         });
 

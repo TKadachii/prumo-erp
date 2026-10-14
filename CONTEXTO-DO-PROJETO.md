@@ -654,6 +654,13 @@ linha (verificado reintroduzindo o bug de propósito).
 - Os valores retornam por `friganso_precos_conferidos_pendente` e são gravados em `system_data/precos_conferidos`.
 - A confirmação fica marcada em `precoConfirmadoDia`; um item inativo é tratado como confiável somente naquele dia. No dia seguinte, a proteção volta automaticamente se o produto continuar fora da tabela.
 
+### Produto ausente no SPAmov (v2.39.1)
+
+- Se a conferência não encontrar um código, a extensão abre uma decisão por item: **Atualizar manualmente** ou **Produto não existe mais**.
+- O preço manual entra junto dos preços lidos automaticamente. Um produto encerrado é enviado em `excluidos` e gravado em `system_data/produtos_excluidos`.
+- A lista de exclusões funciona como bloqueio permanente: o item é removido do catálogo local, não volta numa sincronização posterior e não aparece em ofertas, pesquisas ou em “Tudo que já comprou”.
+- Compras e pedidos antigos não são apagados; continuam preservados como histórico comercial.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

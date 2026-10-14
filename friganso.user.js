@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
-// @version      2026.10.14.1347
+// @version      2026.10.14.1406
 // @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
 // @author       Prumo
 // @match        https://tkadachii.github.io/*
@@ -102,10 +102,10 @@
         try {
             chrome.storage.local.get(["friganso_precos_conferidos_pendente"], function (r) {
                 const pend = r && r.friganso_precos_conferidos_pendente;
-                if (!pend || !pend.itens || !pend.itens.length) return;
+                if (!pend || ((!pend.itens || !pend.itens.length) && (!pend.excluidos || !pend.excluidos.length))) return;
                 if (Date.now() - (pend.ts || 0) > 60 * 60 * 1000) { chrome.storage.local.remove("friganso_precos_conferidos_pendente"); return; }
                 chrome.storage.local.remove("friganso_precos_conferidos_pendente");
-                try { window.postMessage({ source: "friganso-ext", type: "PRECOS_CONFERIDOS_PENDENTE", itens: pend.itens, cliente: pend.cliente || "" }, "*"); } catch (e) {}
+                try { window.postMessage({ source: "friganso-ext", type: "PRECOS_CONFERIDOS_PENDENTE", itens: pend.itens || [], excluidos: pend.excluidos || [], cliente: pend.cliente || "" }, "*"); } catch (e) {}
             });
         } catch (e) {}
         window.addEventListener("message", function (e) {
@@ -2317,20 +2317,51 @@
             if (!achado || valor <= 0) faltando.push(String(it.code));
             else precos.push({ code: String(it.code), name: (achado.nome || it.nome || ""), valorUnit: valor });
         });
-        if (faltando.length) {
-            alert("Ainda não consegui ler o preço de " + faltando.length + " item(ns):\n\n" + faltando.join(", ") + "\n\nConfira se todos aparecem no pedido e tente novamente.");
-            return;
-        }
-        const entregar = function () {
-            try { chrome.storage.local.remove("friganso_conferencia_ativa"); } catch (e) {}
-            const url = APP_URL + "?precosConferidos=pendente";
-            const ehCelular = (navigator.maxTouchPoints || 0) > 0;
-            if (ehCelular) { try { (window.top || window).location.href = url; } catch (e) { window.location.href = url; } return; }
-            try { const w = (window.top || window).open(url, "friganso_erp_app"); if (w && w.focus) w.focus(); } catch (e) { window.open(url, "friganso_erp_app"); }
+        const salvarResultado = function (itensFinais, excluidos) {
+            const entregar = function () {
+                try { chrome.storage.local.remove("friganso_conferencia_ativa"); } catch (e) {}
+                const url = APP_URL + "?precosConferidos=pendente";
+                const ehCelular = (navigator.maxTouchPoints || 0) > 0;
+                if (ehCelular) { try { (window.top || window).location.href = url; } catch (e) { window.location.href = url; } return; }
+                try { const w = (window.top || window).open(url, "friganso_erp_app"); if (w && w.focus) w.focus(); } catch (e) { window.open(url, "friganso_erp_app"); }
+            };
+            try {
+                chrome.storage.local.set({ friganso_precos_conferidos_pendente: { itens: itensFinais, excluidos: excluidos || [], cliente: conf.cliente || dados.cliente || "", ts: Date.now() } }, entregar);
+            } catch (e) { alert("Não consegui guardar as alterações para enviar ao Prumo. Recarregue a extensão e tente de novo."); }
         };
-        try {
-            chrome.storage.local.set({ friganso_precos_conferidos_pendente: { itens: precos, cliente: conf.cliente || dados.cliente || "", ts: Date.now() } }, entregar);
-        } catch (e) { alert("Não consegui guardar os preços para enviar ao Prumo. Recarregue a extensão e tente de novo."); }
+        if (faltando.length) { mostrarDecisaoItensAusentes(conf, faltando, precos, salvarResultado); return; }
+        salvarResultado(precos, []);
+    }
+    function mostrarDecisaoItensAusentes(conf, codigos, precosLidos, concluir) {
+        const antigo = document.getElementById("friganso-ausentes-modal"); if (antigo) antigo.remove();
+        const alvo = new Map((((conf || {}).pedido || {}).itens || []).map(function (it) { return [String(it.code), it]; }));
+        const escolhas = {};
+        const ov = document.createElement("div"); ov.id = "friganso-ausentes-modal";
+        Object.assign(ov.style, { position: "fixed", inset: "0", zIndex: "2147483647", background: "rgba(2,6,23,.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: "14px", fontFamily: "system-ui,sans-serif" });
+        const box = document.createElement("div"); Object.assign(box.style, { width: "620px", maxWidth: "96vw", maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column", borderRadius: "20px", border: "1px solid rgba(251,191,36,.35)", background: "#0b0d17", color: "#e5e7eb", boxShadow: "0 24px 80px rgba(0,0,0,.65)" });
+        const topo = document.createElement("div"); topo.innerHTML = '<div style="font-size:18px;font-weight:900;color:#fef3c7">⚠️ ' + codigos.length + ' produto(s) não apareceram no SPAmov</div><div style="font-size:13px;color:#9ca3af;margin-top:6px;line-height:1.45">Decida o que fazer com cada item. Excluir remove o produto das ofertas e seleções do Prumo em todos os aparelhos. Atualizar mantém o produto com o preço informado.</div>'; Object.assign(topo.style, { padding: "18px", borderBottom: "1px solid #252938" }); box.appendChild(topo);
+        const lista = document.createElement("div"); Object.assign(lista.style, { padding: "12px", overflowY: "auto", display: "grid", gap: "10px", background: "#080a12" });
+        codigos.forEach(function (code) {
+            const item = alvo.get(String(code)) || { code: code, nome: "Produto " + code }; escolhas[code] = { acao: "manual", valor: "" };
+            const card = document.createElement("div"); Object.assign(card.style, { border: "1px solid #252938", borderRadius: "14px", padding: "13px", background: "#111420" });
+            const nome = document.createElement("div"); nome.textContent = code + "  ·  " + (item.nome || item.name || "Produto sem nome"); Object.assign(nome.style, { fontWeight: "800", fontSize: "13px", marginBottom: "10px", color: "#f3f4f6" }); card.appendChild(nome);
+            const linha = document.createElement("div"); Object.assign(linha.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
+            const manual = document.createElement("button"); manual.type = "button"; manual.textContent = "✏️ Atualizar manualmente";
+            const excluir = document.createElement("button"); excluir.type = "button"; excluir.textContent = "🗑️ Produto não existe mais";
+            const inputWrap = document.createElement("label"); inputWrap.innerHTML = '<span style="font-size:11px;color:#94a3b8">Preço à vista R$</span>'; Object.assign(inputWrap.style, { marginTop: "9px", border: "1px solid #22d3ee", borderRadius: "10px", padding: "7px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", background: "#07131a" });
+            const input = document.createElement("input"); input.type = "text"; input.inputMode = "decimal"; input.placeholder = "0,00"; Object.assign(input.style, { width: "100px", background: "transparent", border: "0", outline: "0", color: "#a5f3fc", fontWeight: "900", textAlign: "right", fontSize: "15px" }); inputWrap.appendChild(input);
+            function pintar() { const m = escolhas[code].acao === "manual"; Object.assign(manual.style, { padding: "9px", borderRadius: "9px", border: m ? "1px solid #22d3ee" : "1px solid #334155", background: m ? "rgba(6,182,212,.14)" : "#0f172a", color: m ? "#a5f3fc" : "#94a3b8", fontWeight: "800", cursor: "pointer" }); Object.assign(excluir.style, { padding: "9px", borderRadius: "9px", border: !m ? "1px solid #fb7185" : "1px solid #334155", background: !m ? "rgba(225,29,72,.14)" : "#0f172a", color: !m ? "#fecdd3" : "#94a3b8", fontWeight: "800", cursor: "pointer" }); inputWrap.style.display = m ? "flex" : "none"; }
+            manual.onclick = function () { escolhas[code].acao = "manual"; pintar(); input.focus(); };
+            excluir.onclick = function () { escolhas[code].acao = "excluir"; pintar(); };
+            input.oninput = function () { escolhas[code].valor = input.value; };
+            linha.append(manual, excluir); card.append(linha, inputWrap); lista.appendChild(card); pintar();
+        });
+        box.appendChild(lista);
+        const rodape = document.createElement("div"); Object.assign(rodape.style, { padding: "14px", borderTop: "1px solid #252938", display: "flex", gap: "9px" });
+        const voltar = document.createElement("button"); voltar.textContent = "Voltar ao pedido"; Object.assign(voltar.style, { flex: "1", padding: "11px", borderRadius: "10px", border: "1px solid #334155", background: "#0f172a", color: "#cbd5e1", fontWeight: "800", cursor: "pointer" }); voltar.onclick = function () { ov.remove(); };
+        const aplicar = document.createElement("button"); aplicar.textContent = "Aplicar decisões no Prumo"; Object.assign(aplicar.style, { flex: "1.4", padding: "11px", borderRadius: "10px", border: "0", background: "linear-gradient(135deg,#0891b2,#22d3ee)", color: "#02131a", fontWeight: "900", cursor: "pointer" });
+        aplicar.onclick = function () { const manuais = [], excluidos = []; for (const code of codigos) { const e = escolhas[code], item = alvo.get(String(code)) || {}; if (e.acao === "excluir") excluidos.push(String(code)); else { const valor = Number(String(e.valor || "").replace(",", ".")); if (!(valor > 0)) { alert("Informe o preço à vista do item " + code + " ou marque que ele não existe mais."); return; } manuais.push({ code: String(code), name: item.nome || item.name || "", originalPrice: valor }); } } ov.remove(); concluir(precosLidos.concat(manuais), excluidos); };
+        rodape.append(voltar, aplicar); box.appendChild(rodape); ov.appendChild(box); document.body.appendChild(ov);
     }
     function mostrarBotaoConferenciaPrecos() {
         if (!ehFramePrincipal() || !document.body) return;
