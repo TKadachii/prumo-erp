@@ -639,6 +639,13 @@ linha (verificado reintroduzindo o bug de propósito).
 - No Resumo, item fora da tabela usa o preço lido do pedido atual (`precoFallback`/SPAmov); sem preço atual, o texto também informa preço sob consulta.
 - O gerador de Catálogo remove itens inativos antes de criar a arte e avisa quantos foram retirados.
 
+## 🛑 Confirmação preventiva e auditoria da carteira (2026-10-14, v2.38.0)
+
+- Antes de copiar/faturar no **Resumo** ou na **Fila de Pedidos**, o Prumo lista os itens fora da tabela e exige confirmação explícita.
+- A mesma confirmação protege **Criar ofertas**, a mensagem do **Novo pedido** e a vitrine da **Prospecção**. O modal oferece acesso direto ao site do vendedor para consulta.
+- Em **Campanhas WhatsApp**, `auditoriaPrecos` cruza os clientes selecionados com seus históricos e conta quantos costumam comprar cada produto inativo.
+- O painel da campanha mostra esses códigos antes do envio. As recomendações automáticas continuam excluindo-os; a confirmação permite seguir apenas com a campanha já protegida.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

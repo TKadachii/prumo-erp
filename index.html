@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 230;
+        const APP_BUILD_VERSION = 231;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -714,6 +714,38 @@
                 <b>⚠️ Atenção: {fora.length} item(ns) fora da tabela de hoje.</b> O último preço pode estar errado. Na mensagem para o cliente, o valor será trocado por <b>“Preço sob consulta”</b>.
             </div>;
         };
+        const mapearItensForaTabela = (itens, products) => {
+            const mapa = new Map((products || []).map(p => [String(p.code), p]));
+            const unicos = new Map();
+            (itens || []).forEach(it => {
+                const code = String(it.code || '');
+                if (!code || unicos.has(code)) return;
+                const p = mapa.get(code);
+                if (!p || produtoForaTabelaHoje(p)) unicos.set(code, { code, name: (p && p.name) || it.name || it.nome || ('Produto ' + code), clientes: Number(it.clientes) || 0 });
+            });
+            return Array.from(unicos.values());
+        };
+        const ModalConfirmarPrecos = ({ itens, titulo, descricao, onCancelar, onConfirmar, confirmarLabel }) => (
+            <div className="fixed inset-0 z-[1300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-3">
+                <div className="w-full max-w-xl max-h-[92vh] overflow-hidden rounded-3xl border border-amber-400/30 bg-[#0b0d17] text-slate-100 shadow-2xl flex flex-col">
+                    <div className="p-5 border-b border-amber-400/20 bg-amber-950/25">
+                        <div className="flex items-start gap-3"><span className="text-3xl">⚠️</span><div><h3 className="text-lg font-black text-amber-100">{titulo || 'Preço precisa ser conferido'}</h3><p className="text-sm text-amber-100/80 mt-1">{descricao || 'Estes produtos não estavam na tabela de hoje e podem estar com o último preço desatualizado.'}</p></div></div>
+                    </div>
+                    <div className="p-4 overflow-y-auto space-y-2 bg-[#080a12]">
+                        {(itens || []).map(it => <div key={it.code} className="rounded-xl border border-slate-800 bg-[#111420] p-3 flex items-center gap-3">
+                            <span className="font-mono text-xs font-black text-amber-300 bg-amber-500/10 border border-amber-400/20 rounded-lg px-2 py-1">{it.code}</span>
+                            <span className="text-sm font-bold text-slate-200 flex-1 min-w-0">{it.name}</span>
+                            {it.clientes > 0 && <span className="text-[10px] font-black text-amber-200 bg-amber-500/10 rounded-full px-2 py-1">{it.clientes} cliente(s)</span>}
+                        </div>)}
+                    </div>
+                    <div className="p-4 border-t border-slate-800 bg-[#0b0d17] space-y-3">
+                        <p className="text-xs text-slate-400">Confira o valor no site do vendedor antes de copiar ou enviar. O Prumo nunca colocará o preço antigo silenciosamente.</p>
+                        <a href="http://spd1.friganso.com.br/rdm-business/" target="_blank" rel="noreferrer" className="block w-full text-center rounded-xl border border-cyan-400/25 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 font-bold py-2.5 text-sm">🌐 Abrir site do vendedor para conferir</a>
+                        <div className="flex gap-2"><button onClick={onCancelar} className="flex-1 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold py-3">Voltar e corrigir</button><button onClick={onConfirmar} className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-black py-3">{confirmarLabel || 'Já conferi, continuar'}</button></div>
+                    </div>
+                </div>
+            </div>
+        );
         // 📲 Bloco de um produto pro texto do WhatsApp (Gerador de Zap e Disparos). Dois estilos:
         // "novo" (padrão) — linha única de preço + Cartão/Parcelado combinados quando existir esse dado;
         // "antigo" — o formato de sempre, "(Com 3% de Desconto)" por extenso, sem Cartão/Parcelado.
@@ -4102,9 +4134,14 @@
             // ✋ Conferência obrigatória antes de mandar o pedido (liga/desliga nas Configurações)
             const [conferenciaAtiva] = useState(lerConferenciaAtiva);
             const [mostrarConferencia, setMostrarConferencia] = useState(false);
+            const [avisoPrecos, setAvisoPrecos] = useState(null);
             // Todo o fluxo de "Copiar Resumo" vive aqui pra poder ser chamado de dois lugares:
             // direto (trava desligada) ou depois da conferência (trava ligada).
-            const executarCopiaResumo = (prova) => {
+            const executarCopiaResumo = (prova, precosConfirmados) => {
+                if (!precosConfirmados) {
+                    const fora = mapearItensForaTabela((orderSummary && orderSummary.items) || [], products);
+                    if (fora.length) { setAvisoPrecos({ itens: fora, prova: prova || null }); return; }
+                }
                 // ⚠️ Se a condição atual for diferente da ÚLTIMA compra desse cliente, confirma antes.
                 if (condicaoAtual && condicaoHistorico && condicaoHistorico.ultimaCondicaoRaw) {
                     const catAtual = normalizarCondicaoPagamento(condicaoAtual);
@@ -4510,6 +4547,13 @@
 
             return (
                 <div className="animate-in fade-in space-y-6">
+                    {avisoPrecos && <ModalConfirmarPrecos
+                        itens={avisoPrecos.itens}
+                        titulo="Confira o preço antes de copiar e faturar"
+                        descricao="Estes itens não estão na tabela de hoje. Confirme o preço no site do vendedor antes de o resumo ser copiado e a venda entrar no Prumo."
+                        onCancelar={() => setAvisoPrecos(null)}
+                        onConfirmar={() => { const prova = avisoPrecos.prova; setAvisoPrecos(null); executarCopiaResumo(prova, true); }}
+                    />}
                     {/* ✋ Conferência obrigatória — só aparece com a trava ligada nas Configurações */}
                     {mostrarConferencia && (
                         <ConferenciaPedidoModal
@@ -4914,6 +4958,7 @@
             const [configBusca, setConfigBusca] = useState('');
             const [configCodes, setConfigCodes] = useState(new Set());
             const [salvandoPerfil, setSalvandoPerfil] = useState(false);
+            const [avisoPrecosOferta, setAvisoPrecosOferta] = useState(null);
 
             useEffect(() => { try { window.localStorage.setItem(ESTILO_ZAP_KEY, estiloZap); } catch (e) {} }, [estiloZap]);
             useEffect(() => {
@@ -5032,9 +5077,22 @@
                 const blocos = produtosSelecionados.map(p => montarBlocoProdutoZap(p).trim());
                 return titulo + intro + '\n\n' + blocos.join(`\n${SEPARADOR_ZAP}\n`);
             };
+            const copiarOferta = (precosConfirmados) => {
+                const fora = produtosSelecionados.filter(produtoForaTabelaHoje);
+                if (!precosConfirmados && fora.length) { setAvisoPrecosOferta(fora); return; }
+                navigator.clipboard.writeText(generateText()); showMessage('Oferta copiada para o WhatsApp!', 'success');
+            };
 
             return (
                 <div className="animate-in fade-in space-y-6">
+                    {avisoPrecosOferta && <ModalConfirmarPrecos
+                        itens={avisoPrecosOferta}
+                        titulo="Oferta com item fora da tabela"
+                        descricao="O preço antigo não será copiado: estes itens sairão como “Preço sob consulta”. Confira no site do vendedor antes de prometer o valor ao cliente."
+                        onCancelar={() => setAvisoPrecosOferta(null)}
+                        onConfirmar={() => { setAvisoPrecosOferta(null); copiarOferta(true); }}
+                        confirmarLabel="Continuar com preço sob consulta"
+                    />}
                     {configPerfil && (
                         <div className="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => setConfigPerfil(null)}>
                             <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -5113,7 +5171,7 @@
                             <div className="lg:col-span-7 bg-[#0b0d17] rounded-3xl border border-slate-800 flex flex-col h-[650px] overflow-hidden">
                                 <div className="p-4 border-b border-slate-800 bg-[#10131f] flex flex-wrap justify-between items-center gap-2 font-bold text-slate-200">
                                     <span className="flex items-center gap-2"><div className="h-5 w-5 text-emerald-600"><IconWhatsApp/></div> Prévia do WhatsApp · {produtosSelecionados.length} itens</span>
-                                    <button disabled={!produtosSelecionados.length} onClick={() => { navigator.clipboard.writeText(generateText()); showMessage('Oferta copiada para o WhatsApp!', 'success'); }} className="bg-rose-700 hover:bg-rose-800 disabled:opacity-40 transition-colors text-white px-5 py-2.5 rounded-xl text-sm shadow-md">Copiar oferta</button>
+                                    <button disabled={!produtosSelecionados.length} onClick={() => copiarOferta(false)} className="bg-rose-700 hover:bg-rose-800 disabled:opacity-40 transition-colors text-white px-5 py-2.5 rounded-xl text-sm shadow-md">Copiar oferta</button>
                                 </div>
                                 <div className="px-4 pt-3"><AlertaProdutosForaTabela produtos={produtosSelecionados} /></div>
                                 <div className="prumo-message-stage p-4 sm:p-6 flex-1 overflow-y-auto">
@@ -5654,6 +5712,7 @@
         const ConsultaCnpjScreen = ({ showMessage }) => {
             const [cnpj, setCnpj] = useState('');
             const [buscando, setBuscando] = useState(false);
+            const [avisoPrecosFila, setAvisoPrecosFila] = useState(null);
             const [resultado, setResultado] = useState(null);
             const [erro, setErro] = useState(null);
             const [lendoPdf, setLendoPdf] = useState(false);
@@ -6468,6 +6527,7 @@
             useEffect(() => { try { window.localStorage.setItem('friganso_leads_template', template); } catch (e) {} }, [template]);
             const [incluirOfertas, setIncluirOfertas] = useState(false);
             const [produtosVitrine, setProdutosVitrine] = useState(new Set());
+            const [avisoPrecosLeads, setAvisoPrecosLeads] = useState(null);
             const [buscaProd, setBuscaProd] = useState('');
             const [estiloZap, setEstiloZap] = useState(getEstiloZapSalvo());
             useEffect(() => { try { window.localStorage.setItem(ESTILO_ZAP_KEY, estiloZap); } catch (e) {} }, [estiloZap]);
@@ -6762,8 +6822,11 @@
                 } catch (e) { console.error(e); }
             };
 
-            const iniciar = () => {
+            const produtosVitrineFora = () => incluirOfertas ? (products || []).filter(p => produtosVitrine.has(String(p.code)) && produtoForaTabelaHoje(p)) : [];
+            const iniciar = (precosConfirmados) => {
                 if (!alvos.length) { showMessage('Selecione ao menos 1 lead.', 'error'); return; }
+                const fora = produtosVitrineFora();
+                if (!precosConfirmados && fora.length) { setAvisoPrecosLeads({ acao: 'iniciar', itens: fora }); return; }
                 // 📱 APP ANDROID: balão flutuante — MESMO plugin nativo dos Disparos e da Fila, então
                 // funciona no APK que já está instalado, sem precisar de app novo.
                 const ZB = (isCapacitor && window.Capacitor && window.Capacitor.Plugins) ? window.Capacitor.Plugins.ZapBolha : null;
@@ -6777,6 +6840,14 @@
                     return;
                 }
                 setIdx(0); setEmCampanha(true);
+            };
+            const enviarLeadsPelaExtensao = (precosConfirmados) => {
+                const fora = produtosVitrineFora();
+                if (!precosConfirmados && fora.length) { setAvisoPrecosLeads({ acao: 'extensao', itens: fora }); return; }
+                dispararPelaExtensao(
+                    alvos.map(l => ({ telefone: waNum(l.telefone), nome: l.nomeFantasia || l.razaoSocial || '', mensagem: personalizarLead(l) })),
+                    Math.max(2, respiro), showMessage, () => marcarAbordados(alvos.map(l => l.id))
+                );
             };
 
             const atual = alvos[idx];
@@ -6852,6 +6923,14 @@
             // ═══════════════════ TELA PRINCIPAL ═══════════════════
             return (
                 <div className="animate-in fade-in space-y-6">
+                    {avisoPrecosLeads && <ModalConfirmarPrecos
+                        itens={avisoPrecosLeads.itens}
+                        titulo="Vitrine com preço fora da tabela"
+                        descricao="Esses produtos serão enviados como “Preço sob consulta”. Confira o valor no site do vendedor antes de continuar a abordagem."
+                        onCancelar={() => setAvisoPrecosLeads(null)}
+                        onConfirmar={() => { const acao = avisoPrecosLeads.acao; setAvisoPrecosLeads(null); acao === 'extensao' ? enviarLeadsPelaExtensao(true) : iniciar(true); }}
+                        confirmarLabel="Continuar com preço sob consulta"
+                    />}
                     <header className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
                         <h1 className="text-2xl font-bold text-rose-800 flex items-center gap-2">🎯 Prospecção em Massa</h1>
                         <p className="text-slate-500 text-sm mt-1">Importa uma lista de empresas (dados públicos da Receita Federal), filtra quem interessa e aborda todo mundo pelo WhatsApp — sem repetir quem já é seu cliente.</p>
@@ -6993,14 +7072,11 @@
 
                         {/* 🤖 No navegador, a EXTENSÃO dispara sozinho — mesmo motor dos Disparos */}
                         {!isElectron && !isCapacitor && (
-                            <button onClick={() => dispararPelaExtensao(
-                                alvos.map(l => ({ telefone: waNum(l.telefone), nome: l.nomeFantasia || l.razaoSocial || '', mensagem: personalizarLead(l) })),
-                                Math.max(2, respiro), showMessage, () => marcarAbordados(alvos.map(l => l.id))
-                            )} disabled={!selecionados.size} className="w-full mt-4 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-colors">
+                            <button onClick={() => enviarLeadsPelaExtensao(false)} disabled={!selecionados.size} className="w-full mt-4 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-colors">
                                 🤖 Enviar todos sozinho pela extensão ({selecionados.size})
                             </button>
                         )}
-                        <button onClick={iniciar} disabled={!selecionados.size} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-colors">
+                        <button onClick={() => iniciar(false)} disabled={!selecionados.size} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-colors">
                             <div className="h-5 w-5"><IconWhatsApp /></div>
                             {isCapacitor ? `🎈 Abrir balão com ${selecionados.size} lead(s)` : `Abordar ${selecionados.size} lead(s)`}
                         </button>
@@ -8240,6 +8316,13 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.38.0', data: '14/10/2026', areas: ['site', 'app'], itens: [
+                '🛑 Resumo e Fila de Pedidos agora interrompem a cópia antes de faturar quando há item fora da tabela do dia',
+                '🔎 A confirmação lista código e produto, abre o site do vendedor e exige uma decisão consciente antes de continuar',
+                '📣 Criar ofertas, Novo pedido e vitrines de prospecção receberam a mesma confirmação preventiva',
+                '👥 Campanhas cruzam os clientes selecionados com os itens inativos e mostram quantos clientes costumam comprar cada produto',
+                '🛡️ Produtos sem preço atual continuam excluídos das recomendações automáticas e nunca recuperam silenciosamente o valor antigo',
+            ]},
             { versao: '2.37.0', data: '13/10/2026', areas: ['site', 'app'], itens: [
                 '⚠️ Produtos fora da tabela do dia agora são identificados em Criar ofertas, Novo pedido, campanhas e vitrines de prospecção',
                 '🛡️ Mensagens para clientes não enviam mais o preço antigo desses itens: o valor vira “Preço sob consulta”',
@@ -9945,9 +10028,13 @@
             };
             // Copiar aqui faz exatamente o que o "Copiar Resumo" fazia: copia E grava na ficha do
             // cliente. Sem isso a venda deixaria de entrar no histórico e o Radar/Painel ficariam cegos.
-            const copiarEConfirmar = (i) => {
+            const copiarEConfirmar = (i, precosConfirmados) => {
                 const f = fila[i];
                 if (!f) return;
+                if (!precosConfirmados) {
+                    const fora = mapearItensForaTabela((f.pedido && f.pedido.itens) || [], products);
+                    if (fora.length) { setAvisoPrecosFila({ tipo: 'copiar', indice: i, itens: fora }); return; }
+                }
                 const txt = textoDe(f);
                 navigator.clipboard.writeText(txt);
                 try {
@@ -9972,9 +10059,13 @@
             // 💬 No PC não existe balão: abre o WhatsApp direto, já com o texto do pedido, respeitando
             // a preferência de aplicativo x navegador. Copia junto porque o WhatsApp Web às vezes
             // ignora o ?text= quando a conversa ainda não estava aberta — assim é só colar.
-            const abrirNoZap = (f) => {
+            const abrirNoZap = (f, precosConfirmados) => {
                 const tel = waNum(zap);
                 if (!tel) { showMessage('Preencha o número do WhatsApp lá embaixo primeiro.', 'error'); return; }
+                if (!precosConfirmados) {
+                    const fora = mapearItensForaTabela((f.pedido && f.pedido.itens) || [], products);
+                    if (fora.length) { setAvisoPrecosFila({ tipo: 'zap', pedidoFila: f, itens: fora }); return; }
+                }
                 const txt = f.texto || textoDe(f);
                 try { navigator.clipboard.writeText(txt); } catch (e) {}
                 window.open(zapUrl(tel, txt), '_blank');
@@ -9982,6 +10073,13 @@
 
             return (
                 <div className="animate-in fade-in space-y-6">
+                    {avisoPrecosFila && <ModalConfirmarPrecos
+                        itens={avisoPrecosFila.itens}
+                        titulo="Pedido com preço fora da tabela de hoje"
+                        descricao="Confira estes valores no site do vendedor antes de copiar, marcar como faturado ou abrir no WhatsApp."
+                        onCancelar={() => setAvisoPrecosFila(null)}
+                        onConfirmar={() => { const a = avisoPrecosFila; setAvisoPrecosFila(null); a.tipo === 'copiar' ? copiarEConfirmar(a.indice, true) : abrirNoZap(a.pedidoFila, true); }}
+                    />}
                     <div>
                         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><span>📋</span> Fila de Pedidos</h2>
                         <p className="text-slate-500 text-sm">Toque no pedido, confira o resumo ao lado e copie. A fila zera todo dia às 19h.</p>
@@ -10058,6 +10156,7 @@
                                                     </p>
                                                     {fila[selecionado].feito && <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full flex-shrink-0">já copiado</span>}
                                                 </div>
+                                                 {mapearItensForaTabela((fila[selecionado].pedido && fila[selecionado].pedido.itens) || [], products).length > 0 && <div className="mb-3 rounded-xl border border-amber-400/30 bg-[#2a200d] px-3 py-2 text-xs text-amber-100"><b>⚠️ Preço a conferir:</b> este pedido tem item fora da tabela de hoje. A confirmação será obrigatória antes de copiar.</div>}
                                                 {/* 🎚️ Desconto (0–3%) e preço de cada item, direto na fila */}
                                                 <div className="prumo-fila-itens">
                                                     <div className="pfi-topo">
@@ -10677,6 +10776,7 @@
             const [busca, setBusca] = useState('');
             const [itens, setItens] = useState(Array.isArray(rascunhoInicial.itens) ? rascunhoInicial.itens : []); // {code, name, qty}
             const [enviado, setEnviado] = useState(false);
+            const [avisoPrecosPedido, setAvisoPrecosPedido] = useState(null);
             const [historico, setHistorico] = useState(() => {
                 try { const raw = window.localStorage.getItem('friganso_pedidos_hist'); const arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr : []; } catch (e) { return []; }
             });
@@ -10903,9 +11003,11 @@
                 if (estiloZapPedido === 'antigo') return header + blocos.join('\n\n');
                 return header + blocos.join(`\n${SEPARADOR_ZAP}\n`);
             };
-            const copiarZapPedido = () => {
+            const copiarZapPedido = (precosConfirmados) => {
                 const txt = gerarZapPedido();
                 if (!txt) { showMessage('Adicione itens ao pedido primeiro.', 'error'); return; }
+                const fora = mapearItensForaTabela(itens.filter(i => Number(i.qty) > 0), products);
+                if (!precosConfirmados && fora.length) { setAvisoPrecosPedido(fora); return; }
                 navigator.clipboard.writeText(txt);
                 showMessage('Mensagem do pedido copiada pro Zap! 📲', 'success');
             };
@@ -10913,6 +11015,14 @@
 
             return (
                 <div className="animate-in fade-in max-w-5xl mx-auto">
+                    {avisoPrecosPedido && <ModalConfirmarPrecos
+                        itens={avisoPrecosPedido}
+                        titulo="Confira estes preços antes de mandar ao cliente"
+                        descricao="Os itens abaixo não estão na tabela de hoje. A mensagem usará “Preço sob consulta” até você confirmar o valor no site do vendedor."
+                        onCancelar={() => setAvisoPrecosPedido(null)}
+                        onConfirmar={() => { setAvisoPrecosPedido(null); copiarZapPedido(true); }}
+                        confirmarLabel="Continuar com preço sob consulta"
+                    />}
                     <div className="mb-4">
                         <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2"><span>🛒</span> Fazer Pedido</h2>
                         <p className="text-slate-500 text-xs sm:text-sm">Monte o pedido aqui e a extensão lança no SPAmov pra você.</p>
@@ -11213,6 +11323,7 @@
             const [buscaProd, setBuscaProd] = useState('');
             const [selecionados, setSelecionados] = useState(new Set());
             const [emCampanha, setEmCampanha] = useState(false);
+            const [avisoAuditoriaCampanha, setAvisoAuditoriaCampanha] = useState(false);
             const zapWvRef = useRef(null);      // webview do WhatsApp embutido (só Electron)
             const [enviando, setEnviando] = useState(false);
             const UA_CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
@@ -11390,9 +11501,18 @@
             const alvos = clients.filter(c => selecionados.has(c.id));
             const comTelefone = alvos.filter(c => waNumber(c.phone));
             const semTelefone = alvos.filter(c => !waNumber(c.phone));
+            const auditoriaPrecos = useMemo(() => {
+                const clientesSelecionados = clients.filter(c => selecionados.has(c.id));
+                return products.filter(produtoForaTabelaHoje).map(p => {
+                    const code = String(p.code);
+                    const clientes = clientesSelecionados.filter(c => (c.history || []).some(h => String(h) === code)).length;
+                    return { code, name: p.name, clientes };
+                }).filter(it => it.clientes > 0 || produtosAlvo.has(it.code)).sort((a, b) => b.clientes - a.clientes || a.name.localeCompare(b.name, 'pt-BR'));
+            }, [products, clients, selecionados, produtosAlvo]);
 
-            const iniciar = () => {
+            const iniciar = (precosConfirmados) => {
                 if (comTelefone.length === 0) { showMessage('Selecione ao menos 1 cliente com telefone cadastrado.', 'error'); return; }
+                if (!precosConfirmados && auditoriaPrecos.length) { setAvisoAuditoriaCampanha(true); return; }
                 // 📱 APP ANDROID: usa o balão flutuante (overlay) — você toca e ele abre cada cliente no WhatsApp
                 const ZB = (isCapacitor && window.Capacitor && window.Capacitor.Plugins) ? window.Capacitor.Plugins.ZapBolha : null;
                 if (ZB && ZB.iniciar) {
@@ -11538,6 +11658,14 @@
             // ===== MODO CONFIGURAÇÃO =====
             return (
                 <div className="animate-in fade-in space-y-6">
+                    {avisoAuditoriaCampanha && <ModalConfirmarPrecos
+                        itens={auditoriaPrecos}
+                        titulo="Carteira com preços que precisam de atualização"
+                        descricao="Os números mostram quantos clientes selecionados costumam comprar cada item fora da tabela. Esses produtos já foram retirados das ofertas automáticas; atualize-os no site do vendedor antes de voltar a oferecê-los."
+                        onCancelar={() => setAvisoAuditoriaCampanha(false)}
+                        onConfirmar={() => { setAvisoAuditoriaCampanha(false); iniciar(true); }}
+                        confirmarLabel="Continuar campanha protegida"
+                    />}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><div className="h-6 w-6 text-emerald-600"><IconWhatsApp/></div> Disparos WhatsApp</h2>
@@ -11722,13 +11850,20 @@
                         </div>
                     </div>
 
+                    {auditoriaPrecos.length > 0 && <div className="rounded-3xl border border-amber-400/30 bg-[#171207] p-5 text-amber-100">
+                        <h3 className="font-black">⚠️ Preços para atualizar antes da próxima oferta</h3>
+                        <p className="text-xs text-amber-100/70 mt-1">Entre os clientes selecionados, estes itens aparecem no histórico, mas estão fora da tabela de hoje. Eles não entram automaticamente na campanha.</p>
+                        <div className="mt-3 flex flex-wrap gap-2">{auditoriaPrecos.slice(0, 12).map(it => <span key={it.code} className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold"><span className="font-mono">{it.code}</span> · {it.clientes} cliente(s)</span>)}</div>
+                        {auditoriaPrecos.length > 12 && <p className="text-[11px] mt-2 text-amber-200/70">+ {auditoriaPrecos.length - 12} item(ns) serão mostrados ao iniciar.</p>}
+                    </div>}
+
                     {/* Resumo + iniciar */}
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="text-sm text-slate-600">
                             <p><b className="text-emerald-700">{comTelefone.length}</b> cliente(s) prontos para receber.</p>
                             {semTelefone.length > 0 && <p className="text-amber-600 text-xs mt-1">⚠️ {semTelefone.length} selecionado(s) sem telefone serão pulados. Toque em "+ telefone" na lista para cadastrar na hora.</p>}
                         </div>
-                        <button onClick={iniciar} disabled={comTelefone.length === 0} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-3.5 px-8 rounded-2xl shadow-md transition-colors flex items-center gap-2 w-full sm:w-auto justify-center">
+                        <button onClick={() => iniciar(false)} disabled={comTelefone.length === 0} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-3.5 px-8 rounded-2xl shadow-md transition-colors flex items-center gap-2 w-full sm:w-auto justify-center">
                             <div className="h-5 w-5"><IconWhatsApp/></div> Iniciar Campanha ({comTelefone.length})
                         </button>
                     </div>
