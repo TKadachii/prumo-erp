@@ -150,7 +150,7 @@
         .tema-esmeralda .bg-rose-50, .tema-esmeralda .bg-rose-100, .tema-esmeralda .bg-rose-50\/30 { background-color: rgba(12,120,78,.32) !important; }
         .tema-esmeralda .border, .tema-esmeralda .border-slate-100, .tema-esmeralda .border-slate-200 { border-color: rgba(52,211,153,.25) !important; }
     </style>
-    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=221">
+    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=235">
 </head>
 <body class="prumo-production">
     <!-- 🎨 Tema do sistema (Claro/Escuro/Sakura/Oceano/Esmeralda). Escolha salva em friganso_tema.
@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 234;
+        const APP_BUILD_VERSION = 235;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2830,13 +2830,14 @@
             return 32;
         };
         // 🔒 Rodapé SEM dado pessoal (2026-08-13): o PDF vai pro cliente e é reencaminhado — sai só a marca.
-        const pdfRodape = (doc, L, larg, alt) => {
+        // `aviso` troca o texto do rodapé (o padrão fala de preço; relatório interno usa outro).
+        const pdfRodape = (doc, L, larg, alt, aviso) => {
             const n = doc.internal.getNumberOfPages();
             for (let i = 1; i <= n; i++) {
                 doc.setPage(i);
                 doc.setDrawColor(...L.linha); doc.setLineWidth(0.2); doc.line(10, alt - 5.5, larg - 10, alt - 5.5);
                 doc.setTextColor(...L.suave); doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5);
-                doc.text(L.rodape + '  ·  Preços sujeitos a alteração sem aviso prévio', 10, alt - 3);
+                doc.text(L.rodape + '  ·  ' + (aviso || 'Preços sujeitos a alteração sem aviso prévio'), 10, alt - 3);
                 doc.text('Página ' + i + ' de ' + n, larg - 10, alt - 3, { align: 'right' });
             }
         };
@@ -3179,6 +3180,273 @@
 
             pdfRodape(doc, L, W, H);
             return doc;
+        };
+
+        // 📊 PDF "planilha" do TOTAL VENDIDO por produto (tela Produtos vendidos): uma linha por produto,
+        // com quantidade, peso e faturamento somados de TODAS as vendas. Sem nome de cliente nenhum —
+        // é um relatório do que saiu, não de quem comprou. Mesmo visual escuro dos outros PDFs.
+        const gerarPdfProdutosVendidos = (linhas, resumo, layout) => {
+            const JsPDF = window.jspdf && window.jspdf.jsPDF;
+            if (!JsPDF) throw new Error('sem-lib');
+            const L = PDF_LAYOUTS[layout] || PDF_LAYOUTS[lerLayoutPdf()];
+            const W = 210, H = 297, FUNDO = H - 8;
+            const doc = new JsPDF({ unit: 'mm', format: 'a4' });
+            const n2 = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const n0 = (v) => (Number(v) || 0).toLocaleString('pt-BR');
+            const hoje = new Date();
+
+            // ⚠️ Larguras somam 190mm (A4 em pé com 10mm de margem). Se acrescentar coluna, refaça a conta.
+            const COLS = [
+                { t: 'CÓD.', x: 10, w: 17 }, { t: 'PRODUTO', x: 27, w: 86 },
+                { t: 'QTD', x: 113, w: 17, dir: true }, { t: 'PESO (KG)', x: 130, w: 26, dir: true },
+                { t: 'FATURAMENTO', x: 156, w: 44, dir: true },
+            ];
+            const ALTURA = 5.4;
+            let y = 0;
+            const cabecalho = () => {
+                pdfPintarPagina(doc, L, W, H, 'PRODUTOS VENDIDOS', resumo.periodoLabel + '  ·  gerado em ' + hoje.toLocaleDateString('pt-BR'));
+                doc.setFillColor(...L.thead); doc.rect(10, 29, 190, 7, 'F');
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+                COLS.forEach(c => {
+                    doc.setTextColor(...L.theadTexto);
+                    c.dir ? doc.text(c.t, c.x + c.w - 1, 33.6, { align: 'right' }) : doc.text(c.t, c.x + 1, 33.6);
+                });
+                y = 37;
+            };
+
+            cabecalho();
+            linhas.forEach((p, i) => {
+                // Nome nunca é cortado: quebra em linhas e a linha da planilha cresce junto
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+                const linhasNome = doc.splitTextToSize(String(p.name || ''), COLS[1].w - 2);
+                const altura = Math.max(ALTURA, linhasNome.length * 3.2 + 2.2);
+                if (y + altura > FUNDO - 12) { doc.addPage(); cabecalho(); } // -12 reserva espaço pro TOTAL
+                if (i % 2 === 0) { doc.setFillColor(...L.zebra); doc.rect(10, y, 190, altura, 'F'); }
+                doc.setDrawColor(...L.linha); doc.setLineWidth(0.2); doc.line(10, y + altura, 200, y + altura);
+                const vals = [String(p.code), p.name, n0(p.qty), n2(p.peso), 'R$ ' + n2(p.valor)];
+                const base = y + 3.7;
+                COLS.forEach((c, k) => {
+                    doc.setFont('helvetica', k <= 1 || k === 4 ? 'bold' : 'normal');
+                    doc.setFontSize(k === 0 ? 8 : 7.5);
+                    doc.setTextColor(...(k === 0 ? L.cod : k === 4 ? L.destaque : L.texto));
+                    if (k === 1) { doc.text(linhasNome, c.x + 1, base, { lineHeightFactor: 1.2 }); return; }
+                    c.dir ? doc.text(vals[k], c.x + c.w - 1, base, { align: 'right' }) : doc.text(vals[k], c.x + 1, base);
+                });
+                y += altura;
+            });
+
+            // Linha de TOTAL no fim da última página
+            if (y + 11 > FUNDO) { doc.addPage(); cabecalho(); }
+            y += 2;
+            doc.setFillColor(...L.thead); doc.rect(10, y, 190, 9, 'F');
+            doc.setFillColor(...L.acento); doc.rect(10, y, 1.4, 9, 'F');
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...L.titulo);
+            doc.text('TOTAL — ' + n0(linhas.length) + ' produto(s)', 14, y + 5.8);
+            doc.setTextColor(...L.texto);
+            doc.text(n0(resumo.qty), COLS[2].x + COLS[2].w - 1, y + 5.8, { align: 'right' });
+            doc.text(n2(resumo.peso), COLS[3].x + COLS[3].w - 1, y + 5.8, { align: 'right' });
+            doc.setTextColor(...L.destaque);
+            doc.text('R$ ' + n2(resumo.valor), COLS[4].x + COLS[4].w - 1, y + 5.8, { align: 'right' });
+
+            pdfRodape(doc, L, W, H, 'Relatório interno de vendas');
+            return doc;
+        };
+
+        // 📊 PRODUTOS VENDIDOS — "o que eu já vendi e quanto", sem cliente nenhum.
+        // ⚠️ Lê a coleção INTEIRA de `purchases` (sem o limit(1000) das telas normais): o ponto da tela é
+        // justamente o acumulado de tudo, e um limite silencioso daria um número menor sem avisar.
+        // ⚠️ DEVOLUÇÃO entra NEGATIVA: no banco o `valor`/`pesoTotal` do PEDIDO já vem com sinal, mas os
+        // ITENS ficam positivos de propósito (senão seriam descartados pelo filtro de peso). Então o sinal
+        // é aplicado aqui, item a item — sem isso, devolver mercadoria AUMENTARIA o total vendido.
+        const PERIODOS_VENDIDOS = [
+            { k: 'tudo', label: 'Tudo' }, { k: 'ano', label: 'Este ano' },
+            { k: '90', label: '90 dias' }, { k: 'mes', label: 'Este mês' },
+        ];
+        const ORDENS_VENDIDOS = [
+            { k: 'qty', label: 'Mais vendidos' }, { k: 'peso', label: 'Mais kg' },
+            { k: 'valor', label: 'Faturamento' }, { k: 'nome', label: 'A–Z' }, { k: 'code', label: 'Código' },
+        ];
+        const VendidosScreen = ({ showMessage }) => {
+            const [compras, setCompras] = useState(null);   // null = ainda carregando
+            const [erro, setErro] = useState(false);
+            const [periodo, setPeriodo] = useState('tudo');
+            const [ordem, setOrdem] = useState('qty');
+            const [busca, setBusca] = useState('');
+            const [layoutPdf, setLayoutPdfState] = useState(lerLayoutPdf);
+            const setLayoutPdf = (v) => { setLayoutPdfState(v); salvarLayoutPdf(v); };
+
+            const carregar = async () => {
+                setCompras(null); setErro(false);
+                try {
+                    const snap = await db.collection('purchases').get();
+                    setCompras(snap.docs.map(d => d.data()));
+                } catch (e) { setErro(true); setCompras([]); }
+            };
+            useEffect(() => { carregar(); }, []);
+
+            const corte = useMemo(() => {
+                const agora = new Date();
+                if (periodo === 'ano') return agora.getFullYear() + '-01-01';
+                if (periodo === 'mes') return diaStrGlobal(new Date(agora.getFullYear(), agora.getMonth(), 1));
+                if (periodo === '90') return diaStrGlobal(new Date(agora.getTime() - 90 * 86400000));
+                return null;
+            }, [periodo]);
+
+            // Soma por produto. O corte é pelo campo `dia` (quando a venda aconteceu), nunca pelo `ts`
+            // (que é quando foi importada) — mesma regra da Positivação.
+            const { linhas, resumo } = useMemo(() => {
+                const mapa = new Map();
+                let pedidos = 0;
+                (compras || []).forEach(p => {
+                    const dia = p.dia || (p.ts ? diaStrGlobal(new Date(p.ts)) : '');
+                    if (corte && (!dia || dia < corte)) return;
+                    pedidos++;
+                    const sinal = p.devolucao ? -1 : 1;
+                    (p.itens || []).forEach(it => {
+                        const code = String(it.code || '').trim();
+                        if (!code) return;
+                        const atual = mapa.get(code) || { code, name: it.name || ('Produto ' + code), qty: 0, peso: 0, valor: 0, pedidos: 0, ultimo: '' };
+                        atual.qty += sinal * (Number(it.qty) || 0);
+                        atual.peso += sinal * (Number(it.peso) || 0);
+                        atual.valor += sinal * ((Number(it.peso) || 0) * (Number(it.valorKg) || 0));
+                        atual.pedidos += 1;
+                        if (it.name && dia >= atual.ultimo) atual.name = it.name; // nome da venda mais recente
+                        if (dia > atual.ultimo) atual.ultimo = dia;
+                        mapa.set(code, atual);
+                    });
+                });
+                const todas = Array.from(mapa.values()).map(l => ({ ...l, peso: Math.round(l.peso * 100) / 100, valor: Math.round(l.valor * 100) / 100 }));
+                const soma = todas.reduce((a, l) => ({ qty: a.qty + l.qty, peso: a.peso + l.peso, valor: a.valor + l.valor }), { qty: 0, peso: 0, valor: 0 });
+                return { linhas: todas, resumo: { ...soma, peso: Math.round(soma.peso * 100) / 100, valor: Math.round(soma.valor * 100) / 100, produtos: todas.length, pedidos } };
+            }, [compras, corte]);
+
+            const visiveis = useMemo(() => {
+                const q = normalizeForSearch(busca.trim());
+                const base = q ? linhas.filter(l => l.code.includes(busca.trim()) || normalizeForSearch(l.name).includes(q)) : linhas;
+                const cmp = {
+                    qty: (a, b) => b.qty - a.qty, peso: (a, b) => b.peso - a.peso, valor: (a, b) => b.valor - a.valor,
+                    nome: (a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR', { numeric: true }),
+                    code: (a, b) => a.code.localeCompare(b.code, 'pt-BR', { numeric: true }),
+                }[ordem];
+                return base.slice().sort(cmp);
+            }, [linhas, busca, ordem]);
+
+            const periodoLabel = (PERIODOS_VENDIDOS.find(p => p.k === periodo) || {}).label || 'Tudo';
+            const n2 = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const n0 = (v) => (Number(v) || 0).toLocaleString('pt-BR');
+
+            const baixarPdf = () => {
+                if (!visiveis.length) { showMessage('Nada pra pôr no PDF com esses filtros.', 'error'); return; }
+                try {
+                    // o PDF leva exatamente o que está na tela (mesma busca, mesma ordem, mesmo período)
+                    const soma = visiveis.reduce((a, l) => ({ qty: a.qty + l.qty, peso: a.peso + l.peso, valor: a.valor + l.valor }), { qty: 0, peso: 0, valor: 0 });
+                    const rotulo = periodoLabel + (busca.trim() ? ` · filtro "${busca.trim()}"` : '') + '  ·  ' + n0(visiveis.length) + ' produto(s)';
+                    const doc = gerarPdfProdutosVendidos(visiveis, { ...soma, periodoLabel: rotulo }, layoutPdf);
+                    const d = new Date();
+                    doc.save(layoutPdf + '-produtos-vendidos-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf');
+                    showMessage(visiveis.length + ' produtos no PDF! Procure em Downloads. 📄', 'success');
+                } catch (e) {
+                    if (e && e.message === 'sem-lib') showMessage('O gerador de PDF não carregou. Conecte na internet e atualize a página uma vez.', 'error');
+                    else showMessage('Erro ao gerar o PDF: ' + (e && e.message ? e.message : e), 'error');
+                }
+            };
+
+            return (
+                <div className="animate-in fade-in space-y-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><span>📊</span> Produtos vendidos</h2>
+                            <p className="text-slate-500 text-sm">Tudo que você já vendeu somado por produto — quantidade, peso e faturamento. Sem nome de cliente.</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <EscolhaLayoutPdf valor={layoutPdf} onChange={setLayoutPdf} />
+                            <button onClick={baixarPdf} disabled={compras === null || !visiveis.length} className="prumo-btn prumo-btn-primario">📄 Baixar PDF</button>
+                            <button onClick={carregar} disabled={compras === null} className="prumo-btn prumo-btn-secundario">🔄 Atualizar</button>
+                        </div>
+                    </div>
+
+                    {compras === null ? (
+                        <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-400">
+                            <div className="h-7 w-7 mx-auto mb-3"><IconLoader2/></div>
+                            Somando todas as suas vendas...
+                        </div>
+                    ) : erro ? (
+                        <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-400">
+                            Não consegui buscar as vendas. Confira a internet e toque em 🔄 Atualizar.
+                        </div>
+                    ) : (
+                    <>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            {[['Produtos diferentes', n0(resumo.produtos)], ['Quantidade total', n0(resumo.qty)], ['Peso total', n2(resumo.peso) + ' kg'], ['Faturamento', formatPrice(resumo.valor)]].map(([label, valor]) => (
+                                <div key={label} className="prumo-kpi bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                                    <p className="text-slate-500 font-semibold text-xs">{label}</p>
+                                    <h3 className="text-2xl font-black text-slate-800 mt-0.5">{valor}</h3>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="prumo-precos">
+                            <div className="pt-toolbar">
+                                <div className="pt-busca">
+                                    <div className="pt-busca-icone"><IconSearch /></div>
+                                    <input type="text" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Pesquisar por código ou nome..." />
+                                    {busca && <button type="button" onClick={() => setBusca('')} title="Limpar busca" className="pt-busca-limpar"><IconX /></button>}
+                                    <span className="pt-contador">{visiveis.length} {visiveis.length === 1 ? 'produto' : 'produtos'}</span>
+                                </div>
+                                <div className="pt-linha-filtros">
+                                    <div className="pt-grupo">
+                                        <span className="pt-rotulo">Período</span>
+                                        {PERIODOS_VENDIDOS.map(p => (
+                                            <button key={p.k} type="button" onClick={() => setPeriodo(p.k)} className={`pt-chip ${periodo === p.k ? 'is-on' : ''}`}>{p.label}</button>
+                                        ))}
+                                    </div>
+                                    <div className="pt-grupo">
+                                        <span className="pt-rotulo">Ordem</span>
+                                        {ORDENS_VENDIDOS.map(o => (
+                                            <button key={o.k} type="button" onClick={() => setOrdem(o.k)} className={`pt-chip ${ordem === o.k ? 'is-on' : ''}`}>{o.label}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="pt-rolagem">
+                                {visiveis.length === 0 ? (
+                                    <div className="pt-vazio"><span>📦</span>{linhas.length === 0 ? 'Nenhuma venda registrada ainda neste período.' : `Nenhum produto encontrado para "${busca}".`}</div>
+                                ) : (
+                                <table className="pt-tabela">
+                                    <thead><tr>
+                                        <th className="pt-th-cod">Cód</th>
+                                        <th>Produto</th>
+                                        <th className="pt-dir pt-th-avista">Qtd</th>
+                                        <th className="pt-dir">Peso (kg)</th>
+                                        <th className="pt-dir pt-th-desc">Faturamento</th>
+                                        <th className="pt-dir" title="Em quantos pedidos esse produto apareceu">Pedidos</th>
+                                        <th className="pt-dir">Última venda</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {visiveis.map(l => (
+                                            <tr key={l.code}>
+                                                <td className="pt-cod">{l.code}</td>
+                                                <td className="pt-nome"><span className="pt-nome-texto">{l.name}</span></td>
+                                                <td className="pt-dir"><span className="pt-avista">{n0(l.qty)}</span></td>
+                                                <td className="pt-dir pt-tabela-preco">{n2(l.peso)}</td>
+                                                <td className="pt-dir pt-desc">{formatPrice(l.valor)}</td>
+                                                <td className="pt-dir pt-tabela-preco">{n0(l.pedidos)}</td>
+                                                <td className="pt-dir pt-tabela-preco">{l.ultimo ? l.ultimo.slice(8, 10) + '/' + l.ultimo.slice(5, 7) + '/' + l.ultimo.slice(0, 4) : '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                )}
+                            </div>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                            Somado de {n0(resumo.pedidos)} pedido(s) registrado(s){periodo !== 'tudo' ? ' no período escolhido' : ''}.
+                            Devolução entra negativa, então o número já é o que de fato saiu.
+                        </p>
+                    </>
+                    )}
+                </div>
+            );
         };
 
         // Seletor "Prumo | Friganso" do layout dos PDFs (aparece ao lado de cada botão de PDF)
@@ -8361,6 +8629,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.38.0', data: '22/10/2026', areas: ['site'], itens: [
+                '📊 NOVA ABA "Produtos vendidos" (menu Vendas Diárias): tudo que você já vendeu somado por produto — quantidade, peso e faturamento, sem nome de cliente nenhum',
+                '📄 Botão "Baixar PDF" gera a planilha com o que está na tela (mesmo período, busca e ordem), com linha de TOTAL no fim — nos dois layouts, Prumo ou Friganso',
+                'Dá pra filtrar por período (tudo, este ano, 90 dias, este mês), pesquisar por código ou nome e ordenar por mais vendidos, mais kg, faturamento, A–Z ou código',
+                'Devolução entra negativa, então o número é o que de fato saiu; a tela lê TODAS as vendas, sem o limite das outras telas',
+            ]},
             { versao: '2.39.2', data: '14/10/2026', areas: ['site'], itens: [
                 '📋 Corrigida a tela preta ao abrir a Fila de Pedidos',
                 '🛡️ O aviso de preços fora da tabela voltou a funcionar dentro da própria Fila',
@@ -12990,6 +13264,7 @@
                     case 'resumo': return <ResumoScreen key={resumoNonce} products={products} showMessage={showMessage} clients={clients} user={user} setActiveRoute={setActiveRoute} />;
                     case 'fila': return <FilaScreen showMessage={showMessage} setActiveRoute={setActiveRoute} products={products} clients={clients} user={user} />;
                     case 'historico': return <HistoricoScreen user={user} showMessage={showMessage} />;
+                    case 'vendidos': return <VendidosScreen showMessage={showMessage} />;
                     case 'importarVendas': return <RelatorioVendasScreen user={user} clients={clients} showMessage={showMessage} />;
                     case 'orcamentos': return <OrcamentosScreen products={products} showMessage={showMessage} activeRoute={activeRoute} listaNegra={listaNegra} />;
                     case 'disparos': return <DisparosScreen clients={clients} products={products} user={user} showMessage={showMessage} setActiveRoute={setActiveRoute} listaNegra={listaNegra} />;
@@ -13006,7 +13281,7 @@
                     <div className="h-5 w-5"><Icon /></div> {label}
                 </button>
             );
-            const routeLabels = { dashboard:'Visão geral', clients:'Clientes', rotas:'Rotas', pdf:'Preços', cardapio:'Catálogo e artes', pedido:'Novo pedido', resumo:'Resumo', radar:'Radar', historico:'Histórico', orcamentos:'Ofertas', disparos:'Campanhas', lembretes:'Lembretes', profile:'Minha conta', tutorial:'Tutorial', changelog:'Atualizações', support:'Suporte', navegador:'Site da Prumo', fila:'Fila de pedidos' };
+            const routeLabels = { dashboard:'Visão geral', clients:'Clientes', rotas:'Rotas', pdf:'Preços', cardapio:'Catálogo e artes', pedido:'Novo pedido', resumo:'Resumo', radar:'Radar', historico:'Histórico', vendidos:'Produtos vendidos', orcamentos:'Ofertas', disparos:'Campanhas', lembretes:'Lembretes', profile:'Minha conta', tutorial:'Tutorial', changelog:'Atualizações', support:'Suporte', navegador:'Site da Prumo', fila:'Fila de pedidos' };
 
             return (
                 <div className="prumo-shell flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -13167,6 +13442,7 @@
                             <NavButton route="resumo" icon={IconReceipt} label="Resumo de pedido" />
                             <NavButton route="fila" icon={IconReceipt} label="Fila de pedidos" />
                             <NavButton route="historico" icon={IconFileText} label="Histórico de vendas" />
+                            <NavButton route="vendidos" icon={IconTag} label="Produtos vendidos" />
                             <NavButton route="importarVendas" icon={IconCloudUpload} label="Importar vendas" />
                             <NavButton route="orcamentos" icon={IconWhatsApp} label="Criar ofertas" />
                             <NavButton route="disparos" icon={IconWhatsApp} label="Campanhas WhatsApp" />

@@ -258,3 +258,18 @@ html,body,#root{width:100%;height:100%;overflow:hidden}body{overscroll-behavior:
 .prumo-page input,.prumo-page select,.prumo-page textarea,.prumo-settings-panel input,.prumo-settings-panel select,.prumo-settings-panel textarea{font-size:16px!important}.prumo-page .overflow-x-auto{max-width:100%;-webkit-overflow-scrolling:touch}.prumo-page [class*="grid-cols-3"],.prumo-page [class*="grid-cols-4"]{grid-template-columns:repeat(2,minmax(0,1fr))}.prumo-page header>div:last-child{width:100%}.prumo-page header>div:last-child>button,.prumo-page header>div:last-child>a{flex:1 1 auto;justify-content:center}
 }
 @media(max-width:380px){.prumo-production .prumo-page{padding-left:9px!important;padding-right:9px!important}.prumo-mobile-topbar{padding-left:8px!important;padding-right:8px!important}.prumo-mobile-topbar>.prumo-mobile-back,.prumo-mobile-topbar>.prumo-mobile-more,.prumo-mobile-back-placeholder{width:38px!important;min-width:38px!important;flex-basis:38px!important}.prumo-mobile-title strong{font-size:15px}.prumo-bottomnav{left:6px!important;right:6px!important}.prumo-bottomnav button{font-size:9px!important}.prumo-page [class*="grid-cols-3"],.prumo-page [class*="grid-cols-4"]{grid-template-columns:1fr}.prumo-settings-body{padding:13px!important}}
+/* Produtos vendidos no celular: a tabela continua tabela (não vira ficha como a de preços), então
+   precisa de rolagem lateral própria — a regra geral de .pt-rolagem zera o overflow pro layout de fichas. */
+@media(max-width:767px){
+[data-route=vendidos] .prumo-precos{overflow:hidden}
+[data-route=vendidos] .prumo-precos .pt-rolagem{overflow:auto;-webkit-overflow-scrolling:touch}
+[data-route=vendidos] .pt-tabela th:nth-child(6),[data-route=vendidos] .pt-tabela td:nth-child(6),
+[data-route=vendidos] .pt-tabela th:nth-child(7),[data-route=vendidos] .pt-tabela td:nth-child(7){display:none}
+[data-route=vendidos] .pt-tabela th,[data-route=vendidos] .pt-tabela td{padding:10px 9px!important}
+[data-route=vendidos] .pt-nome{min-width:150px}
+[data-route=vendidos] .prumo-kpi h3{font-size:19px!important}
+}
+/* Os cartões desta tela não têm ícone, então não precisam da altura reservada pro ícone do Painel */
+[data-route=vendidos] .prumo-kpi{min-height:0!important;padding:16px 18px!important}
+[data-route=vendidos] .prumo-kpi h3{padding-top:0!important;font-size:23px!important}
+[data-route=vendidos] .prumo-kpi p{margin-bottom:4px!important;min-height:0!important}
