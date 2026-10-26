@@ -19,15 +19,50 @@
     <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
-    <!-- PDF.js para leitura de PDFs offline -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- SheetJS para importar planilhas Excel/CSV de clientes -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- jsPDF para GERAR PDF (o PDF.js acima só lê) — usado no PDF de mudanças de preço -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- Chart.js (gráficos do Dashboard) — versão fixada pra não quebrar -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <!-- ⚡ BIBLIOTECAS SOB DEMANDA (2026-10-26)
+         pdf.js (313KB) + xlsx (861KB) + jspdf (356KB) + chart.js (201KB) = 1,73 MB que ANTES eram
+         baixados e processados em TODA abertura, mesmo sem abrir a tela que usa cada um. Num celular
+         fraco (Galaxy A07 é o piso) isso é vários segundos de tela parada antes do login aparecer.
+         Agora cada uma só desce quando a tela que precisa dela é aberta. O Babel saiu junto daqui —
+         ver o carregador no fim da página.
+         ⚠️ Quem for usar uma delas TEM que `await window.prumoLib(nome)` antes. -->
+    <script>
+        window.prumoLib = (function () {
+            var URLS = {
+                pdfjs: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+                xlsx:  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+                jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+                chart: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js'
+            };
+            var PRONTO = {
+                pdfjs: function () { return window.pdfjsLib; },
+                xlsx:  function () { return window.XLSX; },
+                jspdf: function () { return window.jspdf; },
+                chart: function () { return window.Chart; }
+            };
+            var emAndamento = {};
+            return function (nome) {
+                var ja = PRONTO[nome] && PRONTO[nome]();
+                if (ja) return Promise.resolve(ja);
+                if (emAndamento[nome]) return emAndamento[nome];
+                emAndamento[nome] = new Promise(function (ok, erro) {
+                    if (!URLS[nome]) { erro(new Error('lib desconhecida: ' + nome)); return; }
+                    var s = document.createElement('script');
+                    s.src = URLS[nome];
+                    s.onload = function () {
+                        // o worker do pdf.js precisa ser apontado assim que a lib existe
+                        if (nome === 'pdfjs' && window.pdfjsLib) {
+                            try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}
+                        }
+                        ok(PRONTO[nome] ? PRONTO[nome]() : true);
+                    };
+                    s.onerror = function () { delete emAndamento[nome]; erro(new Error('Não consegui baixar ' + nome)); };
+                    document.head.appendChild(s);
+                });
+                return emAndamento[nome];
+            };
+        })();
+    </script>
 
     <!-- FIREBASE (Banco de Dados e Auth) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -218,7 +253,7 @@
     </script>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script id="prumo-fonte" type="text/prumo-jsx">
         const { useState, useEffect, useMemo, useRef } = React;
 
         const firebaseConfig = {
@@ -370,7 +405,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 236;
+        const APP_BUILD_VERSION = 237;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -848,6 +883,127 @@
             }
         });
 
+        // ═══════════════════════════════════════════════════════════════════════════════════════
+        // 📮 FILA DE SAÍDA — o "segundo agente" (2026-10-26)
+        // O problema: no celular com internet ruim o pedido sumia no meio do caminho. A venda ia pro
+        // Firestore e, se a LEITURA de conferência travasse (ela não tinha prazo nenhum), a função
+        // morria ali — o vendedor copiava o resumo achando que estava salvo, e não estava.
+        //
+        // Como funciona agora: a venda é gravada PRIMEIRO aqui no aparelho, sem internet nenhuma.
+        // Só depois um vigia tenta mandar pra nuvem. Enquanto não confirmar, o trabalho continua na
+        // fila e é tentado de novo: a cada 20s, quando a internet volta, e toda vez que o app abre.
+        //
+        // ⚠️ Cada trabalho nasce com o ID do documento já definido (`docId`). Isso é o que deixa
+        // tentar de novo à vontade: regravar no MESMO id sobrescreve, nunca duplica a venda. Sem
+        // isso, uma tentativa que foi mas não confirmou viraria pedido em dobro no faturamento.
+        const OUTBOX_KEY = 'prumo_outbox';
+        const OUTBOX_EVENTO = 'prumo-outbox-mudou';
+        const lerOutbox = () => { try { return JSON.parse(window.localStorage.getItem(OUTBOX_KEY) || '[]'); } catch (e) { return []; } };
+        const salvarOutbox = (lista) => {
+            try { window.localStorage.setItem(OUTBOX_KEY, JSON.stringify(lista)); } catch (e) {}
+            try { window.dispatchEvent(new CustomEvent(OUTBOX_EVENTO, { detail: lista.length })); } catch (e) {}
+        };
+        const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+        // Promessa com prazo: sem isso uma chamada de rede pendurada trava o processo pra sempre.
+        const comPrazo = (promessa, ms, oQue) => Promise.race([
+            promessa,
+            new Promise((_, rej) => setTimeout(() => rej(new Error('demorou demais: ' + (oQue || ''))), ms))
+        ]);
+        const enfileirar = (tipo, dados) => {
+            const lista = lerOutbox();
+            lista.push({ id: novoId(), tipo, dados, criadoEm: Date.now(), tentativas: 0, erro: '' });
+            salvarOutbox(lista);
+            setTimeout(processarOutbox, 50);   // tenta já, mas sem segurar quem chamou
+        };
+
+        // Executa UM trabalho. Devolve true só quando a nuvem confirmou — qualquer outra coisa
+        // deixa o trabalho na fila pra próxima rodada.
+        const executarJob = async (job) => {
+            if (job.tipo !== 'compra') return true;      // tipo desconhecido: tira da fila
+            const d = job.dados || {};
+            if (!d.clienteCode || !(d.itens || []).length) return true;
+            const colecao = db.collection('purchases');
+            let ref = colecao.doc(d.docId);
+            let dadosAntigos = null;
+
+            // 🧾 Mesmo SPAmov = mesma nota: se já existe pedido com esse número, ATUALIZA ele em vez
+            // de criar outro. A leitura tem prazo; se não responder, o trabalho fica pra depois (é
+            // melhor atrasar do que arriscar gravar a mesma venda duas vezes).
+            if (d.spamov) {
+                const achado = await comPrazo(colecao.where('spamov', '==', String(d.spamov)).limit(1).get(), 12000, 'conferir SPAmov');
+                if (!achado.empty && achado.docs[0].id !== d.docId) {
+                    ref = achado.docs[0].ref;
+                    dadosAntigos = achado.docs[0].data();
+                }
+            }
+            const corpo = {
+                clienteCode: String(d.clienteCode), clienteName: d.clienteName || '',
+                tipoPessoa: d.tipoPessoa || 'juridica', itens: d.itens,
+                valor: d.valor, pesoTotal: d.pesoTotal,
+                spamov: d.spamov || '', condicaoPagamento: d.condicaoPagamento || '',
+                dia: d.dia, ts: d.ts, via: d.via || '', vendedor: d.vendedor || ''
+            };
+            if (d.prova) corpo.prova = d.prova;
+            if (dadosAntigos) {
+                corpo.dia = d.dia || dadosAntigos.dia;
+                corpo.ts = dadosAntigos.ts || d.ts;      // edição mantém a data original da venda
+                corpo.editadoEm = Date.now();
+                corpo.editadoPor = d.vendedor || '';
+                try {
+                    const h = criarEntradaHistoricoEdicao(dadosAntigos, 'reenvio_resumo', d.vendedor);
+                    corpo.historicoEdicoes = firebase.firestore.FieldValue.arrayUnion(h);
+                } catch (e) {}
+            }
+            // `merge` + id fixo = pode repetir à vontade que não duplica
+            await comPrazo(ref.set(corpo, { merge: true }), 20000, 'gravar venda');
+
+            // histórico do cliente é um extra: se falhar, não segura o trabalho
+            if (d.clienteDocId && (d.itens || []).length) {
+                try {
+                    const codigos = d.itens.map(i => String(i.code));
+                    await comPrazo(db.collection('clients').doc(d.clienteDocId)
+                        .update({ history: firebase.firestore.FieldValue.arrayUnion(...codigos) }), 12000, 'histórico');
+                } catch (e) {}
+            }
+            return true;
+        };
+
+        let _processando = false;
+        const processarOutbox = async () => {
+            if (_processando) return;
+            let lista = lerOutbox();
+            if (!lista.length) return;
+            _processando = true;
+            try {
+                for (const job of lista.slice()) {
+                    try {
+                        const ok = await executarJob(job);
+                        if (ok) {
+                            lista = lerOutbox().filter(j => j.id !== job.id);
+                            salvarOutbox(lista);
+                        }
+                    } catch (e) {
+                        lista = lerOutbox().map(j => j.id === job.id
+                            ? { ...j, tentativas: (j.tentativas || 0) + 1, erro: (e && e.message) || 'falhou' }
+                            : j);
+                        salvarOutbox(lista);
+                        break;   // rede ruim: para a rodada e espera a próxima
+                    }
+                }
+            } finally { _processando = false; }
+        };
+
+        // 🔁 O vigia: tenta sozinho de tempos em tempos, quando a internet volta e quando o app volta
+        // pra frente. Nada disso depende de alguém ficar olhando a tela.
+        setInterval(processarOutbox, 20000);
+        window.addEventListener('online', () => setTimeout(processarOutbox, 500));
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) processarOutbox(); });
+        setTimeout(processarOutbox, 2500);   // e logo que o app abre, pra limpar o que ficou de ontem
+
+        // 🧾 Registra a venda. Daqui pra frente isso NUNCA espera a internet: monta o pedido, joga na
+        // fila de saída (localStorage, instantâneo) e devolve o controle na hora. Quem conversa com a
+        // nuvem é o vigia da fila, que insiste até confirmar.
+        // ⚠️ Continua sendo `async` e com a mesma assinatura só pra não mexer em quem já chama.
         const registrarCompra = async (clienteCode, itensValidos, tipo, via, clients, user, spamov, condicaoPagamento, prova) => {
             try {
                 const itensSafe = (itensValidos || [])
@@ -863,62 +1019,46 @@
                 // 💰 Faturamento da venda = soma de peso(kg) × preço/kg de cada item (a "nota" do SPAmov)
                 const valorTotal = Math.round(itensSafe.reduce((a, i) => a + (i.peso * i.valorKg), 0) * 100) / 100;
                 const pesoTotal = Math.round(itensSafe.reduce((a, i) => a + i.peso, 0) * 100) / 100;
-                const atualizarHistoricoCliente = async () => {
-                    if (!cli || !cli.id) return;
-                    const atual = cli.history || [];
-                    const novos = [...new Set([...atual, ...itensSafe.map(i => i.code)])];
-                    if (novos.length !== atual.length) { try { await db.collection('clients').doc(cli.id).update({ history: novos }); } catch (e) {} }
-                };
-
-                // 🧾 Mesmo SPAmov = mesma nota. Se já existe um pedido ATIVO com esse SPAmov, isso é uma
-                // EDIÇÃO dele (item adicionado/mudado) — atualiza em vez de duplicar, pra não contar duas
-                // vezes no faturamento. Mantém a data original da venda (dia/ts não mudam).
-                const spamovStr = (spamov || '').trim();
-                if (spamovStr) {
-                    try {
-                        const existente = await db.collection('purchases').where('spamov', '==', spamovStr).limit(1).get();
-                        if (!existente.empty) {
-                            const doc = existente.docs[0];
-                            const dadosAntigos = doc.data();
-                            const entradaHist = criarEntradaHistoricoEdicao(dadosAntigos, 'reenvio_resumo', (user && user.code));
-                            await doc.ref.update({
-                                clienteCode: String(clienteCode),
-                                clienteName: (cli && cli.name) || dadosAntigos.clienteName || '',
-                                tipoPessoa: tipo || (cli && cli.tipo) || dadosAntigos.tipoPessoa || 'juridica',
-                                itens: itensSafe,
-                                valor: valorTotal,
-                                pesoTotal: pesoTotal,
-                                condicaoPagamento: condicaoPagamento || dadosAntigos.condicaoPagamento || '',
-                                editadoEm: agora,
-                                editadoPor: (user && user.code) || '',
-                                historicoEdicoes: firebase.firestore.FieldValue.arrayUnion(entradaHist)
-                            });
-                            await atualizarHistoricoCliente();
-                            return;
-                        }
-                    } catch (e) { /* se a checagem falhar, segue e cria um novo abaixo */ }
-                }
-
-                const d = new Date(agora);
-                const dia = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
-                await db.collection('purchases').add({
+                // id do documento criado AGORA e guardado junto: é o que torna a repetição inofensiva
+                enfileirar('compra', {
+                    docId: db.collection('purchases').doc().id,
                     clienteCode: String(clienteCode),
                     clienteName: (cli && cli.name) || '',
+                    clienteDocId: (cli && cli.id) || '',
                     tipoPessoa: tipo || (cli && cli.tipo) || 'juridica',
                     itens: itensSafe,
                     valor: valorTotal,
                     pesoTotal: pesoTotal,
-                    spamov: spamovStr,
+                    spamov: (spamov || '').trim(),
                     condicaoPagamento: condicaoPagamento || '',
-                    // ✋ Prova da conferência obrigatória (print/áudio/ligação), quando ligada
-                    prova: prova || null,
-                    dia: dia,
+                    dia: diaStrGlobal(new Date()),
                     ts: agora,
                     via: via || '',
-                    vendedor: (user && user.code) || ''
+                    vendedor: (user && user.code) || '',
+                    prova: prova || null
                 });
-                await atualizarHistoricoCliente();
             } catch (e) { /* silencioso */ }
+        };
+
+        // 📮 Aviso de venda esperando internet. Só aparece quando tem algo na fila — a ideia é você
+        // SABER que tem venda pendente, em vez de descobrir no fim do dia que o faturamento não bateu.
+        const AvisoFilaSaida = () => {
+            const [quantos, setQuantos] = useState(() => lerOutbox().length);
+            useEffect(() => {
+                const ver = () => setQuantos(lerOutbox().length);
+                window.addEventListener(OUTBOX_EVENTO, ver);
+                const iv = setInterval(ver, 5000);
+                return () => { window.removeEventListener(OUTBOX_EVENTO, ver); clearInterval(iv); };
+            }, []);
+            if (!quantos) return null;
+            return (
+                <button type="button" onClick={() => processarOutbox()} title="Tentar mandar agora"
+                    className="fixed left-3 bottom-20 md:bottom-4 z-[70] flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold"
+                    style={{ background: '#f59e0b1f', border: '1px solid #f59e0b55', color: '#fcd34d', backdropFilter: 'blur(10px)' }}>
+                    <span className="animate-pulse">📮</span>
+                    {quantos} venda(s) esperando internet
+                </button>
+            );
         };
 
         // 💳 Reduz o texto cru da condição de pagamento do SPAmov (ex.: "21 Dias", "À Vista / PIX",
@@ -1597,10 +1737,15 @@
             const ref = useRef(null);
             const inst = useRef(null);
             useEffect(() => {
-                if (!ref.current || !window.Chart) return;
-                if (inst.current) inst.current.destroy();
-                inst.current = new window.Chart(ref.current, { type: tipo, data: data, options: options });
-                return () => { if (inst.current) { inst.current.destroy(); inst.current = null; } };
+                // ⚡ O Chart.js (201KB) só desce quando um gráfico vai mesmo aparecer na tela.
+                // `vivo` evita montar o gráfico se a tela foi trocada enquanto a lib baixava.
+                let vivo = true;
+                window.prumoLib('chart').then(() => {
+                    if (!vivo || !ref.current || !window.Chart) return;
+                    if (inst.current) inst.current.destroy();
+                    inst.current = new window.Chart(ref.current, { type: tipo, data: data, options: options });
+                }).catch(() => {});
+                return () => { vivo = false; if (inst.current) { inst.current.destroy(); inst.current = null; } };
             }, [tipo, JSON.stringify(data), JSON.stringify(options)]);
             return <div style={{ height: (altura || 260) + 'px', position: 'relative' }}><canvas ref={ref}></canvas></div>;
         };
@@ -3335,12 +3480,13 @@
             const n2 = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const n0 = (v) => (Number(v) || 0).toLocaleString('pt-BR');
 
-            const baixarPdf = () => {
-                if (!visiveis.length) { showMessage('Nada pra pôr no PDF com esses filtros.', 'error'); return; }
+            const baixarPdf = async () => {
+                if (!visiveis.length) { showMessage("Nada pra pôr no PDF com esses filtros.", "error"); return; }
                 try {
                     // o PDF leva exatamente o que está na tela (mesma busca, mesma ordem, mesmo período)
                     const soma = visiveis.reduce((a, l) => ({ qty: a.qty + l.qty, peso: a.peso + l.peso, valor: a.valor + l.valor }), { qty: 0, peso: 0, valor: 0 });
                     const rotulo = periodoLabel + (busca.trim() ? ` · filtro "${busca.trim()}"` : '') + '  ·  ' + n0(visiveis.length) + ' produto(s)';
+                    await window.prumoLib("jspdf");
                     const doc = gerarPdfProdutosVendidos(visiveis, { ...soma, periodoLabel: rotulo }, layoutPdf);
                     const d = new Date();
                     doc.save(layoutPdf + '-produtos-vendidos-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf');
@@ -3474,11 +3620,12 @@
 
             // 📄 Baixa o PDF das mudanças de preço pra mandar pro cliente (só as mudanças, sem produtos
             // novos nem os que saíram). Precisa de internet na primeira vez — a lib vem de CDN.
-            const baixarPdfMudancas = () => {
+            const baixarPdfMudancas = async () => {
                 const lista = (priceChanges && priceChanges.changes) || [];
                 const listaNovos = (priceChanges && priceChanges.novos) || [];
                 if (!lista.length && !listaNovos.length) { showMessage('Nada pra pôr no PDF: nenhum preço mudou e nenhum produto novo.', 'error'); return; }
                 try {
+                    await window.prumoLib("jspdf");
                     const doc = gerarPdfMudancasPreco(lista, listaNovos, layoutPdf);
                     const d = new Date();
                     const nome = layoutPdf + '-mudancas-preco-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf';
@@ -3508,6 +3655,7 @@
                     if (!ativos.length) { showMessage('Nenhuma tabela distribuída na nuvem ainda.', 'error'); return; }
                     const ua = dados.updatedAt;
                     const dataTabela = ua && typeof ua.toDate === 'function' ? ua.toDate() : (ua ? new Date(ua) : null);
+                    await window.prumoLib("jspdf");
                     const doc = gerarPdfTabelaPrecos(ativos, dataTabela, layoutPdf);
                     const d = dataTabela || new Date();
                     doc.save(layoutPdf + '-tabela-precos-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf');
@@ -3605,6 +3753,7 @@
                 if (!file || file.type !== 'application/pdf') { showMessage('Selecione um PDF válido.', 'error'); return; }
                 setIsLoading(true);
                 try {
+                    await window.prumoLib("pdfjs");
                     const arrayBuffer = await file.arrayBuffer();
                     const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     const porCodigo = new Map();
@@ -5637,10 +5786,7 @@
         // e não "o primeiro número da linha seguinte" (isso pegava o CNPJ em vez da Inscrição Estadual,
         // já que os dois ficam na mesma linha de valores, um do lado do outro).
         const extrairDadosSefazPdf = async (file) => {
-            if (!window.pdfjsLib) throw new Error('Leitor de PDF ainda não carregou — espera alguns segundos e tenta de novo.');
-            if (window.pdfjsLib.GlobalWorkerOptions && !window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-            }
+            await window.prumoLib("pdfjs");
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             const linhas = []; // [{ y, items: [{x, str}], text }]
@@ -6906,11 +7052,11 @@
             }), [leads]);
 
             // ═══ IMPORTAÇÃO ═══
-            const handleArquivo = (e) => {
+            const handleArquivo = async (e) => {
                 const file = e.target.files && e.target.files[0];
                 e.target.value = '';
                 if (!file) return;
-                if (typeof XLSX === 'undefined') { showMessage('Biblioteca de planilha não carregou. Verifique a internet.', 'error'); return; }
+                try { await window.prumoLib("xlsx"); } catch (err) { showMessage("Não consegui baixar o leitor de planilha. Confira a internet.", "error"); return; }
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     try {
@@ -7850,11 +7996,11 @@
             }, [clientesCarregados, clients]);
 
             // Lê a planilha selecionada e monta o preview de importação
-            const handleFileSelected = (e) => {
+            const handleFileSelected = async (e) => {
                 setImportOrigem('planilha');
                 const file = e.target.files && e.target.files[0];
                 if (!file) return;
-                if (typeof XLSX === 'undefined') { showMessage('Biblioteca de planilha não carregou. Verifique a internet.', 'error'); return; }
+                try { await window.prumoLib("xlsx"); } catch (err) { showMessage("Não consegui baixar o leitor de planilha. Confira a internet.", "error"); return; }
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     try {
@@ -8006,10 +8152,10 @@
             };
 
             // Lê a planilha de histórico de compras e monta o preview
-            const handleHistoryFileSelected = (e) => {
+            const handleHistoryFileSelected = async (e) => {
                 const file = e.target.files && e.target.files[0];
                 if (!file) return;
-                if (typeof XLSX === 'undefined') { showMessage('Biblioteca de planilha não carregou. Verifique a internet.', 'error'); return; }
+                try { await window.prumoLib("xlsx"); } catch (err) { showMessage("Não consegui baixar o leitor de planilha. Confira a internet.", "error"); return; }
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     try {
@@ -8629,6 +8775,13 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.40.0', data: '26/10/2026', areas: ['site', 'app'], itens: [
+                '⚡ ABERTURA MUITO MAIS RÁPIDA: o app compila uma vez por versão e guarda no aparelho. Da 2ª abertura em diante não baixa mais o Babel (3 MB) nem compila nada — medido aqui: 4,3s → 0,2s',
+                '⚡ pdf.js, planilha, gerador de PDF e gráficos (1,73 MB juntos) não são mais baixados na abertura — cada um só desce quando você abre a tela que usa ele',
+                '📮 NOVO: fila de saída — a venda é salva PRIMEIRO no celular, sem internet, e só depois vai pra nuvem. Antes, se a internet travasse no meio, a venda sumia calada e você só descobria no fechamento',
+                '🔁 Um vigia reenvia sozinho o que ficou pendente: a cada 20s, quando a internet volta e toda vez que o app abre. Aparece um aviso "X venda(s) esperando internet" enquanto não confirma',
+                '🧾 Reenvio não duplica mais: cada venda nasce com o número do documento já definido, então tentar de novo sobrescreve em vez de criar pedido repetido',
+            ]},
             { versao: '2.39.0', data: '26/10/2026', areas: ['site'], itens: [
                 '🎲 Campanhas: cliente que NUNCA comprou não recebe mais só "Confira nossos produtos!" — agora vão 5 itens sorteados, misturando mercado, padaria e restaurante, trocando todo dia',
                 '✨ Quem já compra continua recebendo o que compra, e ganha no FIM da mensagem um bloco "TAMBÉM PODE TE INTERESSAR" com mais 5 itens escolhidos pelo tipo do comércio dele',
@@ -12328,9 +12481,10 @@
             const limparValorNota = () => { window.localStorage.removeItem('friganso_debug_valor_nota'); setValorNota(null); };
 
             // 🧪 Exporta a tabela que o site está usando AGORA, pra bater contra o PDF da distribuidora
-            const baixarPdfConferencia = () => {
+            const baixarPdfConferencia = async () => {
                 if (!products || !products.length) { showMessage('Nenhum produto carregado na tabela.', 'error'); return; }
                 try {
+                    await window.prumoLib("jspdf");
                     const doc = gerarPdfConferenciaTabela(products);
                     const d = new Date();
                     doc.save('friganso-conferencia-tabela-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf');
@@ -13390,6 +13544,7 @@
             return (
                 <div className="prumo-shell flex h-screen bg-slate-50 overflow-hidden font-sans">
                     {messageBox && <CustomMessageBox {...messageBox} onClose={() => setMessageBox(null)} />}
+                    <AvisoFilaSaida />
                     {siteUpdate && <SiteUpdateModal siteUpdate={siteUpdate} onAtualizar={atualizarSiteAgora} />}
                     {conferenciaPrecosItens && <ConferenciaPrecosWizard itens={conferenciaPrecosItens} clients={clients} onClose={() => setConferenciaPrecosItens(null)} showMessage={showMessage} />}
 
@@ -13649,6 +13804,116 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+    </script>
+
+    <!-- ⚡ ARRANQUE DO APP (2026-10-26) — compila UMA vez por versão e guarda no aparelho.
+         Antes: o Babel (3 MB) era baixado e compilava 1,1 MB de código em TODA abertura — 0,65s num
+         PC, o que num Galaxy A07 vira vários segundos de tela branca, toda vez.
+         Agora: na 1ª abertura de cada versão compila e guarda o resultado no IndexedDB; da 2ª em
+         diante roda direto do que está guardado e o Babel NEM É BAIXADO.
+         A chave é o APP_BUILD_VERSION lido do próprio código — publicou versão nova, compila de novo
+         sozinho. Não muda nada no jeito de publicar.
+         ⚠️ Qualquer problema (sem IndexedDB, cota cheia, código guardado corrompido) cai no caminho
+         antigo de compilar na hora. O app nunca pode deixar de abrir por causa do cache. -->
+    <script>
+        (function () {
+            var BABEL_URL = 'https://unpkg.com/@babel/standalone@7/babel.min.js';
+            var fonteEl = document.getElementById('prumo-fonte');
+            var fonte = fonteEl ? fonteEl.textContent : '';
+            // ⚠️ A chave é a IMPRESSÃO DIGITAL do código, não o APP_BUILD_VERSION. Com a versão,
+            // quem editasse o index.html e esquecesse de bumpar o número continuaria recebendo o
+            // compilado velho — bug invisível e horrível de achar (aconteceu aqui no teste).
+            // Pelo conteúdo, qualquer letra que mude já invalida sozinha. Custa ~15ms.
+            function digital(s) {
+                var h = 2166136261 >>> 0;
+                for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+                return h.toString(36) + '-' + s.length.toString(36);
+            }
+            var chave = 'app-' + digital(fonte);
+
+            function executar(codigo) {
+                var s = document.createElement('script');
+                s.textContent = codigo;          // roda no escopo global, igual ao Babel fazia
+                document.body.appendChild(s);
+            }
+            function avisarFalha() {
+                var r = document.getElementById('root');
+                if (r && !r.childNodes.length) {
+                    r.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#c9c9d2;font:500 15px system-ui,sans-serif">' +
+                        'Não consegui carregar o Prumo.<br><br>Confira a internet e abra de novo.' +
+                        '<br><br><button onclick="location.reload()" style="margin-top:8px;padding:12px 22px;border:0;border-radius:12px;background:#6d5dfb;color:#fff;font-weight:700;font-size:14px">Tentar de novo</button></div>';
+                }
+            }
+
+            // --- guarda-roupa do código compilado (IndexedDB; falha sempre vira "não tem cache") ---
+            function abrirBanco() {
+                return new Promise(function (ok, erro) {
+                    if (!window.indexedDB) { erro(); return; }
+                    var req = indexedDB.open('prumo-build', 1);
+                    req.onupgradeneeded = function () {
+                        var d = req.result;
+                        if (!d.objectStoreNames.contains('js')) d.createObjectStore('js');
+                    };
+                    req.onsuccess = function () { ok(req.result); };
+                    req.onerror = function () { erro(); };
+                });
+            }
+            function lerCache() {
+                return abrirBanco().then(function (d) {
+                    return new Promise(function (ok) {
+                        try {
+                            var r = d.transaction('js', 'readonly').objectStore('js').get(chave);
+                            r.onsuccess = function () { ok(r.result || null); };
+                            r.onerror = function () { ok(null); };
+                        } catch (e) { ok(null); }
+                    });
+                }).catch(function () { return null; });
+            }
+            function guardarCache(codigo) {
+                abrirBanco().then(function (d) {
+                    try {
+                        var st = d.transaction('js', 'readwrite').objectStore('js');
+                        // limpa versões antigas pra não encher o aparelho
+                        var todas = st.getAllKeys();
+                        todas.onsuccess = function () {
+                            (todas.result || []).forEach(function (k) { if (k !== chave) st.delete(k); });
+                        };
+                        st.put(codigo, chave);
+                    } catch (e) {}
+                }).catch(function () {});
+            }
+            function limparCache() {
+                abrirBanco().then(function (d) {
+                    try { d.transaction('js', 'readwrite').objectStore('js').delete(chave); } catch (e) {}
+                }).catch(function () {});
+            }
+
+            function compilarAgora() {
+                var s = document.createElement('script');
+                s.src = BABEL_URL;
+                s.onload = function () {
+                    var codigo;
+                    try { codigo = Babel.transform(fonte, { presets: ['react'] }).code; }
+                    catch (e) { avisarFalha(); return; }
+                    executar(codigo);
+                    guardarCache(codigo);
+                };
+                s.onerror = avisarFalha;
+                document.head.appendChild(s);
+            }
+
+            lerCache().then(function (codigo) {
+                if (!codigo) { compilarAgora(); return; }
+                try {
+                    executar(codigo);
+                    // se o código guardado estava corrompido, o React não montou nada: refaz do zero
+                    setTimeout(function () {
+                        var r = document.getElementById('root');
+                        if (r && !r.childNodes.length) { limparCache(); location.reload(); }
+                    }, 4000);
+                } catch (e) { limparCache(); compilarAgora(); }
+            });
+        })();
     </script>
 
     <!-- PWA: Service Worker + Deep Link -->
