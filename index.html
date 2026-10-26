@@ -370,7 +370,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 235;
+        const APP_BUILD_VERSION = 236;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -8629,6 +8629,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.39.0', data: '26/10/2026', areas: ['site'], itens: [
+                '🎲 Campanhas: cliente que NUNCA comprou não recebe mais só "Confira nossos produtos!" — agora vão 5 itens sorteados, misturando mercado, padaria e restaurante, trocando todo dia',
+                '✨ Quem já compra continua recebendo o que compra, e ganha no FIM da mensagem um bloco "TAMBÉM PODE TE INTERESSAR" com mais 5 itens escolhidos pelo tipo do comércio dele',
+                'Os itens saem dos perfis que você montou em Criar ofertas (Padaria, Açougue, Mercado, Restaurante, Pizzaria, Lanchonete) — nunca aleatório da tabela',
+                'O sorteio muda todo dia mas não muda a cada clique, então o texto que você confere é o que vai; itens podem repetir de um dia pro outro',
+            ]},
             { versao: '2.38.0', data: '22/10/2026', areas: ['site'], itens: [
                 '📊 NOVA ABA "Produtos vendidos" (menu Vendas Diárias): tudo que você já vendeu somado por produto — quantidade, peso e faturamento, sem nome de cliente nenhum',
                 '📄 Botão "Baixar PDF" gera a planilha com o que está na tela (mesmo período, busca e ordem), com linha de TOTAL no fim — nos dois layouts, Prumo ou Friganso',
@@ -11747,6 +11753,91 @@
                 return out;
             };
 
+            // ═══ 🎲 VITRINE DO DIA (2026-10-26) ═══════════════════════════════════════════════
+            // Dois buracos na campanha que isso tapa:
+            //  1. Cliente que NUNCA comprou recebia só "Confira nossos produtos!" — mensagem vazia,
+            //     sem um preço sequer. Agora ele recebe 5 itens sorteados, misturando mercado,
+            //     padaria e restaurante, pra ter chance de pegar o ramo dele.
+            //  2. Quem já compra só via o que já conhece. Agora ganha um bloco no FIM com mais 5,
+            //     escolhidos pelo tipo do comércio dele.
+            // Os itens saem dos perfis de "Criar ofertas" (system_data/ofertas_perfis) — ou seja,
+            // do que VOCÊ já escolheu a dedo pra cada tipo de loja, nunca aleatório da tabela.
+            const SUGESTOES_QTD = 5;
+            const [perfisCodigos, setPerfisCodigos] = useState({});
+            useEffect(() => {
+                try {
+                    const unsub = db.collection('system_data').doc('ofertas_perfis').onSnapshot(
+                        d => { const dd = d && d.exists ? d.data() : null; setPerfisCodigos((dd && dd.codigos) || {}); }, () => {});
+                    return () => unsub();
+                } catch (e) {}
+            }, []);
+
+            // Sorteio que muda todo dia mas NÃO muda a cada clique/refresh do mesmo dia — senão o
+            // texto mudava embaixo do seu nariz entre conferir e enviar. A semente junta o dia com o
+            // cliente, pra dois clientes não receberem a mesma vitrine.
+            const sorteioDoDia = (pool, n, semente) => {
+                const arr = (pool || []).slice();
+                // ⚠️ Sempre embaralha, mesmo quando a lista é menor que `n`: o `sorteioMisturado`
+                // chama isso com n grande só pra ORDENAR o perfil inteiro. Se saísse cedo aqui, a
+                // ordem ficava congelada e a vitrine era a mesma todo dia (bug pego no teste).
+                if (arr.length < 2) return arr.slice(0, n);
+                const h = new Date();
+                const dia = Number(`${h.getFullYear()}${String(h.getMonth() + 1).padStart(2, '0')}${String(h.getDate()).padStart(2, '0')}`);
+                let s = (dia + hashStr(semente)) >>> 0;
+                const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+                for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = arr[i]; arr[i] = arr[j]; arr[j] = t; }
+                return arr.slice(0, n);
+            };
+            // Itens que VOCÊ escolheu pra esse tipo de loja lá em Criar ofertas, já sem lista negra
+            // e sem o que saiu da tabela de hoje (preço velho não vai pra campanha).
+            const produtosDoPerfilOferta = (id) => ((perfisCodigos[id] || []).map(String))
+                .map(code => products.find(p => String(p.code) === code))
+                .filter(p => p && !produtoForaTabelaHoje(p) && !lnSet.has(String(p.code)));
+            // Intercala os perfis em vez de embaralhar tudo junto: assim os 5 saem MISTURADOS mesmo
+            // (um de cada ramo), e não 5 do mesmo perfil por azar do sorteio.
+            const sorteioMisturado = (ids, n, semente, fora) => {
+                const bloqueados = fora || new Set();
+                const listas = ids.map(id => sorteioDoDia(produtosDoPerfilOferta(id).filter(p => !bloqueados.has(String(p.code))), 999, semente + '|' + id));
+                const vistos = new Set(); const out = [];
+                const maior = listas.reduce((a, l) => Math.max(a, l.length), 0);
+                for (let i = 0; i < maior && out.length < n; i++) {
+                    for (const l of listas) {
+                        const p = l[i]; if (!p) continue;
+                        const k = String(p.code); if (vistos.has(k)) continue;
+                        vistos.add(k); out.push(p);
+                        if (out.length >= n) break;
+                    }
+                }
+                return out;
+            };
+            // Tipo de comércio do cliente -> perfil de oferta. O nome da loja manda mais que o perfil
+            // do CRM, porque "padaria"/"pizzaria" não existem como perfil do CRM mas estão no nome.
+            const perfilOfertaDoCliente = (c) => {
+                const n = normalizeForSearch([c.name, c.contactName].filter(Boolean).join(' '));
+                if (/padaria|panific|confeitar/.test(n)) return 'padaria';
+                if (/pizza/.test(n)) return 'pizzaria';
+                if (/lanchonet|hamburgu|lanches|burger/.test(n)) return 'lanchonete';
+                if (/a[cç]ougue|casa de carne/.test(n)) return 'acougue';
+                if (/restaurante|churrasc|espeto|self.?service|cozinha|buffet|hotel|pousada/.test(n)) return 'restaurante';
+                if (/supermerc|mercad|mercear|minimerc|atacad|empor/.test(n)) return 'mercearia';
+                const cat = categoryForClient(c);
+                return cat === 'acougue' ? 'acougue' : cat === 'mercado' ? 'mercearia' : cat === 'restaurante' ? 'restaurante' : '';
+            };
+            // ✨ Os 5 do fim da mensagem, pra quem JÁ compra. Pode repetir de um dia pro outro de
+            // propósito: é vitrine, não rodízio — o que não pode é cair o item que ele já viu em cima.
+            const sugestoesDoDia = (c, jaOfertados) => {
+                const fora = new Set((jaOfertados || []).map(p => String(p.code)));
+                const id = perfilOfertaDoCliente(c);
+                let out = id ? sorteioDoDia(produtosDoPerfilOferta(id).filter(p => !fora.has(String(p.code))), SUGESTOES_QTD, 'sug|' + c.code) : [];
+                if (out.length < SUGESTOES_QTD) {
+                    // perfil curto (ou cliente sem ramo claro): completa misturando os ramos gerais
+                    const tapar = new Set([...fora, ...out.map(p => String(p.code))]);
+                    out = out.concat(sorteioMisturado(['mercearia', 'padaria', 'restaurante'], SUGESTOES_QTD - out.length, 'sug|' + c.code, tapar));
+                }
+                return out;
+            };
+            const blocoSugestoes = (prods) => '\n\n' + SEPARADOR_ZAP + '\n✨ *TAMBÉM PODE TE INTERESSAR*\n\n' + montarOfertas(prods);
+
             // Monta o bloco de ofertas no formato do WhatsApp (preço riscado + desconto)
             const montarOfertas = (prods) => estiloZap === 'antigo'
                 ? prods.map(p => montarBlocoProdutoZap(p, 'antigo').trim()).join('\n\n')
@@ -11760,16 +11851,29 @@
             const nomeVendedor = () => vendedorCustom.trim() || ((user && user.name) ? user.name.split(' ')[0] : 'vendedor');
             const waNumber = (phone) => { let d = String(phone || '').replace(/\D/g, ''); if (!d) return ''; if (d.length <= 11) d = '55' + d; return d; };
             const personalizar = (c) => {
-                const prods = incluirProduto ? recomendarProdutos(c, qtdProdutos) : [];
+                const doHistorico = incluirProduto ? recomendarProdutos(c, qtdProdutos) : [];
+                // 🆕 Cliente que nunca comprou: em vez de "Confira nossos produtos!" (mensagem sem
+                // nenhum preço), a vitrine do dia vira o corpo da mensagem.
+                const semHistorico = incluirProduto && !doHistorico.length;
+                const prods = semHistorico
+                    ? sorteioMisturado(['mercearia', 'padaria', 'restaurante'], SUGESTOES_QTD, 'novo|' + c.code)
+                    : doHistorico;
                 const ofertas = prods.length ? montarOfertas(prods) : 'Confira nossos produtos!';
                 const primeiro = prods.length ? `${prods[0].code} - ${prods[0].name}` : 'nossos produtos';
-                return template
+                let txt = template
                     .replace(/\{nome\}/gi, c.name || '')
                     .replace(/\{contato\}/gi, c.contactName || c.name || 'tudo bem')
                     .replace(/\{saudacao\}/gi, saudacao())
                     .replace(/\{vendedor\}/gi, nomeVendedor())
                     .replace(/\{ofertas\}/gi, ofertas)
                     .replace(/\{produto\}/gi, primeiro);
+                // ✨ Quem já compra leva os 5 extras no fim. Quem não comprou nada já recebeu a
+                // vitrine em cima — repetir o bloco deixaria a mensagem com dez itens e nenhum vínculo.
+                if (incluirProduto && !semHistorico && prods.length) {
+                    const sug = sugestoesDoDia(c, prods);
+                    if (sug.length) txt += blocoSugestoes(sug);
+                }
+                return txt;
             };
             // respeita a preferência de "aplicativo x navegador" escolhida pelo usuário (ver zapUrl)
             const waLink = (c) => zapUrl(waNumber(c.phone), personalizar(c));
