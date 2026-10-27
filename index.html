@@ -405,7 +405,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 237;
+        const APP_BUILD_VERSION = 238;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2950,6 +2950,23 @@
                 img.src = FRIGANSO_LOGO_PNG;
             } catch (e) {}
         })();
+        // 📦 ESTOQUE (coluna EST-VENDA do SPAmov). Vem como texto cru "2293.2 Kg/156 Un" — aqui vira
+        // número pra dar pra ordenar, e texto curto pra caber na coluna do PDF.
+        // ⚠️ O separador decimal do SPAmov é PONTO ("2293.2"), não vírgula. Trocar isso por engano
+        // transformaria 2293.2 kg em 22932 kg.
+        const lerEstoque = (kgUn) => {
+            const m = String(kgUn || '').match(/([\d.]+)\s*Kg\s*\/\s*([\d.]+)\s*Un/i);
+            if (!m) return { kg: 0, un: 0, tem: false };
+            return { kg: parseFloat(m[1]) || 0, un: parseInt(m[2], 10) || 0, tem: true };
+        };
+        const estoqueTexto = (kgUn) => {
+            const e = lerEstoque(kgUn);
+            if (!e.tem) return '—';
+            const kg = e.kg >= 100 ? Math.round(e.kg).toLocaleString('pt-BR')
+                                   : e.kg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+            return kg + 'kg · ' + e.un.toLocaleString('pt-BR') + 'un';
+        };
+
         const PDF_LAYOUT_KEY = 'prumo_pdf_layout';
         const lerLayoutPdf = () => { try { return PDF_LAYOUTS[window.localStorage.getItem(PDF_LAYOUT_KEY)] ? window.localStorage.getItem(PDF_LAYOUT_KEY) : 'prumo'; } catch (e) { return 'prumo'; } };
         const salvarLayoutPdf = (v) => { try { window.localStorage.setItem(PDF_LAYOUT_KEY, v); } catch (e) {} };
@@ -3257,24 +3274,29 @@
 
             // ⚠️ Larguras somam 277mm (A4 deitado com 10mm de margem). Se acrescentar coluna, refaça a conta.
             // `dir: true` = número alinhado à direita da coluna.
+            // 📦 ESTOQUE = coluna EST-VENDA do SPAmov ("2293.2 Kg/156 Un"), que o site já lia mas não
+            // levava pro PDF. Sem ela não dá pra montar cotação olhando só o papel: você escolhe um
+            // item e descobre depois que não tem quilo pra atender.
             const COLS = [
-                { t: 'CÓD.', x: 10, w: 14 },  { t: 'PRODUTO', x: 24, w: 93 },
-                { t: 'TIPO', x: 118, w: 10 }, { t: 'PESO', x: 129, w: 19 },
-                { t: 'À VISTA', x: 149, w: 18, dir: true }, { t: 'CARTÃO', x: 168, w: 18, dir: true },
-                { t: '7 DIAS', x: 187, w: 14, dir: true },  { t: '14 DIAS', x: 201, w: 14, dir: true },
-                { t: '21 DIAS', x: 215, w: 14, dir: true }, { t: '28 DIAS', x: 229, w: 14, dir: true },
-                { t: '30 DIAS', x: 243, w: 14, dir: true }, { t: '35 DIAS', x: 257, w: 14, dir: true },
-                { t: '45 DIAS', x: 271, w: 16, dir: true },
+                { t: 'CÓD.', x: 10, w: 14 },  { t: 'PRODUTO', x: 24, w: 98 },
+                { t: 'TIPO', x: 122, w: 9 },  { t: 'PESO', x: 131, w: 15 },
+                { t: 'ESTOQUE', x: 146, w: 26, dir: true },
+                { t: 'À VISTA', x: 172, w: 16, dir: true }, { t: 'CARTÃO', x: 188, w: 15, dir: true },
+                { t: '7 DIAS', x: 203, w: 12, dir: true },  { t: '14 DIAS', x: 215, w: 12, dir: true },
+                { t: '21 DIAS', x: 227, w: 12, dir: true }, { t: '28 DIAS', x: 239, w: 12, dir: true },
+                { t: '30 DIAS', x: 251, w: 12, dir: true }, { t: '35 DIAS', x: 263, w: 12, dir: true },
+                { t: '45 DIAS', x: 275, w: 12, dir: true },
             ];
+            const COL_AVISTA = 5;   // índice da coluna destacada (mudou ao entrar o ESTOQUE)
             const ALTURA = 5.4;
             let y = 0;
             const cabecalho = () => {
                 pdfPintarPagina(doc, L, W, H, 'TABELA DE PREÇOS', subtitulo);
                 doc.setFillColor(...L.thead); doc.rect(10, 29, 277, 7, 'F');
-                doc.setFillColor(...L.acento); doc.rect(149, 29, 18, 7, 'F'); // coluna à vista destacada no cabeçalho
+                doc.setFillColor(...L.acento); doc.rect(COLS[COL_AVISTA].x, 29, COLS[COL_AVISTA].w, 7, 'F'); // coluna à vista destacada
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
                 COLS.forEach((c, k) => {
-                    doc.setTextColor(...(k === 4 ? L.titulo : L.theadTexto));
+                    doc.setTextColor(...(k === COL_AVISTA ? L.titulo : L.theadTexto));
                     c.dir ? doc.text(c.t, c.x + c.w - 1, 33.6, { align: 'right' }) : doc.text(c.t, c.x + 1, 33.6);
                 });
                 y = 37;
@@ -3308,17 +3330,28 @@
                 doc.setDrawColor(...L.linha); doc.setLineWidth(0.2); doc.line(10, y + altura, 287, y + altura);
                 const pz = p.precosPrazo || {};
                 const vals = [String(p.code), p.name, String(p.tipo || ''), String(p.pesoItem || ''),
+                              estoqueTexto(p.kgUn),
                               brl(p.originalPrice), brl(p.precoCartao),
                               brl(pz[7]), brl(pz[14]), brl(pz[21]), brl(pz[28]), brl(pz[30]), brl(pz[35]), brl(pz[45])];
                 const base = y + 3.7;
                 COLS.forEach((c, k) => {
-                    const destaque = k === 4; // à vista em destaque: é o preço de referência de toda venda
-                    doc.setFont('helvetica', destaque || k <= 1 ? 'bold' : 'normal');
+                    const destaque = k === COL_AVISTA; // à vista em destaque: é o preço de referência de toda venda
+                    const ehEstoque = k === 4;
+                    doc.setFont('helvetica', destaque || ehEstoque || k <= 1 ? 'bold' : 'normal');
                     doc.setFontSize(destaque || k === 0 ? 8 : 7.5); // código maior e claro: é o que se procura no Ctrl+F
-                    doc.setTextColor(...(destaque ? L.destaque : k === 0 ? L.cod : (k === 1 || k >= 5) ? L.texto : L.suave));
+                    doc.setTextColor(...(destaque ? L.destaque : ehEstoque ? L.desce : k === 0 ? L.cod : (k === 1 || k > COL_AVISTA) ? L.texto : L.suave));
                     if (k === 1) { doc.text(linhasNome, c.x + 1, base, { lineHeightFactor: 1.2 }); return; }
-                    const texto = corta(vals[k], c.w - 2);
-                    c.dir ? doc.text(texto, c.x + c.w - 1, base, { align: 'right' }) : doc.text(texto, c.x + 1, base);
+                    // ⚠️ Número NUNCA pode ser cortado — "5.202,…" é pior que número nenhum. Em coluna
+                    // numérica a fonte encolhe até caber (produto caro tipo pallet de arroz passa de
+                    // R$ 999 e estourava a largura).
+                    let texto = String(vals[k] || '');
+                    if (c.dir) {
+                        let tam = destaque || k === 0 ? 8 : 7.5;
+                        while (doc.getTextWidth(texto) > c.w - 2 && tam > 5) { tam -= 0.5; doc.setFontSize(tam); }
+                        doc.text(texto, c.x + c.w - 1, base, { align: 'right' });
+                    } else {
+                        doc.text(corta(texto, c.w - 2), c.x + 1, base);
+                    }
                 });
                 y += altura;
             });
@@ -3897,6 +3930,7 @@
                     nome: (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { numeric: true }),
                     codigo: (a, b) => String(a.code).localeCompare(String(b.code), 'pt-BR', { numeric: true }),
                     menor: (a, b) => porPreco(a, b, 1),
+                    estoque: (a, b) => lerEstoque(b.kgUn).kg - lerEstoque(a.kgUn).kg,
                     maior: (a, b) => porPreco(a, b, -1),
                 }[ordemTabela];
                 // ativos sempre primeiro; os que sumiram da tabela atual ficam no fim da lista
@@ -4070,7 +4104,7 @@
                                     </div>
                                     <div className="pt-grupo">
                                         <span className="pt-rotulo">Ordem</span>
-                                        {[['tabela', 'Tabela'], ['nome', 'A–Z'], ['menor', 'Menor preço'], ['maior', 'Maior preço'], ['codigo', 'Código']].map(([key, label]) => (
+                                        {[['tabela', 'Tabela'], ['nome', 'A–Z'], ['estoque', '📦 Mais estoque'], ['menor', 'Menor preço'], ['maior', 'Maior preço'], ['codigo', 'Código']].map(([key, label]) => (
                                             <button key={key} type="button" onClick={() => setOrdemTabela(key)} className={`pt-chip ${ordemTabela === key ? 'is-on' : ''}`}>{label}</button>
                                         ))}
                                     </div>
@@ -8775,6 +8809,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.41.0', data: '27/10/2026', areas: ['site'], itens: [
+                '📦 O PDF da tabela agora mostra o ESTOQUE de cada item (quantos kg e quantas unidades tem pra vender) — o dado vem da coluna EST-VENDA do SPAmov, que o site já lia mas não levava pro papel',
+                '📦 Nova ordenação "Mais estoque" na Tabela de Preços, pra achar rápido o que tem quilo sobrando',
+                '🔢 Preço acima de R$ 999 não sai mais cortado no PDF: o número encolhe até caber em vez de virar "5.202,…"',
+            ]},
             { versao: '2.40.0', data: '26/10/2026', areas: ['site', 'app'], itens: [
                 '⚡ ABERTURA MUITO MAIS RÁPIDA: o app compila uma vez por versão e guarda no aparelho. Da 2ª abertura em diante não baixa mais o Babel (3 MB) nem compila nada — medido aqui: 4,3s → 0,2s',
                 '⚡ pdf.js, planilha, gerador de PDF e gráficos (1,73 MB juntos) não são mais baixados na abertura — cada um só desce quando você abre a tela que usa ele',
