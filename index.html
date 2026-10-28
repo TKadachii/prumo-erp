@@ -185,7 +185,7 @@
         .tema-esmeralda .bg-rose-50, .tema-esmeralda .bg-rose-100, .tema-esmeralda .bg-rose-50\/30 { background-color: rgba(12,120,78,.32) !important; }
         .tema-esmeralda .border, .tema-esmeralda .border-slate-100, .tema-esmeralda .border-slate-200 { border-color: rgba(52,211,153,.25) !important; }
     </style>
-    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=239">
+    <link rel="stylesheet" href="https://tkadachii.github.io/prumo-erp/visual.css?v=240">
 </head>
 <body class="prumo-production">
     <!-- 🎨 Tema do sistema (Claro/Escuro/Sakura/Oceano/Esmeralda). Escolha salva em friganso_tema.
@@ -376,19 +376,75 @@
             s = s.replace(/\bcong\.?\b/g, "congelado").replace(/\b(resf|ref)\.?\b/g, "resfriado").replace(/[-_./]/g, " ").replace(/\s+/g, " ").trim();
             return s;
         };
+        // 🔎 CHAVE "DE OUVIDO" (2026-10-28) — o catálogo escreve do jeito dele e a gente digita do
+        // jeito que fala. "CONTRA-FILE GRIL" (um L só) sumia quando se procurava por "grill".
+        // Aqui as duas pontas viram a MESMA chave aproximada, então a grafia deixa de importar:
+        //   grill/gril → gril · mussarela/muçarela → musarela · picanha/picana → picana
+        // ⚠️ A mesma função roda nos dois lados (nome e busca). Mudar só um lado quebraria tudo.
+        const chaveFonetica = (s) => String(s || '')
+            .replace(/ph/g, 'f')
+            .replace(/lh/g, 'l').replace(/nh/g, 'n').replace(/ch/g, 'x')
+            .replace(/h/g, '')
+            .replace(/y/g, 'i').replace(/w/g, 'v')
+            .replace(/qu/g, 'c').replace(/[qk]/g, 'c')
+            .replace(/z/g, 's')
+            .replace(/c([ei])/g, 's$1')
+            .replace(/(.)\1+/g, '$1');            // letra repetida vira uma só: grill→gril, bella→bela
+        // Distância de edição com teto 1 — perdoa UMA letra trocada, faltando ou sobrando e nada mais.
+        // Para assim que passa de 1 em vez de montar a matriz inteira: roda em lista de 700 produtos
+        // a cada tecla digitada, num Galaxy A07.
+        const ateUmErro = (a, b) => {
+            if (a === b) return true;
+            const dif = a.length - b.length;
+            if (dif > 1 || dif < -1) return false;
+            const curta = a.length <= b.length ? a : b;
+            const longa = a.length <= b.length ? b : a;
+            let i = 0, j = 0, erros = 0;
+            while (i < curta.length && j < longa.length) {
+                if (curta[i] === longa[j]) { i++; j++; continue; }
+                if (++erros > 1) return false;
+                if (curta.length === longa.length) { i++; j++; } else { j++; }
+            }
+            return erros + (longa.length - j) <= 1;
+        };
         // Busca de produto tolerante: cada palavra digitada precisa existir no nome (em qualquer ordem),
         // tratando "contra file" e "contrafile" como iguais. Também casa por código.
-        const matchProduto = (p, query) => {
+        // Tenta em degraus, do mais exato pro mais perdoado — assim quem digita certo continua vendo
+        // primeiro o que é certo, e quem erra uma letra ainda acha o item em vez de ver lista vazia.
+        const matchProduto = (p, query, comErroDeDigitacao) => {
             if (!p) return false;
             const q = (query || '').trim();
             if (!q) return false;
             if (String(p.code).includes(q)) return true;
             const nName = normalizeForSearch(p.name);
             const nNameJunto = nName.replace(/\s+/g, '');
-            const norm = normalizeForSearch(q);
-            const tokens = norm.split(' ').filter(Boolean);
+            const tokens = normalizeForSearch(q).split(' ').filter(Boolean);
             if (!tokens.length) return false;
-            return tokens.every(t => nName.includes(t) || nNameJunto.includes(t));
+            // ⚡ A chave fonética do NOME só é montada se a busca direta falhar. Isso roda pra 741
+            // produtos a cada tecla digitada num Galaxy A07 — quem digita certo não paga o custo.
+            let nFon = null, nFonJunto = null, palavras = null;
+            const fonDoNome = () => {
+                if (nFon === null) { nFon = chaveFonetica(nName); nFonJunto = nFon.replace(/\s+/g, ''); }
+                return nFon;
+            };
+            return tokens.every(t => {
+                if (nName.includes(t) || nNameJunto.includes(t)) return true;      // 1. como está escrito
+                const tf = chaveFonetica(t);
+                if (fonDoNome().includes(tf) || nFonJunto.includes(tf)) return true;   // 2. como soa
+                // 3. uma letra de diferença — só em palavra de 5+ letras, senão "pa" acharia "pe", "po"...
+                if (!comErroDeDigitacao || tf.length < 5) return false;
+                if (palavras === null) palavras = fonDoNome().split(' ').filter(Boolean);
+                return palavras.some(w => ateUmErro(w, tf));
+            });
+        };
+        // 🔎 A busca de verdade: primeiro do jeito certo, e SÓ se não achar nada é que perdoa a letra
+        // errada. Sem esse segundo passo separado, procurar "picanha" trazia "CEBOLA PICADA" junto
+        // (picana × picada: uma letra) — quem digita certo não pode pagar pelo conserto de quem erra.
+        const filtrarProdutos = (lista, query) => {
+            const q = (query || '').trim();
+            if (!q) return (lista || []).slice();
+            const certos = (lista || []).filter(p => matchProduto(p, q));
+            return certos.length ? certos : (lista || []).filter(p => matchProduto(p, q, true));
         };
         const parsePrice = (priceStr) => {
             if (!priceStr) return null;
@@ -405,7 +461,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 239;
+        const APP_BUILD_VERSION = 240;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2200,10 +2256,9 @@
             const produto = ordenados.find(p => String(p.code) === codeAtivo);
 
             const achados = useMemo(() => {
-                const t = busca.trim().toLowerCase();
+                const t = busca.trim();
                 if (!t) return ordenados.slice(0, 60);
-                return ordenados.filter(p => String(p.code).toLowerCase().includes(t) ||
-                    String(p.name || '').toLowerCase().includes(t)).slice(0, 60);
+                return filtrarProdutos(ordenados, t).slice(0, 60);
             }, [busca, ordenados]);
 
             // série do produto escolhido, ao longo das tabelas distribuídas
@@ -3949,7 +4004,7 @@
                 if (soLista) base = base.filter(p => lnSet.has(String(p.code)));
                 if (soValorMaximo) base = base.filter(p => vmMap[String(p.code)] != null);
                 if (soInativos) base = base.filter(p => p.ativo === false);
-                if (searchTerm) base = base.filter(p => matchProduto(p, searchTerm.trim()));
+                if (searchTerm) base = filtrarProdutos(base, searchTerm);
                 // Preço pra ordenar = o da coluna "Tabela" no modo escolhido; sem preço nesse modo vai pro fim
                 const precoOrdem = (p) => { const v = precoTabelaModo(p); return v != null && Number(v) > 0 ? Number(v) : null; };
                 const porPreco = (a, b, sinal) => {
@@ -4767,7 +4822,7 @@
             const mpResultados = useMemo(() => {
                 const q = mpBusca.trim();
                 if (!q) return [];
-                return products.filter(p => matchProduto(p, q)).slice(0, 30);
+                return filtrarProdutos(products, q).slice(0, 30);
             }, [products, mpBusca]);
             // 🔁 Mesma regra do Fazer Pedido: clicar de novo soma 1 na qty; a lista de resultados continua
             // aberta (não limpa a busca) pra selecionar mais itens em sequência sem redigitar.
@@ -5560,7 +5615,7 @@
                 if (!configPerfil) return [];
                 const q = configBusca.trim();
                 const base = q
-                    ? products.filter(p => matchProduto(p, q))
+                    ? filtrarProdutos(products, q)
                     : products.filter(p => configCodes.has(String(p.code)) || (sugestoesPorPerfil[configPerfil.id] || []).includes(String(p.code)));
                 return base.filter(p => !lnSet.has(String(p.code)))
                     .sort((a, b) => Number(configCodes.has(String(b.code))) - Number(configCodes.has(String(a.code))) || (vendasPorProduto[String(b.code)] || 0) - (vendasPorProduto[String(a.code)] || 0))
@@ -5581,7 +5636,7 @@
 
             const filtered = useMemo(() => {
                 let lista;
-                if (search.trim()) lista = products.filter(p => matchProduto(p, search.trim()));
+                if (search.trim()) lista = filtrarProdutos(products, search);
                 else if (selectedCodes.size > 0) lista = products.filter(p => selectedCodes.has(String(p.code)));
                 else return [];
                 return lista.filter(p => !lnSet.has(String(p.code)))
@@ -7568,7 +7623,7 @@
                             <div className="mt-3 border-t border-slate-100 pt-3">
                                 <input value={buscaProd} onChange={e => setBuscaProd(e.target.value)} placeholder="Buscar produto pra vitrine..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-2" />
                                 <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
-                                    {(products || []).filter(p => !buscaProd || String(p.name || '').toLowerCase().includes(buscaProd.toLowerCase()) || String(p.code).includes(buscaProd)).slice(0, 60).map(p => (
+                                    {filtrarProdutos(products || [], buscaProd).slice(0, 60).map(p => (
                                         <label key={p.code} className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50">
                                             <input type="checkbox" checked={produtosVitrine.has(String(p.code))} onChange={() => { const s = new Set(produtosVitrine); const k = String(p.code); s.has(k) ? s.delete(k) : s.add(k); setProdutosVitrine(s); }} className="h-4 w-4 accent-rose-700" />
                                             <span className="font-mono text-slate-400">{p.code}</span>
@@ -8843,6 +8898,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.42.1', data: '28/10/2026', areas: ['site'], itens: [
+                '🔎 BUSCA DE PRODUTO PERDOA ERRO DE GRAFIA: o catálogo escreve "CONTRA-FILE GRIL" com um L só, e quem procurava por "grill" não achava nada. Agora acha dos dois jeitos',
+                '🔎 Vale pra qualquer diferença de escrita do mesmo som: mussarela/muçarela, picanha/picana, lasanha/lasana, coxinha/cochinha, kibe/quibe',
+                '🔎 E perdoa UMA letra trocada, faltando ou sobrando em palavras de 5 letras pra cima — "fradinha" acha FRALDINHA',
+                '🔎 A correção entrou em TODAS as buscas de produto: Novo pedido, Criar ofertas, Tabela de Preços, Campanhas, Catálogo, vitrine dos leads, "Tudo que já comprou" e o histórico de preço',
+            ]},
             { versao: '2.42.0', data: '28/10/2026', areas: ['site'], itens: [
                 '📦 ESTOQUE EM TODA TELA QUE MOSTRA PRODUTO: Criar ofertas, Novo pedido, Fila de Pedidos, Campanhas, Catálogo, vitrine dos leads e o histórico do cliente agora trazem uma etiqueta com quantos quilos tem pra vender hoje',
                 '🎨 A etiqueta já diz o estado pela cor: ciano = tranquilo, âmbar = acabando (menos de 100 kg), vermelho = zerado (não oferte), cinza = a tabela não trouxe o estoque desse item',
@@ -10015,7 +10076,7 @@
                 const q = busca.trim();
                 const ativos = (products || []).filter(p => p.ativo !== false);
                 if (!q) return ativos.slice(0, 60);
-                return ativos.filter(p => matchProduto(p, q)).slice(0, 60);
+                return filtrarProdutos(ativos, q).slice(0, 60);
             }, [products, busca]);
 
             const toggleSelecionado = (code) => setSelecionados(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n; });
@@ -11424,9 +11485,9 @@
             }, [clienteInfo, purchases, clienteId, products]);
             const [buscaJaComprou, setBuscaJaComprou] = useState('');
             const jaComprouFiltrado = useMemo(() => {
-                const q = normalizeForSearch(buscaJaComprou.trim());
+                const q = buscaJaComprou.trim();
                 if (!q) return jaComprou;
-                return jaComprou.filter(it => it.code.includes(buscaJaComprou.trim()) || normalizeForSearch(it.name).includes(q));
+                return filtrarProdutos(jaComprou, q);
             }, [jaComprou, buscaJaComprou]);
             const rotuloDia = (dia, ts) => {
                 const hoje = diaISO(Date.now());
@@ -11463,7 +11524,7 @@
             const resultados = useMemo(() => {
                 const q = busca.trim();
                 if (!q) return [];
-                return products.filter(p => matchProduto(p, q)).slice(0, 30);
+                return filtrarProdutos(products, q).slice(0, 30);
             }, [products, busca]);
 
             // 📊 Quantas VEZES cada produto já foi vendido (nº de pedidos que incluíram o item, não peso) —
@@ -12496,7 +12557,7 @@
                                     <AlertaProdutosForaTabela produtos={products.filter(p => produtosAlvo.has(String(p.code)))} />
                                     <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
                                         {products.length === 0 && <p className="text-center text-slate-400 text-xs py-3">Importe a tabela de produtos primeiro.</p>}
-                                        {produtosOrdenados.filter(p => { const q = buscaProd.trim().toLowerCase(); return !q || (p.name || '').toLowerCase().includes(q) || String(p.code).includes(q); }).slice(0, 80).map(p => {
+                                        {filtrarProdutos(produtosOrdenados, buscaProd).slice(0, 80).map(p => {
                                             const code = String(p.code); const qtd = clientesPorProduto[code] || 0; const on = produtosAlvo.has(code);
                                             return (
                                                 <div key={code} onClick={() => toggleProd(code)} className={`flex items-center gap-2 p-1.5 rounded-lg cursor-pointer border ${on ? 'bg-rose-100 border-rose-300' : 'bg-white border-slate-100 hover:border-rose-200'}`}>
