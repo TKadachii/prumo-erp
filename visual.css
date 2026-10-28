@@ -273,3 +273,16 @@ html,body,#root{width:100%;height:100%;overflow:hidden}body{overscroll-behavior:
 [data-route=vendidos] .prumo-kpi{min-height:0!important;padding:16px 18px!important}
 [data-route=vendidos] .prumo-kpi h3{padding-top:0!important;font-size:23px!important}
 [data-route=vendidos] .prumo-kpi p{margin-bottom:4px!important;min-height:0!important}
+
+/* 📦 Etiqueta de ESTOQUE (2026-10-28) — aparece ao lado do item em toda tela que lista produto:
+   Criar ofertas, Novo pedido, Fila, Campanhas, Catálogo, vitrine de leads e histórico do cliente.
+   Cor conta a história sem precisar ler: ciano = tranquilo, âmbar = acabando (<100kg),
+   vermelho = zerado (não oferte), cinza = a tabela não trouxe o estoque desse item. */
+.prumo-estoque-tag{display:inline-flex;align-items:center;gap:.2rem;flex-shrink:0;
+  font-size:10px;font-weight:800;line-height:1.1;white-space:nowrap;letter-spacing:.01em;
+  padding:.28rem .5rem;border-radius:999px;border:1px solid transparent}
+.prumo-estoque-tag.is-compacto{font-size:9px;padding:.18rem .38rem;margin-left:.25rem}
+.prumo-estoque-tag.is-ok{background:#22d3ee1f;border-color:#22d3ee47;color:#9ae9f8}
+.prumo-estoque-tag.is-baixo{background:#f59e0b1f;border-color:#f59e0b4d;color:#fcd77f}
+.prumo-estoque-tag.is-zero{background:#f43f5e1f;border-color:#f43f5e4d;color:#fda4b4}
+.prumo-estoque-tag.is-ignoto{background:#94a3b81a;border-color:#94a3b838;color:#9aa6b8}
