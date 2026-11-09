@@ -168,7 +168,15 @@
     if (!document.body || document.body.tagName === "FRAMESET") return;
 
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-    const bodyText = () => (document.body && document.body.innerText) || "";
+    // Texto da página SEM a faixa de status do próprio robô. Ela fica dentro do <body>, então
+    // "o texto mudou" disparava com a nossa própria mensagem ("Buscando o nome do cliente...") e o
+    // robô seguia antes do SPAmov achar o cliente.
+    const bodyText = () => {
+        const t = (document.body && document.body.innerText) || "";
+        const sb = document.getElementById("friganso-status");
+        const st = sb && sb.innerText;
+        return st ? t.split(st).join("") : t;
+    };
 
     // ---------- LEITURA (Resumo) ----------
     function extrairCliente() {
@@ -1646,22 +1654,120 @@
         // a página recarrega; no próximo load o finalizar continua
     }
 
-    async function processarRun() {
-      try {
+    // ═══ 👀 VIGIA DO LANÇAMENTO (2026-11-09) ═════════════════════════════════════════════════
+    // O robô antigo trabalhava "no escuro": marcava o passo como feito ANTES de conferir e só
+    // andava quando a página recarregava. Com internet ruim o clique se perdia e o pedido parava
+    // no meio (sem o ID do cliente, sem item, ou pulando o 2º item) sem avisar ninguém. Agora:
+    //  1. CONFERE na tela antes de avançar: o item só conta quando aparece na lista do pedido
+    //     (ou o SPAmov diz "item aceito"). Não apareceu? Lança de novo (até ITEM_MAX_TENT vezes).
+    //  2. NUNCA lança o que já está na lista — por isso pode repetir sem medo de dobrar item.
+    //  3. Um VIGIA (setInterval) roda à parte e não depende da página recarregar: passo parado
+    //     há mais de 25s (45s esperando o ✓) é refeito, até VIGIA_MAX vezes por passo.
+    //  4. No fim, VISTORIA: compara a lista da tela com o pedido, relança o que faltou e avisa
+    //     se algum item entrou repetido.
+    const VIGIA_LIMITE_MS = 25000, VIGIA_LIMITE_CLIQUE_MS = 45000, VIGIA_MAX = 4, VIGIA_MAX_TOTAL = 14, ITEM_MAX_TENT = 3;
+    const carregadoEm = Date.now();
+    let processandoRun = false;
+
+    function normCodigo(c) { return String(c || "").replace(/[^0-9a-z]/gi, "").replace(/^0+/, "").toLowerCase(); }
+    // Códigos dos itens JÁ lançados no pedido aberto, contando repetidos. ok=false quando a tabela
+    // do pedido não está na tela — aí não dá pra concluir nada (nem que faltou, nem que entrou).
+    // Conta cada <td> de código uma vez só: o SPAmov aninha tabelas, e varrer as linhas de fora
+    // pegaria o mesmo item duas vezes.
+    function itensNaTela() {
+        const tabela = acharTabelaItens();
+        if (!tabela || colXQuant(tabela) === null) return { ok: false, contagem: new Map() };
+        const ignorar = new Set([extrairSpamov(), extrairOrcamento()].filter(Boolean));
+        const contagem = new Map();
+        tabela.querySelectorAll("td").forEach(function (td) {
+            if (td.querySelector("td")) return;
+            const mm = (td.innerText || "").trim().match(/^(\d{3,7})$/);
+            if (!mm || ignorar.has(mm[1])) return;
+            const tr = td.parentElement; if (!tr || !tr.cells) return;
+            let nome = "";
+            Array.prototype.forEach.call(tr.cells, function (c) { const ct = (c.innerText || "").replace(/\s+/g, " ").trim(); if (/[A-Za-zÀ-Ú]{4,}/.test(ct) && ct.length > nome.length) nome = ct; });
+            if (!nome || nome.length > 70 || /[{}=;]|\bfunction\b|https?:/i.test(nome)) return;
+            const k = normCodigo(mm[1]);
+            contagem.set(k, (contagem.get(k) || 0) + 1);
+        });
+        return { ok: true, contagem: contagem };
+    }
+    // Código do cliente do pedido aberto, só quando vem logo depois do rótulo CLIENTE ("[j] 123 - NOME").
+    function clienteNaTela() {
+        const m = bodyText().match(/CLIENTE[\s\S]{0,60}?\[[jf]\]\s*(\d+[a-z]?)\s*-\s*[^\n\r]*[A-Za-zÀ-Ú]/i);
+        return m && normCodigo(m[1]) ? m[1] : "";
+    }
+    function msgRecusaSpamov() { const msg = bodyText().slice(-900); return /n[ãa]o\s+adicionado|saldo\s+n[ãa]o\s+suporta|n[ãa]o\s+suporta|estoque\s+insuficiente|bloquead/i.test(msg) && !/item\s+aceito/i.test(msg); }
+    function msgItemAceito() { return /item\s+aceito/i.test(bodyText().slice(-900)); }
+    function nomeDaEtapa(stage, run) {
+        if (stage === "novo") return "abrir Novo";
+        if (stage === "cliente") return "preencher o cliente " + ((run.pedido && run.pedido.cliente) || "?");
+        if (stage === "finalizar") return "confirmar (DS→SP→PA)";
+        const itens = (run.pedido && run.pedido.itens) || [];
+        const i = Math.min(run.idx || 0, itens.length);
+        return "lançar itens (" + i + "/" + itens.length + ")";
+    }
+    function resumoRun(run) {
+        const total = ((run.pedido && run.pedido.itens) || []).length;
+        return "Cliente " + ((run.pedido && run.pedido.cliente) || "?") + (run.clienteOk ? " ✓" : "") + " · " + (run.confirmados || []).length + "/" + total + " itens conferidos";
+    }
+
+    // 👀 O vigia: roda a cada 4s em todo frame do SPAmov, sem depender de recarregar a página.
+    async function vigiarRun() {
+        if (processandoRun) return;
+        const run = await getRun();
+        if (!run || !run.ativo || run.stage === "finalizar") return;
+        if (!ehFramePrincipal()) return;
+        const stage = run.stage || "itens";
+        // só o frame que mostra a tela desta etapa age — senão cada frame faria a sua tentativa
+        const temTela = stage === "novo" ? !!acharBotaoNovo()
+            : stage === "cliente" ? !!(acharCampoCliente() || acharBotaoNovo())
+            : (ehFrameItens() || !!acharCampoCliente());
+        if (!temTela) return;
+        const parado = Date.now() - (run.ts || 0);
+        if (parado < (run.aguardando ? VIGIA_LIMITE_CLIQUE_MS : VIGIA_LIMITE_MS)) return;
+        const chave = stage + ":" + (run.idx || 0);
+        const n = (run.vigiaChave === chave ? (run.vigiaN || 0) : 0) + 1;
+        const nTotal = (run.vigiaTotal || 0) + 1;
+        if (n > VIGIA_MAX || nTotal > VIGIA_MAX_TOTAL) {
+            await clearRun();
+            dlog("🛑 vigia: " + nomeDaEtapa(stage, run) + " não andou depois de " + (n > VIGIA_MAX ? VIGIA_MAX + " tentativas" : VIGIA_MAX_TOTAL + " tentativas no pedido") + " — parei");
+            statusBox()("🛑 Travou em: " + nomeDaEtapa(stage, run) + ". Já tentei de novo várias vezes. " + resumoRun(run) + ". Confira a tela e termine na mão.");
+            return;
+        }
+        // Trava entre frames: cada um assina e quem continuar dono depois de 400ms age.
+        const eu = Math.random().toString(36).slice(2);
+        await setRun(Object.assign({}, run, { ts: Date.now(), vigiaChave: chave, vigiaN: n, vigiaTotal: nTotal, vigiaDono: eu }));
+        await sleep(400);
+        const r2 = await getRun();
+        if (!r2 || !r2.ativo || r2.vigiaDono !== eu) return;
+        dlog("👀 vigia: " + nomeDaEtapa(stage, run) + " parada há " + Math.round(parado / 1000) + "s — refazendo (" + n + "/" + VIGIA_MAX + ")");
+        statusBox()("👀 Demorou demais — refazendo: " + nomeDaEtapa(stage, run) + " (" + n + "/" + VIGIA_MAX + ")");
+        processarRun({ vigia: true });
+    }
+
+    async function processarRun(opts) {
+        if (processandoRun) return;
+        processandoRun = true;
+        try { await processarRunPasso(opts || {}); }
+        catch (e) { dlog("❌ ERRO: " + (e && e.message ? e.message : e)); }
+        finally { processandoRun = false; }
+    }
+
+    async function processarRunPasso(opts) {
         const run = await getRun();
         if (!run || !run.ativo) { return; }
         if (!ehFramePrincipal()) { dlog("(frame ignorado — sem UI do SPAmov)"); return; }
         // ⏳ 8 min sem progresso (era 2min) — cada item recarrega a página inteira do SPAmov, e com
         // internet lenta isso pode demorar bem mais que 2min; 2min descartava o pedido todo no meio do
         // lançamento (itens que ainda faltavam ficavam pra trás sem aviso nenhum).
-        if (Date.now() - (run.ts || 0) > 8 * 60 * 1000) { await clearRun(); dlog("⏰ expirou (8min sem progresso) — limpei"); return; }
+        if (Date.now() - (run.ts || 0) > 8 * 60 * 1000) { await clearRun(); dlog("⏰ expirou (8min sem progresso) — limpei"); statusBox()("⏰ O lançamento ficou 8 min parado e foi cancelado. " + resumoRun(run) + "."); return; }
 
         const status = statusBox();
         const stage = run.stage || "itens";
-        dlog("➡ etapa=" + stage + " idx=" + run.idx + " aguardando=" + run.aguardando);
-        const nomeEtapa = stage === "novo" ? "abrir Novo" : (stage === "cliente" ? "preencher Cliente" : (stage === "finalizar" ? "confirmar (DS→SP→PA)" : "lançar Itens"));
-        status("🔄 Retomando — etapa: " + nomeEtapa + "...");
-        await sleep(1800); // deixa a página assentar após o "pisca"/navegação
+        dlog("➡ etapa=" + stage + " idx=" + run.idx + " aguardando=" + run.aguardando + (opts.vigia ? " (vigia)" : ""));
+        status("🔄 " + (opts.vigia ? "Refazendo" : "Retomando") + " — etapa: " + nomeDaEtapa(stage, run) + "...");
+        await sleep(opts.vigia ? 600 : 1800); // deixa a página assentar após o "pisca"/navegação
 
         // ETAPA FINAL: clicar DS -> SP -> PA até confirmar o pedido
         if (stage === "finalizar") { await clearRun(); status("✅ Itens lançados! Clique no DP/finalizar você mesmo. 👍"); return; } // DS→SP→PA desativado a pedido
@@ -1670,15 +1776,15 @@
         if (stage === "novo") {
             let btn = acharBotaoNovo(), t = 0;
             while (!btn && t < 8) { await sleep(500); btn = acharBotaoNovo(); t++; }
-            if (!btn) { dlog("❌ botão Novo NÃO achado"); if (ehFramePrincipal()) status("❌ Não achei o botão 'Novo'."); return; }
+            if (!btn) { dlog("❌ botão Novo NÃO achado"); if (ehFramePrincipal()) status("❌ Não achei o botão 'Novo' — o vigia tenta de novo em instantes."); return; }
             dlog("✓ botão Novo achado — clicando");
             status("Abrindo novo pedido...");
-            await setRun({ pedido: run.pedido, stage: "cliente", idx: 0, ativo: true, aguardando: false, ultimoCode: "", ts: Date.now() });
+            await setRun(Object.assign({}, run, { stage: "cliente", idx: 0, aguardando: false, ultimoCode: "", ts: Date.now() }));
             clicar(btn);
             return; // a página vai recarregar e a etapa "cliente" continua sozinha no próximo load
         }
 
-        // ETAPA 2: preencher o cliente e clicar em "Enviar"
+        // ETAPA 2: preencher o cliente, CONFERIR que o SPAmov achou ele, e clicar em "Enviar"
         if (stage === "cliente") {
             status("Aguardando a tela do cliente...");
             await sleep(1000); // ⏱️ folga após o "Novo" (a tela termina de abrir e foca o campo)
@@ -1691,20 +1797,44 @@
             let cli = acharCampoCliente();
             if (!cli) { const ae = document.activeElement; if (ae && ae.tagName === "INPUT" && ae.type !== "checkbox" && ae.type !== "radio") cli = ae; }
             dlog("campo cliente: " + (cli ? "achado" : "NÃO achado"));
-            if (!cli) { if (ehFramePrincipal()) status("❌ Não achei o campo do Cliente."); return; }
-            status("Digitando cliente " + run.pedido.cliente + "...");
-            typeInto(cli, run.pedido.cliente);   // digitação robusta (native setter + execCommand)
-            dlog("valor no campo após digitar: '" + (cli.value || "") + "'");
-            // 🔑 dispara o "saiu do campo" pra o SPAmov buscar e MOSTRAR o nome do cliente (AJAX).
-            // No Android isso só acontecia quando o usuário tocava na tela; agora forçamos no robô.
-            const antesNome = bodyText();
-            blurDe(cli);
-            enter(cli);
-            status("Buscando o nome do cliente " + run.pedido.cliente + "...");
-            const apareceu = await esperar(function () { return bodyText() !== antesNome; }, 8000); // espera o nome aparecer (o corpo muda)
-            await sleep(900); // folga extra pro AJAX assentar
-            dlog("nome do cliente: " + (apareceu ? "apareceu (corpo mudou)" : "NÃO mudou — segui mesmo assim"));
-            await setRun({ pedido: run.pedido, stage: "itens", idx: 0, ativo: true, aguardando: false, ultimoCode: "", ts: Date.now() });
+            if (!cli) {
+                // 🔁 O "Novo" não pegou (a tela continua a de antes): volta um passo e clica de novo.
+                if (opts.vigia && acharBotaoNovo()) {
+                    dlog("vigia: o campo do cliente não apareceu — clicando em Novo de novo");
+                    await setRun(Object.assign({}, run, { stage: "novo", ts: Date.now() }));
+                    return processarRunPasso({ vigia: true });
+                }
+                if (ehFramePrincipal()) status("❌ Não achei o campo do Cliente — o vigia tenta de novo em instantes.");
+                return;
+            }
+            // Digita e CONFERE que o nome do cliente apareceu (até 3 vezes). Antes bastava "a página
+            // mudou" — e com internet ruim o pedido seguia sem o cliente.
+            const alvo = normCodigo(run.pedido.cliente);
+            let achou = false;
+            for (let t = 1; t <= 3 && !achou; t++) {
+                status("Digitando cliente " + run.pedido.cliente + (t > 1 ? " (tentativa " + t + "/3)" : "") + "...");
+                const antesNome = bodyText();
+                typeInto(cli, run.pedido.cliente);   // digitação robusta (native setter + execCommand)
+                dlog("valor no campo após digitar: '" + (cli.value || "") + "'");
+                // 🔑 dispara o "saiu do campo" pra o SPAmov buscar e MOSTRAR o nome do cliente (AJAX).
+                // No Android isso só acontecia quando o usuário tocava na tela; agora forçamos no robô.
+                blurDe(cli);
+                enter(cli);
+                status("Buscando o nome do cliente " + run.pedido.cliente + "...");
+                const mudou = await esperar(function () { return normCodigo(clienteNaTela()) === alvo || bodyText() !== antesNome; }, 8000);
+                await sleep(900); // folga extra pro AJAX assentar
+                const naTela = clienteNaTela();
+                // Se o SPAmov mostra "[j] código - nome", o código tem que bater. Se não mostra nesse
+                // formato, vale o critério antigo (a página mudou) com o campo ainda com o ID certo.
+                achou = naTela ? normCodigo(naTela) === alvo : (mudou && normCodigo(cli.value) === alvo);
+                dlog("cliente (tentativa " + t + "): " + (naTela ? "na tela " + naTela : (mudou ? "página mudou" : "nada mudou")) + " · campo='" + (cli.value || "") + "' -> " + (achou ? "OK" : "não confirmado"));
+                if (!achou) { await sleep(800); cli = acharCampoCliente() || cli; }
+            }
+            if (!achou && normCodigo(cli.value) !== alvo) {
+                status("❌ O ID " + run.pedido.cliente + " não ficou no campo — o vigia tenta de novo em instantes.");
+                return; // sem ts novo: o vigia refaz esta etapa
+            }
+            await setRun(Object.assign({}, run, { stage: "itens", idx: 0, aguardando: false, ultimoCode: "", clienteOk: achou, ts: Date.now() }));
             let env = acharBotaoEnviar(), te = 0;
             while (!env && te < 8) { await sleep(400); env = acharBotaoEnviar(); te++; }
             dlog("botão Enviar: " + (env ? "achado — clicando" : "NÃO achado (tento Enter)"));
@@ -1714,20 +1844,74 @@
         }
 
         // ETAPA 3: itens
-        if (!ehFrameItens()) return; // só o frame de itens age aqui
-        const total = run.pedido.itens.length;
+        if (!ehFrameItens()) {
+            // 🔁 O "Enviar" do cliente não pegou: a tela ainda é a do cliente. Volta e refaz.
+            if (opts.vigia && acharCampoCliente()) {
+                dlog("vigia: a lista de itens não abriu — voltando pro cliente");
+                await setRun(Object.assign({}, run, { stage: "cliente", ts: Date.now() }));
+                return processarRunPasso({ vigia: true });
+            }
+            return; // só o frame de itens age aqui
+        }
+        const itens = run.pedido.itens;
+        const total = itens.length;
+        const confirmados = (run.confirmados || []).slice();
+        const naoConferidos = (run.naoConferidos || []).slice();
+        let idx = run.idx || 0;
+        let tentItem = run.tentItem || 0;
+        const quantasVezes = function (lista, k) { return lista.filter(function (c) { return c === k; }).length; };
 
-        // Confere o resultado do item anterior (a mensagem aparece na página recarregada)
-        if (run.aguardando) {
-            const msg = bodyText().slice(-900);
-            if (/n[ãa]o\s+adicionado|saldo\s+n[ãa]o\s+suporta|n[ãa]o\s+suporta|estoque\s+insuficiente|bloquead/i.test(msg) && !/item\s+aceito/i.test(msg)) {
+        // 🧍 Cliente certo? Lançar item no cliente errado é pior que parar.
+        const cliTela = clienteNaTela();
+        if (cliTela && run.pedido.cliente && normCodigo(cliTela) !== normCodigo(run.pedido.cliente)) {
+            await clearRun();
+            dlog("🛑 cliente na tela = " + cliTela + ", mas o pedido é do " + run.pedido.cliente + " — parei");
+            status("🛑 O pedido aberto é do cliente " + cliTela + ", não do " + run.pedido.cliente + ". Parei pra não lançar no cliente errado.");
+            return;
+        }
+
+        // Confere o resultado do último ✓ (na página recarregada, ou na mesma se o vigia chamou)
+        if (run.aguardando && run.ultimoCode) {
+            const tela = itensNaTela();
+            const recarregou = carregadoEm > (run.cliqueTs || 0);
+            const k = normCodigo(run.ultimoCode);
+            const entrou = (tela.ok && (tela.contagem.get(k) || 0) > quantasVezes(confirmados, k)) || (recarregou && msgItemAceito());
+            if (entrou) {
+                confirmados.push(k); tentItem = 0;
+                dlog("✅ conferido na lista: " + run.ultimoCode);
+            } else if (msgRecusaSpamov()) {
                 await clearRun();
                 status("🛑 PAROU no item " + run.ultimoCode + ". O SPAmov recusou (veja a faixa azul). Os anteriores foram lançados.");
                 return;
+            } else if (tela.ok && confirmados.every(function (c) { return tela.contagem.has(c); })) {
+                // a lista está legível (os anteriores aparecem) e este não: não entrou mesmo
+                tentItem++;
+                if (tentItem > ITEM_MAX_TENT) {
+                    await clearRun();
+                    dlog("🛑 " + run.ultimoCode + " não entrou depois de " + ITEM_MAX_TENT + " tentativas — parei");
+                    status("🛑 O item " + run.ultimoCode + " não entrou depois de " + ITEM_MAX_TENT + " tentativas. " + resumoRun(Object.assign({}, run, { confirmados: confirmados })) + ". Lance o resto na mão.");
+                    return;
+                }
+                idx = Math.max(0, idx - 1);
+                dlog("🔁 " + run.ultimoCode + " não apareceu na lista — lançando de novo (" + tentItem + "/" + ITEM_MAX_TENT + ")");
+            } else {
+                naoConferidos.push(k);
+                dlog("⚠️ não consegui ler a lista pra conferir " + run.ultimoCode + " — sigo e confiro na vistoria do fim");
             }
         }
 
-        if (run.idx >= total) {
+        // ⏭️ Pula o que já está na lista: repetir um passo nunca dobra item.
+        const telaAgora = itensNaTela();
+        while (idx < total && telaAgora.ok) {
+            const k = normCodigo(itens[idx].code);
+            const precisa = quantasVezes(itens.slice(0, idx + 1).map(function (it) { return normCodigo(it.code); }), k);
+            if ((telaAgora.contagem.get(k) || 0) < precisa) break;
+            if (quantasVezes(confirmados, k) < precisa) confirmados.push(k);
+            dlog("⏭️ " + itens[idx].code + " já está na lista — pulo");
+            idx++; tentItem = 0;
+        }
+
+        if (idx >= total) {
             if (run.pedido && run.pedido.conferenciaPrecos) {
                 dlog("✓ todos os " + total + " itens de conferência carregados — aguardando leitura dos preços");
                 await clearRun();
@@ -1735,20 +1919,46 @@
                 status("✅ Itens carregados! Confira a condição À Vista e clique em “Atualizar preços no Prumo”.");
                 return;
             }
-            dlog("✓ todos os " + total + " itens lançados — PRONTO (agora você confere e clica no DP)");
+            // 🔎 VISTORIA: a lista da tela bate com o pedido?
+            const fim = itensNaTela();
+            if (fim.ok) {
+                const pedidoCont = new Map(), original = new Map();
+                itens.forEach(function (it) { const k = normCodigo(it.code); pedidoCont.set(k, (pedidoCont.get(k) || 0) + 1); original.set(k, String(it.code)); });
+                const faltam = [], dobrados = [];
+                pedidoCont.forEach(function (n, k) { const t = fim.contagem.get(k) || 0; if (t < n) faltam.push(original.get(k)); else if (t > n) dobrados.push(original.get(k)); });
+                if (faltam.length && (run.rodadasVistoria || 0) < 2) {
+                    dlog("🔎 vistoria: faltou " + faltam.join(", ") + " — lançando de novo");
+                    status("🔎 Vistoria: faltou " + faltam.join(", ") + " — lançando de novo...");
+                    await setRun(Object.assign({}, run, { idx: 0, aguardando: false, ultimoCode: "", confirmados: [], naoConferidos: [], tentItem: 0, rodadasVistoria: (run.rodadasVistoria || 0) + 1, ts: Date.now() }));
+                    return processarRunPasso({ vigia: true });
+                }
+                await clearRun();
+                if (faltam.length) { dlog("⚠️ vistoria: ainda falta " + faltam.join(", ")); status("⚠️ Vistoria: faltou " + faltam.join(", ") + " na lista mesmo depois de tentar de novo. Lance na mão antes do DP."); }
+                else if (dobrados.length) { dlog("⚠️ vistoria: repetido " + dobrados.join(", ")); status("⚠️ Vistoria: tudo entrou, mas " + dobrados.join(", ") + " está repetido na lista. Apague o repetido antes do DP."); }
+                else { dlog("✅ vistoria OK — " + total + "/" + total + " itens na lista"); status("✅ Vistoria OK: cliente " + run.pedido.cliente + " e " + total + "/" + total + " itens conferidos na lista. Agora clique no DP/finalizar. 👍"); }
+                return;
+            }
+            dlog("✓ todos os " + total + " itens lançados — PRONTO (lista não legível pra vistoria)");
             await clearRun();
-            status("✅ Itens lançados! Agora confira e clique no DP/finalizar você mesmo. 👍");
+            status("✅ Itens lançados! Não consegui ler a lista pra conferir — confira e clique no DP/finalizar você mesmo. 👍");
             return;
         }
 
         // garante a linha de entrada pronta
         let info = camposEntrada(), tent = 0;
         while ((!info || !info.code || !info.qty) && tent < 12) { await sleep(500); info = camposEntrada(); tent++; }
-        if (!info || !info.code || !info.qty) { dlog("campos do item ainda não prontos (inputs: " + (info ? info.n : 0) + ") — aguardo e tento de novo"); status("Aguardando os campos do item... (pode deixar, não precisa tocar na tela)"); return; } // não cancela: sobrevive a toques/navegação; expira sozinho em 2min se travar
+        if (!info || !info.code || !info.qty) {
+            // guarda o que já foi conferido, mas sem ts novo: o vigia refaz se a linha não aparecer
+            await setRun(Object.assign({}, run, { idx: idx, aguardando: false, confirmados: confirmados, naoConferidos: naoConferidos, tentItem: tentItem }));
+            dlog("campos do item ainda não prontos (inputs: " + (info ? info.n : 0) + ") — aguardo e tento de novo");
+            status("Aguardando os campos do item... (pode deixar, não precisa tocar na tela)");
+            return;
+        }
 
-        const it = run.pedido.itens[run.idx];
-        dlog("item " + (run.idx + 1) + "/" + total + ": " + it.code + " x" + it.qty);
-        status("Lançando " + (run.idx + 1) + "/" + total + ":  " + it.code + "  x" + it.qty);
+        const it = itens[idx];
+        const resumo = resumoRun(Object.assign({}, run, { confirmados: confirmados }));
+        dlog("item " + (idx + 1) + "/" + total + ": " + it.code + " x" + it.qty + (tentItem ? " (de novo " + tentItem + "/" + ITEM_MAX_TENT + ")" : ""));
+        status("Lançando " + (idx + 1) + "/" + total + ":  " + it.code + "  x" + it.qty + (tentItem ? " (de novo " + tentItem + "/" + ITEM_MAX_TENT + ")" : "") + " · " + resumo);
 
         // 1) código -> resolve o produto (com blur forçado, igual ao cliente, pro Android)
         const antesCod = bodyText();
@@ -1759,22 +1969,36 @@
         await esperar(function () { return bodyText() !== antesCod; }, 6000);
         await sleep(900);
 
-        // 2) quantidade (ignora o campo de valor)
+        // 2) quantidade (ignora o campo de valor) — e confere que ficou
         info = camposEntrada();
-        if (info && info.qty) setInput(info.qty, it.qty);
+        if (info && info.qty) {
+            setInput(info.qty, it.qty);
+            if (String(info.qty.value || "").trim() !== String(it.qty)) { await sleep(300); setInput(info.qty, it.qty); }
+        }
         await sleep(400);
 
-        // 3) salva o avanço ANTES de clicar (a página vai recarregar)
-        await setRun({ pedido: run.pedido, stage: "itens", idx: run.idx + 1, ativo: true, aguardando: true, ultimoCode: it.code, ts: Date.now() });
+        // 3) salva o avanço ANTES de clicar (a página vai recarregar). aguardando=true: o próximo
+        //    passo só conta este item depois de VER ele na lista.
+        const kIt = normCodigo(it.code);
+        const antesNaLista = telaAgora.ok ? (telaAgora.contagem.get(kIt) || 0) : 0;
+        await setRun(Object.assign({}, run, { stage: "itens", idx: idx + 1, aguardando: true, ultimoCode: it.code, confirmados: confirmados, naoConferidos: naoConferidos, tentItem: tentItem, cliqueTs: Date.now(), ts: Date.now() }));
 
         // 4) clica no ✓ verde -> o site recarrega e o próximo item continua sozinho
-        const check = acharCheckVerde(info ? info.rect : linhaEntradaRect());
+        // ⚠️ Mede a linha DE NOVO agora: digitar a quantidade foca o campo e a tela rola (no celular,
+        // com a página em 1280px, sempre). Com a posição velha o ✓ "sumia", o robô apertava Enter no
+        // lugar e o item às vezes não entrava.
+        const infoAgora = camposEntrada() || info;
+        let check = acharCheckVerde(infoAgora ? infoAgora.rect : linhaEntradaRect());
+        if (!check) { await sleep(500); const i2 = camposEntrada(); check = acharCheckVerde(i2 ? i2.rect : linhaEntradaRect()); }
         dlog("✓ verde: " + (check ? "achado — clicando" : "NÃO achado (Enter)"));
         if (check) clicar(check);
-        else if (info && info.qty) enter(info.qty);
-        status("✓ " + it.code + " enviado — aguardando o site recarregar...");
-        // a página recarrega ("pisca") e o próximo item continua sozinho no próximo load
-      } catch (e) { dlog("❌ ERRO: " + (e && e.message ? e.message : e)); }
+        else if (infoAgora && infoAgora.qty) enter(infoAgora.qty);
+        status("✓ " + it.code + " enviado — conferindo se entrou na lista...");
+        // Se o SPAmov colocar o item SEM recarregar a página, segue daqui mesmo em vez de esperar o vigia.
+        const apareceu = await esperar(function () { const t = itensNaTela(); return t.ok && (t.contagem.get(kIt) || 0) > antesNaLista; }, 15000);
+        if (apareceu) return processarRunPasso({});
+        // senão: a página recarrega ("pisca") e o próximo item continua sozinho no próximo load,
+        // ou o vigia refaz o passo se nada acontecer.
     }
 
     function removerDaFila(id) {
@@ -2420,6 +2644,8 @@
     if (ehFramePrincipal()) mostrarBotaoConferenciaPrecos();
     // Retoma automaticamente um lançamento em andamento (após cada reload do site)
     if (ehFramePrincipal()) processarRun();
+    // 👀 Vigia: confere o lançamento a cada 4s, mesmo se a página não recarregar (internet ruim)
+    setInterval(vigiarRun, 4000);
     // Login automático (se solicitado pelo Debug e estivermos na tela de login)
     tentarLogin();
     // Após logar, navega: SPA mov -> VENDAS - VENDEDOR

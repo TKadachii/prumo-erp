@@ -461,7 +461,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 242;
+        const APP_BUILD_VERSION = 243;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -8941,6 +8941,15 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.44.0', data: '09/11/2026', areas: ['site', 'app', 'extensao'], itens: [
+                '👀 LANÇAR PEDIDO COM VIGIA: o robô agora CONFERE cada passo no site da Friganso — só considera o cliente preenchido quando o nome aparece, e só conta o item quando ele aparece na lista do pedido',
+                '🔁 Passo que não foi (clique perdido, internet ruim, página que não recarregou) é refeito sozinho: o vigia percebe que passou do tempo e tenta de novo, até 4 vezes por passo',
+                '🛡️ Repetir nunca dobra item: o que já está na lista é pulado. E se o pedido aberto for de OUTRO cliente, o robô para antes de lançar',
+                '🔎 Vistoria no fim: compara a lista da tela com o pedido, lança o que faltou e avisa se algum item ficou repetido',
+                '🐞 Corrigido: o robô achava que o nome do cliente tinha aparecido por causa da PRÓPRIA faixa de aviso dele, e clicava em Enviar antes da Friganso achar o cliente',
+                '🏪 CAMPANHA: lojas com o MESMO WhatsApp (ex.: dono com 3 lojas) recebem UMA mensagem só, com os itens das lojas juntos e sem repetir',
+                '👥 CAMPANHA: "+ comprador" em cada cliente — cadastre o WhatsApp do outro comprador da loja e os dois recebem a mensagem',
+            ]},
             { versao: '2.43.1', data: '09/11/2026', areas: ['site'], itens: [
                 '📅 Grupo 80 sem desconto até domingo, 15/11 — na segunda, 16/11, o desconto volta sozinho e o aviso some',
             ]},
@@ -12039,6 +12048,24 @@
                 } catch (e) { showMessage('Erro ao salvar telefone.', 'error'); }
                 finally { setPhoneSaving(false); }
             };
+            // 👥 Compradores extras da loja (phonesExtra): cada número recebe a mensagem da loja.
+            const salvarComprador = async (c) => {
+                const tel = phoneInput.trim();
+                if (waNumber(tel).length < 12) { showMessage('Digite o DDD + número do comprador.', 'error'); return; }
+                if (numerosDoCliente(c).includes(waNumber(tel))) { showMessage('Esse número já recebe a mensagem desta loja.', 'error'); return; }
+                setPhoneSaving(true);
+                try {
+                    await db.collection('clients').doc(c.id).update({ phonesExtra: [...(c.phonesExtra || []), tel] });
+                    showMessage('Comprador adicionado! Ele também vai receber a campanha desta loja.', 'success');
+                    setPhoneEditId(null); setPhoneInput('');
+                } catch (e) { showMessage('Erro ao salvar o comprador.', 'error'); }
+                finally { setPhoneSaving(false); }
+            };
+            const removerComprador = async (c, tel) => {
+                if (!window.confirm('Parar de mandar a campanha pro número ' + formatarTelBonito(tel) + '?')) return;
+                try { await db.collection('clients').doc(c.id).update({ phonesExtra: (c.phonesExtra || []).filter(t => t !== tel) }); }
+                catch (e) { showMessage('Erro ao remover o comprador.', 'error'); }
+            };
 
             // --- helpers de categoria/recomendação (espelham o Radar) ---
             const CAT_RE = {
@@ -12220,8 +12247,17 @@
             };
             const nomeVendedor = () => vendedorCustom.trim() || ((user && user.name) ? user.name.split(' ')[0] : 'vendedor');
             const waNumber = (phone) => { let d = String(phone || '').replace(/\D/g, ''); if (!d) return ''; if (d.length <= 11) d = '55' + d; return d; };
-            const personalizar = (c) => {
-                const doHistorico = incluirProduto ? recomendarProdutos(c, qtdProdutos) : [];
+            // 🏪 Uma mensagem pra VÁRIAS lojas do mesmo dono (mesmo WhatsApp). Junta os produtos de
+            // cada loja sem repetir item — antes o seu Marcos, com 3 lojas no mesmo número, recebia
+            // 3 tabelas seguidas com o traseiro repetido em todas. O preço é o da tabela do dia (igual
+            // pra todas as lojas), então uma lista só serve pra todas. Com 1 loja, sai igual a antes.
+            const personalizarGrupo = (clientes) => {
+                const c = clientes[0];
+                const vistos = new Set();
+                const doHistorico = [];
+                if (incluirProduto) clientes.forEach(cl => recomendarProdutos(cl, qtdProdutos).forEach(p => {
+                    const k = String(p.code); if (!vistos.has(k)) { vistos.add(k); doHistorico.push(p); }
+                }));
                 // 🆕 Cliente que nunca comprou: em vez de "Confira nossos produtos!" (mensagem sem
                 // nenhum preço), a vitrine do dia vira o corpo da mensagem.
                 const semHistorico = incluirProduto && !doHistorico.length;
@@ -12230,8 +12266,9 @@
                     : doHistorico;
                 const ofertas = prods.length ? montarOfertas(prods) : 'Confira nossos produtos!';
                 const primeiro = prods.length ? `${prods[0].code} - ${prods[0].name}` : 'nossos produtos';
+                const nomes = clientes.map(cl => cl.name).filter(Boolean).join(' / ');
                 let txt = template
-                    .replace(/\{nome\}/gi, c.name || '')
+                    .replace(/\{nome\}/gi, nomes)
                     .replace(/\{contato\}/gi, c.contactName || c.name || 'tudo bem')
                     .replace(/\{saudacao\}/gi, saudacao())
                     .replace(/\{vendedor\}/gi, nomeVendedor())
@@ -12245,8 +12282,28 @@
                 }
                 return txt;
             };
+            const personalizar = (c) => personalizarGrupo([c]);
             // respeita a preferência de "aplicativo x navegador" escolhida pelo usuário (ver zapUrl)
             const waLink = (c) => zapUrl(waNumber(c.phone), personalizar(c));
+
+            // 📱 Todos os WhatsApp de um cliente: o principal + os compradores extras (phonesExtra),
+            // pra loja que tem 2 compradores receber nos dois números.
+            const numerosDoCliente = (c) => [...new Set([c.phone, ...(c.phonesExtra || [])].map(waNumber).filter(Boolean))];
+            // 📬 Destinos da campanha: UM por número. Lojas que dividem o número viram uma mensagem só
+            // (personalizarGrupo); loja com vários compradores aparece em cada número dela.
+            const montarDestinos = (lista) => {
+                const porNumero = new Map();
+                lista.forEach(c => numerosDoCliente(c).forEach(numero => {
+                    if (!porNumero.has(numero)) porNumero.set(numero, { id: numero, numero, clientes: [] });
+                    porNumero.get(numero).clientes.push(c);
+                }));
+                return [...porNumero.values()].map(d => ({
+                    ...d,
+                    nome: d.clientes.map(c => c.name || ('Cliente ' + (c.code || ''))).join(' / '),
+                    codigos: d.clientes.map(c => c.code || '—'),
+                }));
+            };
+            const mensagemDe = (d) => personalizarGrupo(d.clientes);
 
             // --- quantos clientes compram cada produto (pro filtro "Por produto") ---
             const clientesPorProduto = useMemo(() => {
@@ -12308,8 +12365,11 @@
             const limparSel = () => setSelecionados(new Set());
 
             const alvos = clients.filter(c => selecionados.has(c.id));
-            const comTelefone = alvos.filter(c => waNumber(c.phone));
-            const semTelefone = alvos.filter(c => !waNumber(c.phone));
+            const comTelefone = alvos.filter(c => numerosDoCliente(c).length);
+            const semTelefone = alvos.filter(c => !numerosDoCliente(c).length);
+            const destinos = montarDestinos(comTelefone);
+            const juntadas = destinos.filter(d => d.clientes.length > 1);
+            const comVariosCompradores = comTelefone.filter(c => numerosDoCliente(c).length > 1);
             const auditoriaPrecos = useMemo(() => {
                 const clientesSelecionados = clients.filter(c => selecionados.has(c.id));
                 return products.filter(produtoForaTabelaHoje).map(p => {
@@ -12320,12 +12380,12 @@
             }, [products, clients, selecionados, produtosAlvo]);
 
             const iniciar = (precosConfirmados) => {
-                if (comTelefone.length === 0) { showMessage('Selecione ao menos 1 cliente com telefone cadastrado.', 'error'); return; }
+                if (destinos.length === 0) { showMessage('Selecione ao menos 1 cliente com telefone cadastrado.', 'error'); return; }
                 if (!precosConfirmados && auditoriaPrecos.length) { setAvisoAuditoriaCampanha(true); return; }
                 // 📱 APP ANDROID: usa o balão flutuante (overlay) — você toca e ele abre cada cliente no WhatsApp
                 const ZB = (isCapacitor && window.Capacitor && window.Capacitor.Plugins) ? window.Capacitor.Plugins.ZapBolha : null;
                 if (ZB && ZB.iniciar) {
-                    const contatos = comTelefone.map(c => ({ nome: c.name || ('Cliente ' + (c.code || '')), telefone: waNumber(c.phone), mensagem: personalizar(c) }));
+                    const contatos = destinos.map(d => ({ nome: d.nome, telefone: d.numero, mensagem: mensagemDe(d) }));
                     ZB.iniciar({ contatos }).then(res => {
                         if (res && res.semPermissao) showMessage('Ative "Exibir sobre outros apps" pro Prumo (abriu a tela) e toque em Iniciar de novo. 🎈', 'error');
                         else showMessage('Balão ativado! Vá pro WhatsApp e toque no balão verde pra ir enviando, um por um. 🎈', 'success');
@@ -12334,10 +12394,10 @@
                 }
                 setIdx(0); setEnviados(new Set()); setEmCampanha(true);
             };
-            const atual = comTelefone[idx];
+            const atual = destinos[idx];
             const avancar = (marcarEnviado) => {
                 if (marcarEnviado && atual) { const s = new Set(enviados); s.add(atual.id); setEnviados(s); }
-                if (idx + 1 >= comTelefone.length) { setEmCampanha(false); showMessage(`Campanha concluída! ${marcarEnviado ? enviados.size + 1 : enviados.size} enviada(s).`, 'success'); }
+                if (idx + 1 >= destinos.length) { setEmCampanha(false); showMessage(`Campanha concluída! ${marcarEnviado ? enviados.size + 1 : enviados.size} enviada(s).`, 'success'); }
                 else setIdx(idx + 1);
             };
             const voltar = () => { if (idx > 0) setIdx(idx - 1); };
@@ -12362,7 +12422,7 @@
                 if (!window.__frigZap) { showMessage('WhatsApp embutido indisponível.', 'error'); return; }
                 const cli = atual;
                 setEnviando(true);
-                window.__frigZap.enviar(waNumber(cli.phone), personalizar(cli), (ok) => {
+                window.__frigZap.enviar(cli.numero, mensagemDe(cli), (ok) => {
                     setEnviando(false);
                     if (ok) { avancar(true); }
                     else { showMessage('Não enviou. Abra o painel 💬 (canto inferior direito) e confira se o WhatsApp está conectado (QR).', 'error'); }
@@ -12373,20 +12433,20 @@
             const [rodandoAuto, setRodandoAuto] = useState(false);
             const pararRef = useRef(false);
             const enviarIndice = (i) => new Promise(res => {
-                const cli = comTelefone[i]; if (!cli || !window.__frigZap) { res(false); return; }
-                window.__frigZap.enviar(waNumber(cli.phone), personalizar(cli), ok => res(ok));
+                const cli = destinos[i]; if (!cli || !window.__frigZap) { res(false); return; }
+                window.__frigZap.enviar(cli.numero, mensagemDe(cli), ok => res(ok));
             });
             const rodarAuto = async () => {
-                if (rodandoAuto || comTelefone.length === 0) return;
+                if (rodandoAuto || destinos.length === 0) return;
                 setRodandoAuto(true); pararRef.current = false;
                 let i = idx, okCount = 0;
-                while (i < comTelefone.length && !pararRef.current) {
+                while (i < destinos.length && !pararRef.current) {
                     setIdx(i); setEnviando(true);
                     const ok = await enviarIndice(i);
                     setEnviando(false);
-                    if (ok) { okCount++; setEnviados(prev => { const s = new Set(prev); s.add(comTelefone[i].id); return s; }); }
+                    if (ok) { okCount++; setEnviados(prev => { const s = new Set(prev); s.add(destinos[i].id); return s; }); }
                     i++;
-                    if (i < comTelefone.length && !pararRef.current) await new Promise(r => setTimeout(r, 2000)); // respiro entre envios
+                    if (i < destinos.length && !pararRef.current) await new Promise(r => setTimeout(r, 2000)); // respiro entre envios
                 }
                 setRodandoAuto(false);
                 if (pararRef.current) showMessage('Envio automático pausado em ' + okCount + ' enviada(s).', 'success');
@@ -12396,36 +12456,37 @@
 
             // ===== MODO CAMPANHA (passo a passo) =====
             if (emCampanha && atual) {
-                const prodsRec = incluirProduto ? recomendarProdutos(atual, qtdProdutos) : [];
+                const prodsRec = incluirProduto ? [...new Map(atual.clientes.flatMap(c => recomendarProdutos(c, qtdProdutos)).map(p => [String(p.code), p])).values()] : [];
                 return (
                     <div className="animate-in fade-in max-w-2xl mx-auto">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><div className="h-6 w-6 text-emerald-600"><IconWhatsApp/></div> Campanha em andamento</h2>
                             <button onClick={() => setEmCampanha(false)} className="text-slate-500 font-medium px-4 py-2 bg-slate-200 rounded-lg text-sm">Encerrar</button>
                         </div>
-                        <div className="bg-slate-200 rounded-full h-2 mb-1 overflow-hidden"><div className="bg-emerald-500 h-full transition-all" style={{ width: `${((idx) / comTelefone.length) * 100}%` }}></div></div>
-                        <p className="text-xs text-slate-500 mb-4 text-center">Cliente {idx + 1} de {comTelefone.length} · {enviados.size} enviada(s)</p>
+                        <div className="bg-slate-200 rounded-full h-2 mb-1 overflow-hidden"><div className="bg-emerald-500 h-full transition-all" style={{ width: `${((idx) / destinos.length) * 100}%` }}></div></div>
+                        <p className="text-xs text-slate-500 mb-4 text-center">Mensagem {idx + 1} de {destinos.length} · {enviados.size} enviada(s)</p>
 
                         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                             <div className="flex items-center gap-3 mb-4">
-                                <div className="h-12 w-12 rounded-2xl bg-rose-700 text-white flex flex-col items-center justify-center font-bold leading-none flex-shrink-0"><span className="text-[8px] opacity-70">COD</span><span className="font-mono font-black text-base">{atual.code || '—'}</span></div>
+                                <div className="h-12 w-12 rounded-2xl bg-rose-700 text-white flex flex-col items-center justify-center font-bold leading-none flex-shrink-0"><span className="text-[8px] opacity-70">COD</span><span className="font-mono font-black text-base">{atual.codigos[0]}</span></div>
                                 <div className="min-w-0">
-                                    <h3 className="font-bold text-slate-800 truncate">{atual.name}</h3>
-                                    <p className="text-xs text-slate-500">📱 {atual.phone}</p>
+                                    <h3 className="font-bold text-slate-800 truncate">{atual.nome}</h3>
+                                    <p className="text-xs text-slate-500">📱 {formatarTelBonito(atual.numero)}</p>
+                                    {atual.clientes.length > 1 && <p className="text-[11px] font-bold text-emerald-700 mt-0.5">🏪 {atual.clientes.length} lojas no mesmo número ({atual.codigos.join(', ')}) — vai uma mensagem só, sem item repetido</p>}
                                 </div>
                             </div>
                             {prodsRec.length > 0 && <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 mb-3 text-xs text-rose-700"><span className="font-bold">{prodsRec.length} oferta(s) incluídas:</span> {prodsRec.map(p => p.code).join(', ')}</div>}
                             <div className="mb-3"><AlertaProdutosForaTabela produtos={prodsRec} /></div>
                             <div className="prumo-message-bubble rounded-2xl p-4 mb-4">
-                                <pre className="font-sans text-sm whitespace-pre-wrap text-slate-800">{personalizar(atual)}</pre>
+                                <pre className="font-sans text-sm whitespace-pre-wrap text-slate-800">{mensagemDe(atual)}</pre>
                             </div>
                             {/* 🤖 No site/navegador quem automatiza é a EXTENSÃO (o programa de PC usa o WhatsApp embutido) */}
                             {!isElectron && !isCapacitor && (
                                 <button onClick={() => dispararPelaExtensao(
-                                    comTelefone.slice(idx).map(c => ({ telefone: waNumber(c.phone), nome: c.name || '', mensagem: personalizar(c) })),
+                                    destinos.slice(idx).map(d => ({ telefone: d.numero, nome: d.nome, mensagem: mensagemDe(d) })),
                                     8, showMessage, () => setEmCampanha(false)
                                 )} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-2xl shadow-md transition-colors flex items-center justify-center gap-2 mb-3 text-lg">
-                                    🤖 Enviar todos sozinho ({comTelefone.length - idx} restante{comTelefone.length - idx > 1 ? 's' : ''})
+                                    🤖 Enviar todos sozinho ({destinos.length - idx} restante{destinos.length - idx > 1 ? 's' : ''})
                                 </button>
                             )}
                             {/* 🤖 Envio automático em sequência (só no programa de PC) */}
@@ -12435,14 +12496,14 @@
                                 </button>
                             ) : (
                                 <button onClick={rodarAuto} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-2xl shadow-md transition-colors flex items-center justify-center gap-2 mb-3 text-lg">
-                                    🤖 Enviar todos sozinho ({comTelefone.length - idx} restante{comTelefone.length - idx > 1 ? 's' : ''})
+                                    🤖 Enviar todos sozinho ({destinos.length - idx} restante{destinos.length - idx > 1 ? 's' : ''})
                                 </button>
                             ))}
                             <button disabled={enviando || rodandoAuto} onClick={() => {
                                 if (isElectron) { enviarAutomatico(); return; } // auto-envio no programa de PC
                                 // Fora do programa: abre o app do WhatsApp Desktop via protocolo
                                 const a = document.createElement('a');
-                                a.href = 'whatsapp://send?phone=' + waNumber(atual.phone) + '&text=' + encodeURIComponent(personalizar(atual));
+                                a.href = 'whatsapp://send?phone=' + atual.numero + '&text=' + encodeURIComponent(mensagemDe(atual));
                                 document.body.appendChild(a);
                                 a.click();
                                 setTimeout(() => { try { a.remove(); } catch (e) {} }, 500);
@@ -12452,7 +12513,7 @@
                             </button>
                             <div className="flex items-center gap-2">
                                 <button onClick={voltar} disabled={idx === 0 || rodandoAuto} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-600 font-black text-xl rounded-xl transition-colors flex items-center justify-center gap-2" title="Voltar">← <span className="text-sm font-bold">Voltar</span></button>
-                                <span className="text-xs font-bold text-slate-400 px-1 flex-shrink-0">{idx + 1}/{comTelefone.length}</span>
+                                <span className="text-xs font-bold text-slate-400 px-1 flex-shrink-0">{idx + 1}/{destinos.length}</span>
                                 <button onClick={() => avancar(false)} disabled={rodandoAuto} className="flex-1 py-3 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white font-black text-xl rounded-xl transition-colors flex items-center justify-center gap-2" title="Avançar (pular)"><span className="text-sm font-bold">Avançar</span> →</button>
                             </div>
                             {isElectron && (
@@ -12633,6 +12694,7 @@
                                 {lista.map(c => {
                                     const semTel = !waNumber(c.phone);
                                     const editando = phoneEditId === c.id;
+                                    const editandoComprador = phoneEditId === c.id + '|comprador';
                                     const semHist = incluirProduto && products.length > 0 && recomendarProdutos(c, 1).length === 0;
                                     return (
                                         <div key={c.id} className={`p-2 rounded-lg border ${selecionados.has(c.id) ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100 hover:border-slate-200'}`}>
@@ -12645,6 +12707,24 @@
                                                     ? (!editando && <button onClick={() => { setPhoneEditId(c.id); setPhoneInput(''); }} className="text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 py-1 rounded-full flex-shrink-0 transition-colors flex items-center gap-1">+ telefone</button>)
                                                     : (!editando && <button onClick={() => { setPhoneEditId(c.id); setPhoneInput(c.phone || ''); }} title="Clique para corrigir o número" className="text-[10px] text-emerald-600 font-mono flex-shrink-0 hover:bg-emerald-50 px-1.5 py-1 rounded transition-colors flex items-center gap-1">📱 {c.phone} <span className="text-emerald-400">✎</span></button>)}
                                             </div>
+                                            {!semTel && !editando && !editandoComprador && (
+                                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5 pl-6">
+                                                    {(c.phonesExtra || []).map(tel => (
+                                                        <span key={tel} className="inline-flex items-center gap-1 text-[10px] font-mono rounded-full pl-2 pr-1 py-0.5" style={{ background: '#34d39914', border: '1px solid #34d39944', color: '#6ee7b7' }} title="Comprador extra: também recebe a campanha desta loja">
+                                                            👤 {formatarTelBonito(tel)}
+                                                            <button onClick={() => removerComprador(c, tel)} aria-label={'Remover comprador ' + tel} className="text-slate-400 hover:text-red-500 px-1">✕</button>
+                                                        </span>
+                                                    ))}
+                                                    <button onClick={() => { setPhoneEditId(c.id + '|comprador'); setPhoneInput(''); }} title="Loja com mais de um comprador: cadastre o outro WhatsApp e os dois recebem" className="text-[10px] font-bold text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 px-2 py-0.5 rounded-full border border-dashed border-slate-200">+ comprador</button>
+                                                </div>
+                                            )}
+                                            {editandoComprador && (
+                                                <div className="flex gap-1.5 mt-2 pl-6">
+                                                    <input type="tel" autoFocus value={phoneInput} onChange={e => setPhoneInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvarComprador(c); }} placeholder="WhatsApp do outro comprador (DDD + número)" className="flex-1 px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-400"/>
+                                                    <button onClick={() => salvarComprador(c)} disabled={phoneSaving} className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">Adicionar</button>
+                                                    <button onClick={() => { setPhoneEditId(null); setPhoneInput(''); }} className="text-xs font-bold text-slate-400 hover:bg-slate-100 px-2 py-1.5 rounded-lg">✕</button>
+                                                </div>
+                                            )}
                                             {editando && (
                                                 <div className="flex gap-1.5 mt-2 pl-6">
                                                     <input type="tel" autoFocus value={phoneInput} onChange={e => setPhoneInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvarTelefone(c.id); }} placeholder="DDD + número (ex: 22999998888)" className="flex-1 px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-400"/>
@@ -12670,11 +12750,13 @@
                     {/* Resumo + iniciar */}
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="text-sm text-slate-600">
-                            <p><b className="text-emerald-700">{comTelefone.length}</b> cliente(s) prontos para receber.</p>
+                            <p><b className="text-emerald-700">{comTelefone.length}</b> cliente(s) prontos → <b className="text-emerald-700">{destinos.length}</b> mensagem(ns).</p>
+                            {juntadas.length > 0 && <p className="text-emerald-700 text-xs mt-1">🏪 {juntadas.length} número(s) com mais de uma loja: cada um recebe UMA mensagem com os itens das lojas juntos ({juntadas.map(d => d.codigos.join('+')).slice(0, 4).join(', ')}{juntadas.length > 4 ? '…' : ''}).</p>}
+                            {comVariosCompradores.length > 0 && <p className="text-emerald-700 text-xs mt-1">👥 {comVariosCompradores.length} loja(s) com mais de um comprador: todos os números recebem.</p>}
                             {semTelefone.length > 0 && <p className="text-amber-600 text-xs mt-1">⚠️ {semTelefone.length} selecionado(s) sem telefone serão pulados. Toque em "+ telefone" na lista para cadastrar na hora.</p>}
                         </div>
-                        <button onClick={() => iniciar(false)} disabled={comTelefone.length === 0} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-3.5 px-8 rounded-2xl shadow-md transition-colors flex items-center gap-2 w-full sm:w-auto justify-center">
-                            <div className="h-5 w-5"><IconWhatsApp/></div> Iniciar Campanha ({comTelefone.length})
+                        <button onClick={() => iniciar(false)} disabled={destinos.length === 0} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-3.5 px-8 rounded-2xl shadow-md transition-colors flex items-center gap-2 w-full sm:w-auto justify-center">
+                            <div className="h-5 w-5"><IconWhatsApp/></div> Iniciar Campanha ({destinos.length})
                         </button>
                     </div>
                 </div>

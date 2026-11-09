@@ -661,6 +661,36 @@ linha (verificado reintroduzindo o bug de propósito).
 - A lista de exclusões funciona como bloqueio permanente: o item é removido do catálogo local, não volta numa sincronização posterior e não aparece em ofertas, pesquisas ou em “Tudo que já comprou”.
 - Compras e pedidos antigos não são apagados; continuam preservados como histórico comercial.
 
+## 👀 Vigia do lançamento de pedido (2026-11-09, v2.44.0)
+Queixa: com internet ruim o lançamento "parava no meio" — sem o ID do cliente, sem item, ou pulando o
+2º item. Causa: o robô (`processarRun` no `content.js`) marcava o passo como feito ANTES de conferir e só
+andava quando a página recarregava. Agora:
+- **Confere antes de avançar.** Cliente só conta quando `clienteNaTela()` (o "[j] código - NOME" logo
+  depois de CLIENTE) bate com o pedido. Item só conta quando aparece em `itensNaTela()` (contagem por
+  código na tabela do pedido) ou o SPAmov diz "item aceito" numa página recarregada depois do clique.
+- **Nunca dobra item:** antes de lançar, pula o que já está na lista. Por isso repetir é seguro.
+- **Vigia** (`vigiarRun`, `setInterval` de 4s em todo frame): passo parado há 25s (45s esperando o ✓) é
+  refeito, até 4x por passo e 14x no pedido; depois para com aviso dizendo o que faltou. Volta um passo
+  quando precisa (campo do cliente não apareceu → Novo de novo; lista não abriu → cliente de novo).
+  Trava entre frames: cada frame assina `vigiaDono` no run e só age quem continua dono após 400ms.
+- **Cliente errado na tela → para** antes de lançar qualquer item.
+- **Vistoria** no fim: relança o que faltou (até 2 rodadas) e avisa item repetido.
+- 🐞 Dois bugs antigos achados no teste: (1) `bodyText()` incluía a faixa de status do próprio robô, então
+  "a página mudou" era sempre verdade e ele clicava Enviar antes do SPAmov achar o cliente — agora
+  `bodyText()` tira o texto do `#friganso-status`; (2) a posição da linha do item era medida ANTES de
+  digitar a quantidade; o foco rola a tela (no celular, sempre, por causa do viewport 1280) e o ✓ "sumia",
+  aí ia Enter no lugar — agora mede de novo na hora de clicar.
+- ✅ Testado contra um SPAmov falso que perde cliques de propósito (Novo, busca do cliente, Enviar, ✓,
+  item que não entra, página lenta). Teste no SPAmov de verdade ainda é com o usuário.
+
+## 🏪 Campanha: um número, várias lojas / uma loja, vários compradores (2026-11-09, v2.44.0)
+- Disparos agora monta **destinos por número** (`montarDestinos`): lojas selecionadas com o mesmo
+  WhatsApp viram UMA mensagem (`personalizarGrupo`) com a união dos produtos de cada loja, sem repetir.
+  Preço é o da tabela do dia (igual pra todas), então uma lista só serve.
+- `phonesExtra` (array no doc do cliente): "+ comprador" na lista de Disparos. Cada número recebe.
+  A importação de clientes do SPAmov não toca nesse campo.
+- Vale nos 3 caminhos de envio: balão do Android (`ZapBolha`), extensão (`ZAP_CAMPANHA`) e PC (`__frigZap`).
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
