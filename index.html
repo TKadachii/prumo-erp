@@ -461,7 +461,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 241;
+        const APP_BUILD_VERSION = 242;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -774,7 +774,7 @@
         // Fica na nuvem (system_data/bloqueio_desconto) e o admin liga/desliga em ⚙️ Configurações.
         // Enquanto o documento não existe na nuvem, vale o padrão abaixo. `ate` (AAAA-MM-DD, opcional)
         // é o último dia do bloqueio — depois disso o desconto volta sozinho.
-        const BLOQUEIO_DESCONTO_PADRAO = { ativo: true, grupos: ['80'], ate: '' };
+        const BLOQUEIO_DESCONTO_PADRAO = { ativo: true, grupos: ['80'], ate: '2026-11-15' };
         window.__bloqueioDesconto = window.__bloqueioDesconto || BLOQUEIO_DESCONTO_PADRAO;
         const CAMPO_ESCURO = { background: '#0b0b10', border: '1px solid #8b7cff44', color: '#ededf2', colorScheme: 'dark' };
         const gruposSemDescontoHoje = () => {
@@ -8941,6 +8941,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.43.1', data: '09/11/2026', areas: ['site'], itens: [
+                '📅 Grupo 80 sem desconto até domingo, 15/11 — na segunda, 16/11, o desconto volta sozinho e o aviso some',
+            ]},
             { versao: '2.43.0', data: '09/11/2026', areas: ['site'], itens: [
                 '🚫 GRUPO 80 SEM DESCONTO POR UNS DIAS: todos os itens do grupo 80 ficam travados no preço de tabela — no Resumo, Fila de Pedidos, Zap, Campanhas e na Tabela de Preços',
                 '📢 Aviso na tela pra todo mundo, uma vez por dia, explicando que o grupo está sem desconto',
