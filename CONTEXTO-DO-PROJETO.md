@@ -908,6 +908,20 @@ que só o navegador interno do APK coloca: é por isso que ela aparece no celula
 
 Coberto por `ferramentas/teste-painel-acoes.js` (20 checagens).
 
+### ✍️ DS→SP→PA é MANUAL, por escolha do vendedor (2026-11-10, v2.48.1)
+O robô lança os itens e **para**. Passar o pedido de DS pra SP e pra PA é feito à mão, porque o
+vendedor prefere assim — confirmado por ele em 10/11/2026.
+
+Isso apareceu como "código órfão" numa vistoria (`finalizarPasso` e, em cascata, `estaEmPA`,
+`acharMovBotao` e `clicavelPerto` — nada chamava nenhuma delas). As quatro foram removidas.
+
+⚠️ **O ramo `if (stage === "finalizar")` em `processarRunPasso` NÃO é lixo e não pode ser removido**:
+um lançamento guardado por uma versão antiga pode chegar com essa etapa, e sem o ramo o robô ficaria
+preso num estado que ninguém mais trata. Ele encerra o lançamento e avisa. O rótulo correspondente em
+`nomeDaEtapa` existe pelo mesmo motivo.
+
+⚠️ E não "conserte" isso religando a etapa automática: a ausência é a decisão.
+
 ### 🧹 Vistoria de código morto (2026-11-10)
 Varredura por função declarada e nunca chamada, em `content.js` e `index.html`. Achados e removidos:
 `acharLinhaEntrada`, `naFaixa`, `finalizarPasso` (extensão) e `parsePrice` (site).

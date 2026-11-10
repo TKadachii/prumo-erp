@@ -1570,62 +1570,6 @@
         return null;
     }
 
-    // Processa UM item por carregamento da página. O clique no verde recarrega o site
-    // e, no próximo load, esta função retoma sozinha do próximo item.
-    // Detecta se o pedido já está no estado PA (confirmado)
-    function estaEmPA() {
-        const t = bodyText();
-        if (/\bPA\b\s*Mov/i.test(t)) return true;
-        // no estado PA aparece a linha expandida: PCP OE PDE OP PDP CP NF DP FIN
-        return /\bPCP\b/.test(t) && /\bPDE\b/.test(t) && /\bFIN\b/.test(t);
-    }
-    // Acha um elemento clicável (link/imagem/onclick) PERTO de uma referência (o "Mov")
-    function clicavelPerto(ref, raio) {
-        const rr = ref.getBoundingClientRect(); const cx = rr.left + rr.width / 2, cy = rr.top + rr.height / 2;
-        const cands = document.querySelectorAll("a, img, input[type=image], [onclick]");
-        let best = null, bd = 1e9;
-        for (let i = 0; i < cands.length; i++) {
-            const c = cands[i]; if (c === ref) continue;
-            const r = c.getBoundingClientRect(); if (!r.width || !r.height) continue;
-            const x = r.left + r.width / 2, y = r.top + r.height / 2;
-            const d = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-            if (d < (raio || 80) && d < bd) { bd = d; best = c; }
-        }
-        return best;
-    }
-    // Acha o botão "DS/SP/PA Mov" — é uma IMAGENZINHA. Acha a imagem perto do texto "Mov"/"Orçamento".
-    function acharMovBotao() {
-        const els = document.querySelectorAll("a, td, div, span, b, img, button");
-        let ref = null;
-        // 1) referência: texto "DS Mov" / "Mov"
-        for (let i = 0; i < els.length; i++) {
-            const e = els[i];
-            const t = ((e.innerText || e.alt || e.title || "") + "").replace(/\s+/g, " ").trim();
-            const r = e.getBoundingClientRect();
-            if (!r.width || !r.height) continue;
-            if (/^(DS|SP|PA)\s*Mov$/i.test(t) || /^Mov$/i.test(t)) { ref = e; break; }
-        }
-        // 2) sem "Mov": usa "Orçamento" como referência (o DS fica logo à esquerda dele)
-        if (!ref) {
-            for (let i = 0; i < els.length; i++) {
-                const e = els[i]; const t = ((e.innerText || "") + "").trim();
-                if (/^Or[çc]amento$/i.test(t)) { const r = e.getBoundingClientRect(); if (r.width) { ref = e; break; } }
-            }
-        }
-        if (!ref) return null;
-        const rr = ref.getBoundingClientRect(); const cx = rr.left + rr.width / 2, cy = rr.top + rr.height / 2;
-        // procura a IMAGEM mais próxima da referência (o badge DS)
-        const imgs = document.querySelectorAll("img, input[type=image]");
-        let best = null, bd = 1e9;
-        for (let i = 0; i < imgs.length; i++) {
-            const im = imgs[i]; const r = im.getBoundingClientRect(); if (!r.width || !r.height) continue;
-            const x = r.left + r.width / 2, y = r.top + r.height / 2;
-            const d = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-            if (d < 100 && d < bd) { bd = d; best = im; }
-        }
-        if (best) return best;
-        return clicavelPerto(ref, 100) || ref;
-    }
     // ═══ 👀 VIGIA DO LANÇAMENTO (2026-11-09) ═════════════════════════════════════════════════
     // O robô antigo trabalhava "no escuro": marcava o passo como feito ANTES de conferir e só
     // andava quando a página recarregava. Com internet ruim o clique se perdia e o pedido parava
@@ -1742,7 +1686,14 @@
         await sleep(opts.vigia ? 600 : 1800); // deixa a página assentar após o "pisca"/navegação
 
         // ETAPA FINAL: clicar DS -> SP -> PA até confirmar o pedido
-        if (stage === "finalizar") { await clearRun(); status("✅ Itens lançados! Clique no DP/finalizar você mesmo. 👍"); return; } // DS→SP→PA desativado a pedido
+        // ⚠️ DS→SP→PA DESATIVADO A PEDIDO — e isto é intencional, não um esquecimento.
+        // O vendedor PREFERE passar o pedido de DS pra SP e pra PA com a própria mão (confirmado em
+        // 10/11/2026). O robô lança os itens e para aqui. As funções que faziam esse trecho
+        // (estaEmPA, acharMovBotao, clicavelPerto) foram removidas na v2.48.1 por estarem órfãs.
+        // Este ramo CONTINUA existindo porque um lançamento guardado de uma versão antiga pode
+        // chegar aqui com a etapa "finalizar" — sem ele, o robô ficaria preso num estado que
+        // ninguém mais trata.
+        if (stage === "finalizar") { await clearRun(); status("✅ Itens lançados! Clique no DP/finalizar você mesmo. 👍"); return; }
 
         // ETAPA 1: clicar em "Novo"
         if (stage === "novo") {
