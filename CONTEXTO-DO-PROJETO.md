@@ -776,6 +776,41 @@ Coberto por `ferramentas/teste-credenciais-spamov.js` (17 checagens), incluindo 
 caso (gravar na conta A, voltar pra B) e uma varredura que falha se alguém voltar a ler a chave
 compartilhada.
 
+### ⚠️ Admin é CARGO, não pessoa (bug de 10/11/2026, v2.46.2)
+A v2.45.0 separou os dados, e **mesmo assim vazou**. O cliente "Promessas", do dono original,
+aparecia na conta do colega no CRM, no Novo pedido e no Resumo.
+
+A causa foi o 3º degrau de `ehMeuRegistro`, escrito assim:
+
+```js
+return user.role === 'admin';   // registro órfão
+```
+
+A intenção era "a base antiga é de quem já usava o app". Mas isso amarra a propriedade a um
+**cargo**. No dia em que o colega foi promovido a admin, ele herdou a base inteira do primeiro — sem
+nenhuma ação, sem nenhum aviso. E como a migração ainda não tinha sido rodada, **todos** os clientes
+antigos eram órfãos: vazou a carteira completa.
+
+**Regra agora:** órfão pertence a uma PESSOA, nomeada em `system_data/propriedade.donoLegado` (um id
+de usuário). Enquanto ninguém for nomeado, só o dono original do sistema (código `99206`, que já é a
+definição de dono em outros dois pontos do app) enxerga órfão; o App nomeia esse usuário sozinho na
+primeira abertura. A migração do Diagnóstico grava o nome junto do carimbo.
+
+A **Visão de equipe** tinha o mesmo defeito e foi corrigida junto (`podeVerEquipe`): dependia só de
+`role === 'admin'`, então bastava promover alguém pra ele abrir o Diagnóstico, ligar a chave e ver
+tudo de todo mundo. Agora segue a mesma pessoa.
+
+⚠️ **Lição, e ela é geral:** em regra de propriedade, cargo nunca substitui identidade. "É do admin"
+parece seguro enquanto só existe um admin — e o dia em que existir o segundo não vem com aviso.
+Sempre que aparecer `role === 'x'` decidindo QUAIS DADOS alguém vê (e não quais BOTÕES ele tem),
+é quase certo que está errado.
+
+⚠️ Enquanto existir registro órfão, essa regra é a única coisa segurando a separação. O estado final
+é **não ter órfão**: Diagnóstico → Dono dos registros → Escanear → Carimbar.
+
+Coberto por `ferramentas/teste-dono-registros.js`, que agora testa explicitamente o SEGUNDO ADMIN e
+falha se o degrau do órfão voltar a decidir por cargo.
+
 ### ⛔ Isto NÃO é segurança de banco — e por quê
 Todo mundo entra no Firebase como **anônimo** (`auth.signInAnonymously()`, index.html ~linha 294). O
 login de verdade é uma consulta: `users.where('code').where('password', hash)`. Ou seja, o

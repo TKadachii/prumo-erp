@@ -461,7 +461,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 247;
+        const APP_BUILD_VERSION = 248;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -1092,6 +1092,13 @@
         // degraus, e o carimbo definitivo é feito pela migração no Diagnóstico.
         const donoDoRegistro = (d) => String((d && (d.vendedorId || d.userId)) || '').trim();
 
+        // 👤 Quem responde pelos registros antigos sem dono. Vem de system_data/propriedade, gravado
+        // pela migração do Diagnóstico. É UMA pessoa (um id), não um cargo — foi justamente confiar
+        // no cargo que deixou o segundo admin enxergar a base do primeiro.
+        const CODIGO_DONO_ORIGINAL = '99206';
+        let _donoLegado = '';
+        const definirDonoLegado = (id) => { _donoLegado = String(id || ''); };
+
         const ehMeuRegistro = (d, user) => {
             if (!user || !d) return false;
             const dono = donoDoRegistro(d);
@@ -1099,10 +1106,16 @@
             // 2º degrau: venda antiga sem vendedorId, mas com o CÓDIGO do vendedor gravado.
             const cod = String(d.vendedor || '').trim();
             if (cod) return cod === String(user.code || '').trim();
-            // 3º degrau: registro órfão (nem id, nem código). Até a migração carimbar, ele fica
-            // visível SÓ pro admin — que é quem tinha a base antes de existir um segundo usuário.
-            // É o degrau que impede o vazamento sem arriscar esconder nada de quem já usava o app.
-            return user.role === 'admin';
+            // 3º degrau: registro órfão (nem id, nem código), de antes de existir dono.
+            // ⚠️ ERRADO ATÉ A v2.46.1: isto era `user.role === 'admin'`. Admin é CARGO, não pessoa —
+            // no dia em que existiu um segundo admin, ele passou a enxergar toda a base antiga do
+            // primeiro. Órfão pertence a UMA pessoa, e ela é nomeada em system_data/propriedade.
+            // Enquanto ninguém for nomeado, ninguém vê órfão — exceto o dono original do sistema
+            // (código 99206), que é quem já tinha a base inteira antes de qualquer outra conta
+            // existir. Esse código já é a definição de "dono" em outros dois pontos do app (ele é
+            // quem vira admin sozinho no cadastro e no login).
+            if (_donoLegado) return String(user.id || '') === _donoLegado;
+            return String(user.code || '') === CODIGO_DONO_ORIGINAL;
         };
 
         // 👑 O admin pode querer enxergar a equipe inteira (visão de gerente). Fica DESLIGADO por
@@ -1110,6 +1123,14 @@
         // vira a soma da equipe e perde o sentido.
         const VER_TUDO_KEY = 'prumo_admin_ver_tudo';
         const lerVerTudo = () => { try { return window.localStorage.getItem(VER_TUDO_KEY) === '1'; } catch (e) { return false; } };
+        // ⚠️ Mesma lição do degrau do órfão: quem pode ver a equipe inteira é a PESSOA que responde
+        // pela base, não qualquer um com cargo de admin. Sem isto, bastava promover alguém a admin
+        // pra ele abrir o Diagnóstico, ligar a visão de equipe e ver tudo de todo mundo.
+        const podeVerEquipe = (u) => {
+            if (!u) return false;
+            if (_donoLegado) return String(u.id || '') === _donoLegado;
+            return String(u.code || '') === CODIGO_DONO_ORIGINAL;
+        };
 
         // Quem está logado agora. Fica em módulo de propósito: os 13 pontos que leem `purchases`
         // estão espalhados por telas que nem todas recebem `user` por props, e sair plumbando prop
@@ -1122,7 +1143,7 @@
         const soMeus = (lista) => {
             const u = _usuarioAtual;
             if (!u) return [];
-            if (u.role === 'admin' && lerVerTudo()) return lista || [];
+            if (podeVerEquipe(u) && lerVerTudo()) return lista || [];
             return (lista || []).filter(d => ehMeuRegistro(d, u));
         };
 
@@ -9239,6 +9260,13 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.46.2', data: '10/11/2026', areas: ['site'], itens: [
+                '🔐 CORRIGIDO o vazamento que sobrou: clientes antigos (de antes da separação) ainda apareciam para um SEGUNDO ADMIN — era assim que o "Promessas" aparecia na conta do colega, no CRM, no Novo pedido e no Resumo',
+                'A regra errada dizia "registro antigo é visível pro admin". Admin é CARGO, não pessoa: no dia em que existiu um segundo admin, ele passou a enxergar a base inteira do primeiro',
+                'Agora os registros antigos pertencem a UMA PESSOA, nomeada em Diagnóstico → Dono dos registros. Cargo não dá mais acesso a nada',
+                '👑 A "Visão de equipe" também deixou de depender do cargo — senão bastava ser promovido a admin para ligá-la e ver tudo de todos',
+                '✅ Definitivo: rode Diagnóstico → Dono dos registros → Escanear → Carimbar. Depois disso não existe mais registro sem dono, e a regra deixa de ser necessária',
+            ]},
             { versao: '2.46.1', data: '10/11/2026', areas: ['site'], itens: [
                 '🔑 CORRIGIDO: o login do SPAmov era guardado por APARELHO, não por conta. Quem entrasse na conta de um colega no mesmo computador e salvasse o login dele, ao voltar pra própria conta encontrava o login do colega no lugar do seu',
                 '⚠️ O pior era o silencioso: um clique em "Abrir SPAmov e Logar" entraria com o usuário errado e lançaria pedido no nome da pessoa errada, sem nenhum aviso',
@@ -13244,6 +13272,13 @@
                 setDonoBusy(true);
                 try {
                     const carimbo = { vendedorId: alvo.id, vendedor: alvo.code || '' };
+                    // Nomeia quem responde pelos órfãos que sobrarem (ex.: uma coleção que falhou no
+                    // meio). Sem isso, "órfão" voltaria a depender de cargo — que é o que vazou.
+                    try {
+                        await db.collection('system_data').doc('propriedade')
+                            .set({ donoLegado: alvo.id, definidoEm: Date.now(), definidoPor: (user && user.code) || '' }, { merge: true });
+                        definirDonoLegado(alvo.id);
+                    } catch (e) {}
                     let gravados = 0;
                     for (const nome of COLECOES_PESSOAIS) {
                         const lista = donoPreview[nome].orfaos;
@@ -13498,7 +13533,7 @@
                                 <p className="text-[11px] text-slate-400">⚠️ Confira a coluna <b>Código gravado</b> antes: se aparecer um código que não é seu, esses registros são de outro vendedor e devem ser carimbados no nome dele, numa segunda passada.</p>
                             </div>
                         )}
-                        <div className="border-t border-slate-100 pt-4">
+                        <div className="border-t border-slate-100 pt-4" hidden={!podeVerEquipe(user)}>
                             <label className="flex items-start gap-3 cursor-pointer">
                                 <input type="checkbox" checked={verTudo} onChange={alternarVerTudo} className="mt-1 h-4 w-4" />
                                 <span className="text-sm text-slate-600">
@@ -13654,6 +13689,32 @@
             useEffect(() => {
                 limparLegadoSpamov();
                 sincronizarCredenciaisExtensao(user);
+            }, [user && user.id]);
+
+            // 👤 Quem responde pelos registros antigos sem dono. Precisa chegar ANTES das telas
+            // lerem, senão a primeira pintura mostra a lista errada — por isso o estado também é
+            // atualizado, pra forçar um novo render quando a resposta chega.
+            const [donoLegadoPronto, setDonoLegadoPronto] = useState(0);
+            useEffect(() => {
+                if (!user) return;
+                let vivo = true;
+                db.collection('system_data').doc('propriedade').get().then(async d => {
+                    if (!vivo) return;
+                    const atual = (d.exists && d.data().donoLegado) || '';
+                    if (atual) { definirDonoLegado(atual); setDonoLegadoPronto(v => v + 1); return; }
+                    // Ninguém nomeado ainda: o dono original do sistema assume sozinho, pra não
+                    // perder de vista a própria base enquanto a migração não roda. Qualquer outra
+                    // conta NÃO assume nada — é exatamente o que vazava antes.
+                    if (String(user.code || '') === CODIGO_DONO_ORIGINAL && user.id) {
+                        try {
+                            await db.collection('system_data').doc('propriedade')
+                                .set({ donoLegado: user.id, definidoEm: Date.now(), definidoPor: user.code }, { merge: true });
+                            definirDonoLegado(user.id);
+                        } catch (e) {}
+                    }
+                    setDonoLegadoPronto(v => v + 1);
+                }).catch(() => { if (vivo) setDonoLegadoPronto(v => v + 1); });
+                return () => { vivo = false; };
             }, [user && user.id]);
             const [activeRoute, setActiveRoute] = useState(() => {
                 const r = window.sessionStorage.getItem('friganso_initial_route');
@@ -13978,10 +14039,14 @@
             };
             const [clients, setClients] = useState([]);
 
+            // ⚠️ Reassina quando o dono do legado chega. O filtro roda NA HORA em que o snapshot
+            // responde, e o primeiro responde antes de o system_data/propriedade voltar — sem
+            // reassinar, a lista ficaria congelada com a resposta de quando ainda não se sabia
+            // quem responde pelos registros antigos.
             useEffect(() => {
                 const unsubscribe = db.collection('clients').onSnapshot(snap => setClients(soMeus(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))));
                 return () => unsubscribe();
-            }, []);
+            }, [donoLegadoPronto]);
 
             // 🚫 Lista Negra (itens indisponíveis) — compartilhada na nuvem. Itens aqui NÃO saem em Gerador de Zap / Disparos.
             const [listaNegra, setListaNegra] = useState([]);

@@ -23,9 +23,9 @@ const win = { localStorage: {
     setItem: (k, v) => { guardado[k] = String(v); },
 } };
 const api = new Function('window', bloco + `
-    return { donoDoRegistro, ehMeuRegistro, soMeus, carimboDono, definirUsuarioAtual, VER_TUDO_KEY };
+    return { donoDoRegistro, ehMeuRegistro, soMeus, carimboDono, definirUsuarioAtual, definirDonoLegado, VER_TUDO_KEY, CODIGO_DONO_ORIGINAL };
 `)(win);
-const { ehMeuRegistro, soMeus, carimboDono, definirUsuarioAtual, VER_TUDO_KEY } = api;
+const { ehMeuRegistro, soMeus, carimboDono, definirUsuarioAtual, definirDonoLegado, VER_TUDO_KEY, CODIGO_DONO_ORIGINAL } = api;
 
 let falhas = 0;
 function checa(nome, cond, extra) {
@@ -33,11 +33,13 @@ function checa(nome, cond, extra) {
     console.log(`${cond ? '✅' : '❌'} ${nome}${cond ? '' : '  → ' + extra}`);
 }
 
-const BRUNO = { id: 'uid-bruno', code: '77', role: 'admin' };
+const BRUNO = { id: 'uid-bruno', code: CODIGO_DONO_ORIGINAL, role: 'admin' };
 const AMIGO = { id: 'uid-amigo', code: '88', role: 'vendedor' };
+// ⚠️ O caso que vazou de verdade: o colega foi promovido a ADMIN.
+const AMIGO_ADMIN = { id: 'uid-amigo', code: '88', role: 'admin' };
 
 console.log('═══ 1. REGISTRO COM DONO ═══');
-const doBruno = { vendedorId: 'uid-bruno', vendedor: '77', name: 'Bar do Zé' };
+const doBruno = { vendedorId: 'uid-bruno', vendedor: CODIGO_DONO_ORIGINAL, name: 'Bar do Zé' };
 const doAmigo = { vendedorId: 'uid-amigo', vendedor: '88', name: 'Padaria Sol' };
 checa('vejo o que é meu', ehMeuRegistro(doBruno, BRUNO) === true, '');
 checa('NÃO vejo o do outro vendedor', ehMeuRegistro(doAmigo, BRUNO) === false, 'vazou');
@@ -46,7 +48,7 @@ checa('o outro NÃO vê o meu', ehMeuRegistro(doBruno, AMIGO) === false, 'VAZAME
 console.log('\n═══ 2. VENDA ANTIGA (só com o código do vendedor) ═══');
 // purchases já gravava `vendedor: user.code` desde o começo — esse degrau salva o histórico de
 // quem já usava, sem precisar esperar a migração.
-const vendaAntigaBruno = { vendedor: '77', valor: 1000 };
+const vendaAntigaBruno = { vendedor: CODIGO_DONO_ORIGINAL, valor: 1000 };
 const vendaAntigaAmigo = { vendedor: '88', valor: 500 };
 checa('venda antiga com o meu código continua minha', ehMeuRegistro(vendaAntigaBruno, BRUNO) === true, '');
 checa('venda antiga com o código do outro não é minha', ehMeuRegistro(vendaAntigaAmigo, BRUNO) === false, '');
@@ -56,6 +58,24 @@ console.log('\n═══ 3. REGISTRO ÓRFÃO (o degrau delicado) ═══');
 const orfao = { name: 'Cliente antigo', code: '1602' };
 checa('órfão NÃO aparece pro vendedor novo', ehMeuRegistro(orfao, AMIGO) === false, 'VAZAMENTO do legado');
 checa('órfão continua visível pro admin (não perde histórico)', ehMeuRegistro(orfao, BRUNO) === true, 'sumiu o histórico de quem já usava');
+
+console.log('\n═══ 3b. ÓRFÃO É DE UMA PESSOA, NÃO DE UM CARGO ═══');
+// O vazamento real (10/11/2026): a regra era `user.role === 'admin'`. O colega foi promovido a
+// admin e passou a enxergar a base antiga inteira — cliente "Promessas" aparecia pra ele no CRM,
+// no Novo pedido e no Resumo. Admin é cargo; órfão pertence a uma PESSOA.
+checa('SEGUNDO ADMIN não vê o registro órfão do dono original',
+    ehMeuRegistro(orfao, AMIGO_ADMIN) === false, 'VAZAMENTO — era exatamente este o bug');
+checa('e o dono original continua vendo', ehMeuRegistro(orfao, BRUNO) === true, '');
+
+// Depois da migração nomear o dono, vale o ID — nem o código nem o cargo.
+definirDonoLegado('uid-amigo');
+checa('nomeado o dono, é ELE quem vê o órfão', ehMeuRegistro(orfao, AMIGO_ADMIN) === true, '');
+checa('e quem não foi nomeado deixa de ver, mesmo sendo o dono original',
+    ehMeuRegistro(orfao, BRUNO) === false, 'cargo ainda mandando');
+definirDonoLegado('uid-bruno');
+checa('nomeando de volta, volta pro dono certo', ehMeuRegistro(orfao, BRUNO) === true, '');
+checa('e o outro admin perde o acesso de novo', ehMeuRegistro(orfao, AMIGO_ADMIN) === false, '');
+definirDonoLegado('');
 
 console.log('\n═══ 4. soMeus — o filtro usado em toda leitura ═══');
 const tudo = [doBruno, doAmigo, vendaAntigaBruno, vendaAntigaAmigo, orfao];
@@ -78,11 +98,19 @@ win.localStorage.setItem(VER_TUDO_KEY, '1');
 checa('ligada: admin vê a equipe toda', soMeus(tudo).length === 5, '');
 definirUsuarioAtual(AMIGO);
 checa('a chave NÃO serve pra quem não é admin', soMeus(tudo).length === 2, 'não-admin ligou a visão de equipe');
+// ⚠️ Nem pra um SEGUNDO admin: senão bastava ser promovido pra ligar a chave e ver tudo.
+definirUsuarioAtual(AMIGO_ADMIN);
+win.localStorage.setItem(VER_TUDO_KEY, '1');
+checa('nem pra um segundo admin', soMeus(tudo).length === 2,
+    `segundo admin ligou a visão de equipe e viu ${soMeus(tudo).length}`);
+definirUsuarioAtual(BRUNO);
+checa('o dono original continua podendo', soMeus(tudo).length === 5, '');
+win.localStorage.setItem(VER_TUDO_KEY, '0');
 win.localStorage.setItem(VER_TUDO_KEY, '0');
 
 console.log('\n═══ 6. O CARIMBO ═══');
 definirUsuarioAtual(AMIGO);
-checa('carimbo grava id e código', carimboDono(BRUNO).vendedorId === 'uid-bruno' && carimboDono(BRUNO).vendedor === '77', JSON.stringify(carimboDono(BRUNO)));
+checa('carimbo grava id e código', carimboDono(BRUNO).vendedorId === 'uid-bruno' && carimboDono(BRUNO).vendedor === CODIGO_DONO_ORIGINAL, JSON.stringify(carimboDono(BRUNO)));
 checa('carimbo sem argumento usa quem está logado', carimboDono().vendedorId === 'uid-amigo', JSON.stringify(carimboDono()));
 checa('carimbo sem ninguém logado não inventa dono', (definirUsuarioAtual(null), carimboDono().vendedorId) === '', '');
 
@@ -110,6 +138,14 @@ linhas.forEach((l, i) => {
     });
 });
 checa('toda leitura de dado pessoal passa por soMeus', escaparam.length === 0, '\n        ' + escaparam.join('\n        '));
+
+// ⚠️ A regra do órfão não pode voltar a ser "qualquer admin".
+const blocoRegra = src.slice(src.indexOf('const ehMeuRegistro'), src.indexOf('const VER_TUDO_KEY'));
+const regraViva = blocoRegra.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+checa('o degrau do órfão não decide por cargo',
+    !/return\s+user\.role\s*===\s*'admin'/.test(regraViva),
+    'voltou a liberar órfão pra qualquer admin');
+checa('o degrau do órfão decide por pessoa', /_donoLegado/.test(regraViva), 'não consulta o dono nomeado');
 
 console.log(falhas ? `\n❌ ${falhas} falha(s)` : '\n✅ todos passaram');
 process.exit(falhas ? 1 : 0);
