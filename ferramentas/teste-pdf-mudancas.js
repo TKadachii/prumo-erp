@@ -11,6 +11,27 @@ global.window = { jspdf: { jsPDF } };
 
 // Extrai a função REAL do index.html
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
+// ⚠️ A função usa PDF_LAYOUTS (o cabeçalho/logo do PDF). Sem trazer essa constante junto, o
+// teste quebra com "PDF_LAYOUTS is not defined" — falha do extrator, não do app.
+function extrairBloco(marcador) {
+    const a = src.indexOf(marcador);
+    if (a < 0) { console.log('❌ não achei ' + marcador); process.exit(1); }
+    let p = 0, f = -1;
+    for (let k = src.indexOf('{', a); k < src.length; k++) {
+        if (src[k] === '{') p++; else if (src[k] === '}') { p--; if (!p) { f = k + 1; break; } }
+    }
+    return src.slice(a, f);
+}
+eval(extrairBloco('const PDF_LAYOUTS = {').replace(/^const /, 'globalThis.'));
+// lerLayoutPdf decide qual cabeçalho usar quando a chamada não passa um; ela lê localStorage,
+// que não existe no Node — daí o dublê abaixo, que devolve sempre o layout padrão.
+globalThis.window = globalThis.window || { localStorage: { getItem: () => null, setItem: () => {} } };
+globalThis.PDF_LAYOUT_KEY = 'prumo_pdf_layout';
+globalThis.lerLayoutPdf = () => 'prumo';
+// O PDF foi refatorado em ajudantes compartilhados; o teste precisa deles todos.
+eval(extrairBloco('const pdfPintarPagina = (').replace(/^const /, 'globalThis.'));
+eval(extrairBloco('const pdfRodape = (').replace(/^const /, 'globalThis.'));
+
 const i = src.indexOf('const gerarPdfMudancasPreco = (');
 let prof = 0, fim = -1;
 for (let k = src.indexOf('{', i); k < src.length; k++) {
@@ -57,7 +78,11 @@ ok(!nomesPessoais.some(n => textos.some(t => t.includes(n))), 'nenhum nome pesso
 const telRe = /(\(\d{2}\)\s*\d{4,5}-?\d{4})|(\+?55\s?\d{2}\s?\d{4,5})|(\b\d{8,11}\b)/;
 const suspeitos = textos.filter(t => telRe.test(t));
 ok(suspeitos.length === 0, `nenhum telefone no PDF${suspeitos.length ? ' → achei: ' + JSON.stringify(suspeitos) : ''}`);
-ok(textos.some(t => t === 'Friganso'), 'rodapé traz só "Friganso"');
+// ⚠️ Era `t === 'Friganso'` (igualdade exata). O rebrand pra Prumo e a junção do rodapé numa
+// linha só ("<marca>  ·  <aviso>") quebraram a igualdade sem que nada de errado tivesse acontecido.
+// O que importa aqui é a INTENÇÃO: o rodapé leva a marca da empresa, e nada pessoal — e isso é o
+// que as duas checagens acima garantem.
+ok(textos.some(t => /Prumo|Friganso/.test(t)), 'rodapé traz a marca da empresa');
 ok(textos.some(t => t.includes('MUDANÇAS DE PREÇO') || t.includes('MUDAN')), 'título continua lá');
 ok(textos.some(t => t.includes('1603')), 'os produtos continuam no PDF');
 ok(textos.some(t => t.includes('BAIXARAM')), 'seção "BAIXARAM DE PREÇO" presente');

@@ -691,6 +691,66 @@ andava quando a página recarregava. Agora:
   A importação de clientes do SPAmov não toca nesse campo.
 - Vale nos 3 caminhos de envio: balão do Android (`ZapBolha`), extensão (`ZAP_CAMPANHA`) e PC (`__frigZap`).
 
+## 🔐 Separação de dados entre vendedores (2026-11-10, v2.45.0)
+O app nasceu pra UMA pessoa. `clients`, `purchases`, `leads` e `purchases_lixeira` eram lidos
+inteiros, sem filtro nenhum. No dia em que um segundo vendedor se cadastrou, ele abriu o app e viu a
+carteira, as vendas e o placar de positivação do primeiro.
+
+A convenção **já existia** no projeto — `lembretes` usa `userId`, `cadastros_processo` e
+`locais_visitados` usam `vendedorId`. Foi estendida pro resto com o MESMO nome, em vez de inventar um
+terceiro.
+
+**Como se decide o dono** (`ehMeuRegistro`), em três degraus:
+1. tem `vendedorId`/`userId` → é de quem o id apontar;
+2. não tem, mas tem o **código** em `vendedor` → é de quem tiver esse código (salva o histórico de
+   `purchases`, que grava `vendedor: user.code` desde o começo);
+3. órfão (nem id nem código) → **visível só pro admin** até a migração carimbar.
+
+⚠️ O degrau 3 é o delicado, e é o ponto todo do desenho: filtrar por `vendedorId` direto na consulta
+seria mais simples, mas faria o histórico inteiro de quem já usava o app **sumir da tela dele**.
+Conserto de privacidade que apaga o passado do usuário não é conserto.
+
+`soMeus(lista)` é o filtro único, usado em **toda** leitura de dado pessoal. Ele lê `_usuarioAtual`,
+uma variável de MÓDULO definida no corpo do render do `App` (não num `useEffect`: o efeito roda
+depois dos filhos montarem, e as telas já teriam disparado os `onSnapshot` com usuário nulo, abrindo
+a lista vazia na primeira pintura). Foi feito assim porque são 13 pontos lendo `purchases`, em telas
+que nem todas recebem `user` por props — e sair plumbando prop por prop é exatamente como nasceu o
+bug da tela branca. Pelo mesmo motivo, `carimboDono()` sem argumento usa o usuário atual: a
+`ClientsScreen` não recebe `user`.
+
+Sem ninguém logado, `soMeus` devolve **vazio**, nunca a lista inteira.
+
+**Migração:** Diagnóstico → "Dono dos registros". Escaneia, mostra quantos órfãos tem em cada coleção
+e com que código, e carimba em lotes de 450 (o limite do Firestore é 500). Não apaga nada e não toca
+em registro que já tem dono. A coluna "código gravado" existe pra pegar o caso de órfãos que são de
+OUTRO vendedor — esses devem ser carimbados no nome dele, numa segunda passada.
+
+**Visão de equipe** (`prumo_admin_ver_tudo`): só admin, desligada por padrão — o número do painel tem
+que ser o DELE, senão a meta de positivação vira a soma da equipe. Recarrega a página ao trocar,
+porque os `onSnapshot` já montados guardaram a lista filtrada.
+
+Importação do relatório: o "esse SPAMOV já existe?" passou a ser **dentro da carteira**. Sem isso o
+pedido de um vendedor bloquearia — e o `update` sobrescreveria — o pedido do outro com o mesmo número.
+
+### ⛔ Isto NÃO é segurança de banco — e por quê
+Todo mundo entra no Firebase como **anônimo** (`auth.signInAnonymously()`, index.html ~linha 294). O
+login de verdade é uma consulta: `users.where('code').where('password', hash)`. Ou seja, o
+`request.auth.uid` que chega no Firestore é um id descartável, **sem nenhuma relação** com o
+documento do usuário.
+
+Consequência: **não dá pra escrever regra de segurança por vendedor.** O servidor não tem como saber
+quem é quem. O filtro desta versão separa o que cada um VÊ no aplicativo; quem souber abrir o console
+do navegador continua conseguindo ler a coleção inteira — inclusive o `users`, que guarda os hashes
+de senha de todo mundo.
+
+O conserto de verdade é migrar o login pro **Firebase Auth** (e-mail/senha de verdade), gravar o
+`uid` no documento do usuário e só então publicar `firestore.rules` com
+`resource.data.vendedorId == request.auth.uid`. É um trabalho à parte, e precisa ser feito DEPOIS da
+migração de dono acima — senão os registros órfãos ficam ilegíveis pra todo mundo.
+
+Coberto por `ferramentas/teste-dono-registros.js` (18 checagens), incluindo uma varredura que falha
+se alguma leitura nova de dado pessoal esquecer o `soMeus`.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

@@ -76,7 +76,9 @@ ok(/onConfirmar=\{\(prova\) => \{ setMostrarConferencia\(false\); executarCopiaR
 console.log('\n═══ 4. A PROVA CHEGA NA VENDA? ═══');
 ok(/registrarCompra = async \(clienteCode, itensValidos, tipo, via, clients, user, spamov, condicaoPagamento, prova\)/.test(src),
    'registrarCompra recebe a prova');
-ok(/prova: prova \|\| null,/.test(src), 'a prova é gravada no documento da compra');
+// ⚠️ sem exigir a vírgula final: ela some sozinha quando o campo é o ÚLTIMO do objeto, e o
+// teste passou a acusar um bug que não existia. A regra é o campo ser gravado, não a pontuação.
+ok(/prova: prova \|\| null\s*[,}\n]/.test(src), 'a prova é gravada no documento da compra');
 ok(/registrarCompra\(orderSummary\.customerCode, itens, null, 'resumo', clients, user, orderSummary\.spamov, condicaoAtual, prova\)/.test(src),
    'o Resumo repassa a prova ao registrar a venda');
 
