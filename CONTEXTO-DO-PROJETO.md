@@ -744,6 +744,38 @@ o bug dos Lembretes) e existe num lugar só: a cópia do Debug foi removida, nã
 **no aparelho**, nunca no Firestore. Consequência prática: é por dispositivo — quem usa celular e PC
 cadastra nos dois. E não há dono a separar aqui: um aparelho, um login.
 
+### 🔑 A credencial do SPAmov é por CONTA, não por aparelho (v2.46.1)
+Bug encontrado no uso real logo depois da v2.45.1: a chave era `friganso_spamov_user`/`_pass`, **uma
+só pro navegador inteiro**. O usuário entrou na conta de um colega no mesmo computador, salvou o
+login do SPAmov dele, voltou pra própria conta — e o login do colega estava lá, no lugar do seu.
+
+⚠️ O sintoma visível (campo com o nome errado) é o menos grave. O grave é o silencioso: um clique em
+"Abrir SPAmov e Logar" entraria no SPAmov com o usuário do colega e **lançaria pedido no nome da
+pessoa errada**, sem nenhum aviso de que algo estava trocado.
+
+Agora cada conta tem a sua chave: `prumo_spamov_<id do usuário>`. Três detalhes que fazem parte do
+conserto e não são óbvios:
+
+1. **A extensão guarda a PRÓPRIA cópia** (`chrome.storage.friganso_creds`). Sem avisá-la na troca de
+   conta, ela seguiria logando com a credencial do dono anterior mesmo com o app já correto. Por isso
+   `sincronizarCredenciaisExtensao` roda a cada troca de usuário — inclusive mandando **vazio** quando
+   a conta nova ainda não cadastrou login.
+2. **As chaves antigas NÃO são migradas**, são apagadas. No aparelho onde o bug aconteceu elas guardam
+   o login de outra pessoa; adotá-las como "do usuário atual" seria repetir o erro com cara de
+   conserto. O preço é cada um recadastrar uma vez — e é o preço certo.
+3. O card leva `key={user.id}`. Ele lê a credencial na montagem; sem o `key`, trocar de conta sem
+   remontar continuaria exibindo a do usuário anterior.
+
+⚠️ Lição de API: `chaveSpamov` aceitava `null` e `undefined` como "a conta de agora". O teste pegou a
+ambiguidade — um `null` vindo de variável não preenchida gravaria silenciosamente na conta errada.
+Agora **só o argumento omitido** significa "conta atual"; `null` significa ninguém e devolve chave
+vazia. Por isso `gravarCredenciaisSpamov(usuario, senha, user)` tem o usuário por ÚLTIMO: ninguém
+precisa passar `null` posicional.
+
+Coberto por `ferramentas/teste-credenciais-spamov.js` (17 checagens), incluindo a reprodução exata do
+caso (gravar na conta A, voltar pra B) e uma varredura que falha se alguém voltar a ler a chave
+compartilhada.
+
 ### ⛔ Isto NÃO é segurança de banco — e por quê
 Todo mundo entra no Firebase como **anônimo** (`auth.signInAnonymously()`, index.html ~linha 294). O
 login de verdade é uma consulta: `users.where('code').where('password', hash)`. Ou seja, o

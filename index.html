@@ -461,7 +461,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 246;
+        const APP_BUILD_VERSION = 247;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -872,8 +872,7 @@
             const opcoes = (clients || []).filter(c => !q || String(c.code).includes(busca.trim()) || normalizeForSearch(c.name || '').includes(q)).slice(0, 30);
             const iniciar = () => {
                 if (!cliente) { showMessage('Selecione um cliente para fazer a conferência.', 'error'); return; }
-                const usuario = window.localStorage.getItem('friganso_spamov_user') || '';
-                const senha = window.localStorage.getItem('friganso_spamov_pass') || '';
+                const { usuario, senha } = lerCredenciaisSpamov();
                 if (!usuario || !senha) { showMessage('Cadastre primeiro o seu login do SPAmov em Minha conta.', 'error'); return; }
                 const pedido = { cliente: String(cliente.code), tipoPessoa: /f[ií]sica/i.test(cliente.tipo || '') ? 'fisica' : 'juridica', conferenciaPrecos: true, itens: (itens || []).map(it => ({ code: String(it.code), nome: it.name, qty: 1 })) };
                 let respondeu = false;
@@ -1602,6 +1601,56 @@
             );
         };
 
+        // ═══════════════════════════════════════════════════════════════════════════════════════
+        // 🔑 CREDENCIAIS DO SPAMOV — POR CONTA, não por aparelho
+        // Bug (10/11/2026): a chave era `friganso_spamov_user`/`_pass`, uma só pro navegador inteiro.
+        // Quem entrava na conta de um colega no mesmo computador, salvava o login do SPAmov dele e
+        // depois voltava pra própria conta, encontrava o login DO COLEGA no lugar do seu. Pior que
+        // confuso: um clique em "Abrir SPAmov e Logar" entraria com o usuário errado e lançaria
+        // pedido no nome da pessoa errada.
+        //
+        // Agora cada conta tem a sua chave (`prumo_spamov_<id do usuário>`). Continua no aparelho e
+        // nunca no servidor — o que mudou é que deixou de ser compartilhada entre as contas.
+        // ⚠️ Só `undefined` (argumento omitido) quer dizer "a conta logada agora". `null` quer dizer
+        // NINGUÉM, e devolve chave vazia. Aceitar os dois como "atual" deixaria um `null` vindo de
+        // uma variável não preenchida gravar silenciosamente na conta errada.
+        const chaveSpamov = (user) => {
+            const u = (user === undefined) ? _usuarioAtual : user;
+            return (u && u.id) ? 'prumo_spamov_' + u.id : '';
+        };
+        const lerCredenciaisSpamov = (user) => {
+            const k = chaveSpamov(user);
+            if (!k) return { usuario: '', senha: '' };
+            try {
+                const bruto = window.localStorage.getItem(k);
+                if (!bruto) return { usuario: '', senha: '' };
+                const d = JSON.parse(bruto);
+                return { usuario: d.usuario || '', senha: d.senha || '' };
+            } catch (e) { return { usuario: '', senha: '' }; }
+        };
+        const gravarCredenciaisSpamov = (usuario, senha, user) => {
+            const k = chaveSpamov(user);
+            if (!k) return;
+            try { window.localStorage.setItem(k, JSON.stringify({ usuario: usuario || '', senha: senha || '' })); } catch (e) {}
+        };
+        // ⚠️ As chaves antigas NÃO são migradas de propósito. No aparelho onde o bug aconteceu elas
+        // guardam o login de OUTRA pessoa — adotá-las como "do usuário atual" seria repetir o erro
+        // com cara de conserto. Elas são apagadas, e cada um cadastra o seu uma vez.
+        const limparLegadoSpamov = () => {
+            try {
+                window.localStorage.removeItem('friganso_spamov_user');
+                window.localStorage.removeItem('friganso_spamov_pass');
+            } catch (e) {}
+        };
+        // 📤 A extensão guarda a PRÓPRIA cópia (chrome.storage.friganso_creds). Sem avisar na troca
+        // de conta, ela continuaria logando com a credencial do dono anterior mesmo depois do app já
+        // estar certo. Isto é chamado sempre que o usuário logado muda — inclusive pra MANDAR VAZIO
+        // quando a conta nova ainda não cadastrou login nenhum.
+        const sincronizarCredenciaisExtensao = (user) => {
+            const { usuario, senha } = lerCredenciaisSpamov(user);
+            try { window.postMessage({ source: 'friganso-app', type: 'SET_CREDS', usuario: usuario, senha: senha, autoLogin: false }, '*'); } catch (e) {}
+        };
+
         // 🔐 Login do SPAmov — de CADA vendedor, então mora em "Minha conta", não no Debug.
         // Ficava na tela de Diagnóstico, que só abre pra quem é admin: na prática, quem não fosse
         // admin não tinha como cadastrar o próprio login e ficava sem o "Abrir e Logar" e sem o
@@ -1612,13 +1661,12 @@
         // Componente de MÓDULO (não declarado dentro da tela): componente dentro de componente é
         // recriado a cada render e os campos perdem o foco a cada letra — o bug dos Lembretes.
         const CredenciaisSpamov = ({ showMessage }) => {
-            const [usuario, setUsuario] = useState(() => window.localStorage.getItem('friganso_spamov_user') || '');
-            const [senha, setSenha] = useState(() => window.localStorage.getItem('friganso_spamov_pass') || '');
+            const [usuario, setUsuario] = useState(() => lerCredenciaisSpamov().usuario);
+            const [senha, setSenha] = useState(() => lerCredenciaisSpamov().senha);
             const [verSenha, setVerSenha] = useState(false);
 
             const gravar = () => {
-                window.localStorage.setItem('friganso_spamov_user', usuario);
-                window.localStorage.setItem('friganso_spamov_pass', senha);
+                gravarCredenciaisSpamov(usuario, senha);
             };
             const salvar = () => {
                 gravar();
@@ -1835,7 +1883,9 @@
                         </div>
                     </div>
 
-                    <CredenciaisSpamov showMessage={showMessage} />
+                    {/* key por conta: o card lê a credencial na montagem, e sem o key ele
+                        continuaria mostrando a do usuário anterior ao trocar de conta. */}
+                    <CredenciaisSpamov key={user.id} showMessage={showMessage} />
 
                     {/* Card alterar senha */}
                     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
@@ -9189,6 +9239,14 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.46.1', data: '10/11/2026', areas: ['site'], itens: [
+                '🔑 CORRIGIDO: o login do SPAmov era guardado por APARELHO, não por conta. Quem entrasse na conta de um colega no mesmo computador e salvasse o login dele, ao voltar pra própria conta encontrava o login do colega no lugar do seu',
+                '⚠️ O pior era o silencioso: um clique em "Abrir SPAmov e Logar" entraria com o usuário errado e lançaria pedido no nome da pessoa errada, sem nenhum aviso',
+                'Agora cada conta guarda a sua credencial, separada das outras, e trocar de conta troca o login junto',
+                '🧩 A extensão também é avisada na troca de conta — ela guardava a própria cópia e continuaria logando com a credencial do dono anterior',
+                '🧹 O valor antigo compartilhado é APAGADO do aparelho. Ele não é adotado como seu de propósito: no computador onde isso aconteceu, ele é de outra pessoa',
+                '👉 Cada um precisa cadastrar o login do SPAmov uma vez em Minha conta — inclusive quem já tinha cadastrado',
+            ]},
             { versao: '2.46.0', data: '10/11/2026', areas: ['site'], itens: [
                 '⚡ IMPORTAR VENDAS REAIS FICOU MUITO MAIS RÁPIDO: 1.000 pedidos saíram de ~2.000 idas ao servidor, uma esperando a outra, para ~34 consultas em paralelo e 3 gravações em lote',
                 '📊 Barra de progresso com as duas etapas ("conferindo o que já existe" e "gravando") e o contador X de Y — dá pra ver que está andando',
@@ -11913,9 +11971,8 @@
                 if (!clienteId.trim()) { showMessage('Informe o ID do cliente.', 'error'); return; }
                 const validos = itens.filter(i => Number(i.qty) > 0);
                 if (!validos.length) { showMessage('Adicione ao menos 1 item com quantidade.', 'error'); return; }
-                const u = window.localStorage.getItem('friganso_spamov_user') || '';
-                const s = window.localStorage.getItem('friganso_spamov_pass') || '';
-                if (!u || !s) { showMessage('Primeiro salve seu login do SPAmov na aba 🐞 Debug.', 'error'); return; }
+                const { usuario: u, senha: s } = lerCredenciaisSpamov();
+                if (!u || !s) { showMessage('Cadastre primeiro o seu login do SPAmov em Minha conta.', 'error'); return; }
                 const pedido = { cliente: clienteId.trim(), tipoPessoa: tipoPessoa, itens: validos.map(i => ({ code: String(i.code), nome: i.name, qty: Number(i.qty) })) };
                 const SPURL = 'http://spd1.friganso.com.br/rdm-business/';
                 const msg = { source: 'friganso-app', type: 'LANCAR_AUTO', usuario: u, senha: s, pedido: pedido };
@@ -13591,6 +13648,13 @@
             // useEffect: o useEffect roda DEPOIS dos filhos montarem, e as telas já teriam disparado
             // os onSnapshot com _usuarioAtual nulo — abrindo a lista vazia na primeira pintura.
             definirUsuarioAtual(user);
+            // 🔑 Troca de conta: a credencial do SPAmov é de QUEM está logado. A extensão guarda a
+            // própria cópia, então ela precisa ser avisada — inclusive com vazio, quando a conta nova
+            // ainda não cadastrou login. Sem isso ela seguiria logando com a credencial do anterior.
+            useEffect(() => {
+                limparLegadoSpamov();
+                sincronizarCredenciaisExtensao(user);
+            }, [user && user.id]);
             const [activeRoute, setActiveRoute] = useState(() => {
                 const r = window.sessionStorage.getItem('friganso_initial_route');
                 if (r) { window.sessionStorage.removeItem('friganso_initial_route'); return r; }
@@ -13692,8 +13756,7 @@
                 if (!isCapacitor) return;
                 const P = (window.Capacitor && window.Capacitor.Plugins) ? window.Capacitor.Plugins.SpamovAuto : null;
                 window.__frigAbrirSpamov = () => {
-                    const u = window.localStorage.getItem('friganso_spamov_user') || '';
-                    const s = window.localStorage.getItem('friganso_spamov_pass') || '';
+                    const { usuario: u, senha: s } = lerCredenciaisSpamov();
                     if (P && P.abrir) P.abrir({ url: 'http://spd1.friganso.com.br/rdm-business/', creds: { usuario: u, senha: s } });
                     else showMessage('Recurso indisponível nesta versão do app.', 'error');
                 };
