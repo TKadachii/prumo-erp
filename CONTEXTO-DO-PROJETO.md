@@ -732,6 +732,18 @@ porque os `onSnapshot` já montados guardaram a lista filtrada.
 Importação do relatório: o "esse SPAMOV já existe?" passou a ser **dentro da carteira**. Sem isso o
 pedido de um vendedor bloquearia — e o `update` sobrescreveria — o pedido do outro com o mesmo número.
 
+### 🏭 Login do SPAmov mora em "Minha conta" (v2.45.1)
+É a credencial de CADA vendedor, não uma configuração do sistema. Ficava no Diagnóstico, que só abre
+pra `role === 'admin'` — então o vendedor comum não tinha como cadastrar o próprio login, e ficava sem
+o "Abrir SPAmov e Logar" e sem o lançamento automático de pedido.
+
+`CredenciaisSpamov` é componente de MÓDULO (dentro da tela, os campos perderiam o foco a cada letra —
+o bug dos Lembretes) e existe num lugar só: a cópia do Debug foi removida, não duplicada.
+
+⚠️ Usuário e senha ficam em `localStorage` (`friganso_spamov_user` / `friganso_spamov_pass`), ou seja
+**no aparelho**, nunca no Firestore. Consequência prática: é por dispositivo — quem usa celular e PC
+cadastra nos dois. E não há dono a separar aqui: um aparelho, um login.
+
 ### ⛔ Isto NÃO é segurança de banco — e por quê
 Todo mundo entra no Firebase como **anônimo** (`auth.signInAnonymously()`, index.html ~linha 294). O
 login de verdade é uma consulta: `users.where('code').where('password', hash)`. Ou seja, o

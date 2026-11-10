@@ -461,7 +461,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 244;
+        const APP_BUILD_VERSION = 245;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -874,7 +874,7 @@
                 if (!cliente) { showMessage('Selecione um cliente para fazer a conferência.', 'error'); return; }
                 const usuario = window.localStorage.getItem('friganso_spamov_user') || '';
                 const senha = window.localStorage.getItem('friganso_spamov_pass') || '';
-                if (!usuario || !senha) { showMessage('Salve primeiro seu login do SPAmov na aba Debug.', 'error'); return; }
+                if (!usuario || !senha) { showMessage('Cadastre primeiro o seu login do SPAmov em Minha conta.', 'error'); return; }
                 const pedido = { cliente: String(cliente.code), tipoPessoa: /f[ií]sica/i.test(cliente.tipo || '') ? 'fisica' : 'juridica', conferenciaPrecos: true, itens: (itens || []).map(it => ({ code: String(it.code), nome: it.name, qty: 1 })) };
                 let respondeu = false;
                 const onAck = e => {
@@ -1602,6 +1602,69 @@
             );
         };
 
+        // 🔐 Login do SPAmov — de CADA vendedor, então mora em "Minha conta", não no Debug.
+        // Ficava na tela de Diagnóstico, que só abre pra quem é admin: na prática, quem não fosse
+        // admin não tinha como cadastrar o próprio login e ficava sem o "Abrir e Logar" e sem o
+        // lançamento automático de pedido.
+        // ⚠️ Usuário e senha ficam em localStorage, ou seja, NESTE aparelho e em mais lugar nenhum —
+        // nunca no Firestore. Por isso cada vendedor cadastra o dele uma vez por dispositivo, e por
+        // isso também não há o que separar por dono aqui: um aparelho, um login.
+        // Componente de MÓDULO (não declarado dentro da tela): componente dentro de componente é
+        // recriado a cada render e os campos perdem o foco a cada letra — o bug dos Lembretes.
+        const CredenciaisSpamov = ({ showMessage }) => {
+            const [usuario, setUsuario] = useState(() => window.localStorage.getItem('friganso_spamov_user') || '');
+            const [senha, setSenha] = useState(() => window.localStorage.getItem('friganso_spamov_pass') || '');
+            const [verSenha, setVerSenha] = useState(false);
+
+            const gravar = () => {
+                window.localStorage.setItem('friganso_spamov_user', usuario);
+                window.localStorage.setItem('friganso_spamov_pass', senha);
+            };
+            const salvar = () => {
+                gravar();
+                window.postMessage({ source: 'friganso-app', type: 'SET_CREDS', usuario: usuario, senha: senha, autoLogin: false }, '*');
+                showMessage('Login do SPAmov salvo neste aparelho.', 'success');
+            };
+            const abrirELogar = () => {
+                if (!usuario.trim() || !senha) { showMessage('Preencha usuário e senha primeiro.', 'error'); return; }
+                gravar();
+                window.postMessage({ source: 'friganso-app', type: 'SET_CREDS', usuario: usuario, senha: senha, autoLogin: true, irVendas: true }, '*');
+                showMessage('Abrindo SPAmov, logando e indo pra Vendas...', 'success');
+                setTimeout(() => { window.open('http://spd1.friganso.com.br/rdm-business/', 'spamov_login'); }, 500);
+            };
+
+            return (
+                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 space-y-4">
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl">🏭</span>
+                        <div>
+                            <h3 className="text-base font-bold text-slate-800">Login do SPAmov</h3>
+                            <p className="text-sm text-slate-500">O seu login da Friganso. É ele que abre o SPAmov sozinho e lança o pedido pra você.</p>
+                        </div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+                        ⚠️ Fica salvo <b>só neste aparelho</b> — nunca no servidor. Se você usa o celular e o PC, cadastre nos dois. E não cadastre em aparelho que não seja seu.
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500">Usuário</label>
+                        <input type="text" value={usuario} onChange={e => setUsuario(e.target.value)} placeholder="ex: f.v.99206" className="w-full mt-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-500" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500">Senha</label>
+                        <div className="relative mt-1">
+                            <input type={verSenha ? 'text' : 'password'} value={senha} onChange={e => setSenha(e.target.value)} placeholder="sua senha do SPAmov" className="w-full px-3 py-2.5 pr-16 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-rose-500" />
+                            <button onClick={() => setVerSenha(!verSenha)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600 px-2 py-1">{verSenha ? 'ocultar' : 'ver'}</button>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                        <button onClick={abrirELogar} className="flex-1 min-w-[180px] bg-rose-700 hover:bg-rose-800 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"><span>🚀</span> Abrir SPAmov e Logar</button>
+                        <button onClick={salvar} className="bg-white border-2 border-slate-200 hover:border-rose-400 text-slate-700 font-bold py-3 px-5 rounded-xl transition-colors">💾 Salvar</button>
+                    </div>
+                    <p className="text-[11px] text-slate-400">A extensão precisa estar instalada e com acesso aos sites. Ao clicar em "Abrir e Logar", a página do SPAmov abre e a extensão preenche e clica em <b>Log In</b>.</p>
+                </div>
+            );
+        };
+
         const ProfileAdminScreen = ({ user, showMessage, setActiveRoute }) => {
             // 📇 Portfólio do vendedor — dados extras (cargo/tempo de casa/especialidades/whatsapp) pra
             // gerar o cartão de apresentação (imagem 9:16 pra mandar pro cliente).
@@ -1771,6 +1834,8 @@
                             <button onClick={gerarCartao} disabled={gerandoCartao} className="flex-1 bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">{gerandoCartao ? 'Gerando...' : '📇 Gerar Cartão'}</button>
                         </div>
                     </div>
+
+                    <CredenciaisSpamov showMessage={showMessage} />
 
                     {/* Card alterar senha */}
                     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
@@ -9010,6 +9075,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.45.1', data: '10/11/2026', areas: ['site'], itens: [
+                '🏭 O login do SPAmov saiu do Diagnóstico e foi pra MINHA CONTA — agora todo vendedor cadastra o dele',
+                'Antes ficava numa tela que só abre pra admin: quem não era admin não conseguia cadastrar o próprio login, e ficava sem o "Abrir SPAmov e Logar" e sem o lançamento automático de pedido',
+                '⚠️ Continua salvo só no aparelho, nunca no servidor — quem usa celular e PC cadastra nos dois',
+                'Ficou num lugar só, pra não existirem duas telas fazendo a mesma coisa e saírem do compasso',
+            ]},
             { versao: '2.45.0', data: '10/11/2026', areas: ['site'], itens: [
                 '🔐 CORRIGIDO: quando um segundo vendedor se cadastrava, ele via a carteira, as vendas e a positivação do primeiro — o app lia as listas inteiras, sem dono',
                 'Agora todo cliente, venda, lead e item da lixeira tem dono, e cada vendedor só enxerga o que é dele',
@@ -12843,9 +12914,6 @@
 
         // ===== DEBUG (somente admin) =====
         const DebugScreen = ({ user, showMessage, products }) => {
-            const [usuario, setUsuario] = useState(() => window.localStorage.getItem('friganso_spamov_user') || '');
-            const [senha, setSenha] = useState(() => window.localStorage.getItem('friganso_spamov_pass') || '');
-            const [verSenha, setVerSenha] = useState(false);
 
             // 🧪 Valor da Nota (teste) = Peso (P.Liq. KG) × Preço/Kg — pra comparar com o total real do SPAmov
             const lerValorNota = () => { try { const raw = window.localStorage.getItem('friganso_debug_valor_nota'); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } };
@@ -13073,20 +13141,6 @@
                 setDedupBusy(false);
             };
 
-            const salvar = () => {
-                window.localStorage.setItem('friganso_spamov_user', usuario);
-                window.localStorage.setItem('friganso_spamov_pass', senha);
-                window.postMessage({ source: 'friganso-app', type: 'SET_CREDS', usuario: usuario, senha: senha, autoLogin: false }, '*');
-                showMessage('Credenciais salvas neste dispositivo.', 'success');
-            };
-            const abrirELogar = () => {
-                if (!usuario.trim() || !senha) { showMessage('Preencha usuário e senha primeiro.', 'error'); return; }
-                window.localStorage.setItem('friganso_spamov_user', usuario);
-                window.localStorage.setItem('friganso_spamov_pass', senha);
-                window.postMessage({ source: 'friganso-app', type: 'SET_CREDS', usuario: usuario, senha: senha, autoLogin: true, irVendas: true }, '*');
-                showMessage('Abrindo SPAmov, logando e indo pra Vendas...', 'success');
-                setTimeout(() => { window.open('http://spd1.friganso.com.br/rdm-business/', 'spamov_login'); }, 500);
-            };
 
             return (
                 <div className="animate-in fade-in max-w-2xl mx-auto space-y-5">
@@ -13122,28 +13176,10 @@
                         )}
                     </div>
 
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2"><span>🔐</span> Login automático no SPAmov</h3>
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
-                            ⚠️ Suas credenciais ficam salvas <b>só neste aparelho</b> (nunca no servidor/GitHub). Use só num dispositivo de confiança.
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500">Usuário</label>
-                            <input type="text" value={usuario} onChange={e => setUsuario(e.target.value)} placeholder="ex: f.v.99206" className="w-full mt-1 px-3 py-2.5 bg-slate-50 border rounded-xl text-sm outline-none focus:border-rose-500" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500">Senha</label>
-                            <div className="relative mt-1">
-                                <input type={verSenha ? 'text' : 'password'} value={senha} onChange={e => setSenha(e.target.value)} placeholder="sua senha do SPAmov" className="w-full px-3 py-2.5 pr-16 bg-slate-50 border rounded-xl text-sm outline-none focus:border-rose-500" />
-                                <button onClick={() => setVerSenha(!verSenha)} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600 px-2 py-1">{verSenha ? 'ocultar' : 'ver'}</button>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={abrirELogar} className="flex-1 bg-rose-700 hover:bg-rose-800 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"><span>🚀</span> Abrir SPAmov e Logar</button>
-                            <button onClick={salvar} className="bg-white border-2 border-slate-200 hover:border-rose-400 text-slate-700 font-bold py-3 px-5 rounded-xl transition-colors">💾 Salvar</button>
-                        </div>
-                        <p className="text-[11px] text-slate-400">A extensão precisa estar instalada e com acesso aos sites. Ao clicar em "Abrir e Logar", a página do SPAmov abre e a extensão preenche e clica em <b>Log In</b>.</p>
-                    </div>
+                    {/* 🔐 O login do SPAmov saiu daqui pra "Minha conta": é a credencial de CADA
+                        vendedor, e o Debug só abre pra admin — quem não era admin não tinha como
+                        cadastrar o próprio login e ficava sem o "Abrir e Logar" e sem o lançamento
+                        automático. Fica num lugar só pra não existirem duas telas que divergem. */}
 
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
                         <div className="flex items-center justify-between">
