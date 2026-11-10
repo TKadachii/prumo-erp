@@ -461,7 +461,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 248;
+        const APP_BUILD_VERSION = 249;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -1670,6 +1670,54 @@
         const sincronizarCredenciaisExtensao = (user) => {
             const { usuario, senha } = lerCredenciaisSpamov(user);
             try { window.postMessage({ source: 'friganso-app', type: 'SET_CREDS', usuario: usuario, senha: senha, autoLogin: false }, '*'); } catch (e) {}
+        };
+
+        // 🗑️ EXCLUIR CLIENTE — move pra lixeira, não apaga.
+        // Mesma regra dos pedidos (`purchases_lixeira`, desde 2026-08): o registro sai da carteira
+        // mas continua existindo, porque "apaguei sem querer" é irreversível e acontece.
+        //
+        // ⚠️ As VENDAS do cliente NÃO são tocadas. Elas guardam `clienteCode` e `clienteName`
+        // próprios, então o histórico e o faturamento do mês continuam inteiros depois da exclusão.
+        // Apagar as vendas junto mudaria números já fechados — nunca é isso que a pessoa quer quando
+        // pede pra "tirar o cliente da lista".
+        const excluirCliente = async (cliente, user, showMessage) => {
+            const u = user || _usuarioAtual;
+            if (!cliente || !cliente.id) return false;
+            if (!ehMeuRegistro(cliente, u)) {
+                showMessage && showMessage('Esse cliente não é da sua carteira.', 'error');
+                return false;
+            }
+            const nome = cliente.name || 'sem nome';
+            const texto = `Excluir o cliente "${nome}" (cód. ${cliente.code || '—'})?\n\n` +
+                `✅ As VENDAS dele continuam no histórico e no faturamento — só o cadastro sai da sua carteira.\n` +
+                `♻️ Ele vai pra lixeira de clientes, dá pra trazer de volta depois.`;
+            if (!window.confirm(texto)) return false;
+            try {
+                const { id, ...dados } = cliente;
+                await db.collection('clients_lixeira').doc(id).set({
+                    ...dados, removidoEm: Date.now(), removidoPor: (u && u.code) || '',
+                });
+                await db.collection('clients').doc(id).delete();
+                showMessage && showMessage(`"${nome}" foi pra lixeira. As vendas dele continuam no histórico. 🗑️`, 'success');
+                return true;
+            } catch (e) {
+                showMessage && showMessage('Não consegui excluir. Confira a internet e tente de novo.', 'error');
+                return false;
+            }
+        };
+
+        const restaurarCliente = async (cliente, showMessage) => {
+            if (!cliente || !cliente.id) return false;
+            try {
+                const { id, removidoEm, removidoPor, ...dados } = cliente;
+                await db.collection('clients').doc(id).set(dados);
+                await db.collection('clients_lixeira').doc(id).delete();
+                showMessage && showMessage(`"${dados.name || 'Cliente'}" voltou pra sua carteira. ♻️`, 'success');
+                return true;
+            } catch (e) {
+                showMessage && showMessage('Não consegui trazer de volta. Tente de novo.', 'error');
+                return false;
+            }
         };
 
         // 🔐 Login do SPAmov — de CADA vendedor, então mora em "Minha conta", não no Debug.
@@ -8244,7 +8292,7 @@
         };
 
         // 🔎 Tela "Rotas de Entrega": pesquisa por número, cidade, bairro ou dia, com os clientes de cada rota.
-        const RotasScreen = ({ clients, setActiveRoute }) => {
+        const RotasScreen = ({ clients, setActiveRoute, showMessage }) => {
             const [busca, setBusca] = useState('');
             const [regiao, setRegiao] = useState('todas');
             const [aberta, setAberta] = useState(null);
@@ -8334,11 +8382,15 @@
                                         {expandida && (
                                             <div className="mt-2 space-y-1 max-h-60 overflow-y-auto">
                                                 {doRota.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
-                                                    <button key={c.id} onClick={() => abrirCliente(c)} className="w-full text-left flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-100">
-                                                        <span className="font-mono text-[10px] font-bold text-rose-700">{c.code}</span>
-                                                        <span className="text-xs text-slate-700 truncate flex-1">{c.name}</span>
-                                                        <span className="text-[10px] text-slate-400 truncate max-w-[40%]">{c.bairro || c.municipio || ''}</span>
-                                                    </button>
+                                                    <div key={c.id} className="w-full flex items-center gap-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-100">
+                                                        <button onClick={() => abrirCliente(c)} className="text-left flex items-center gap-2 p-2 flex-1 min-w-0">
+                                                            <span className="font-mono text-[10px] font-bold text-rose-700">{c.code}</span>
+                                                            <span className="text-xs text-slate-700 truncate flex-1">{c.name}</span>
+                                                            <span className="text-[10px] text-slate-400 truncate max-w-[40%]">{c.bairro || c.municipio || ''}</span>
+                                                        </button>
+                                                        <button onClick={() => excluirCliente(c, null, showMessage)} title="Excluir cliente"
+                                                                className="px-2 py-2 text-slate-300 hover:text-red-600 text-xs">🗑️</button>
+                                                    </div>
                                                 ))}
                                             </div>
                                         )}
@@ -8356,11 +8408,15 @@
                                 {semRota.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => {
                                     const { opcoes } = rotaDoCliente(c);
                                     return (
-                                        <button key={c.id} onClick={() => abrirCliente(c)} className="w-full text-left flex items-center gap-2 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-100">
-                                            <span className="font-mono text-[10px] font-bold text-rose-700">{c.code}</span>
-                                            <span className="text-xs text-slate-700 truncate flex-1">{c.name}</span>
-                                            <span className="text-[10px] text-slate-400 truncate max-w-[45%]">{opcoes.length > 1 ? `${opcoes.map(o => o.rota).join(' ou ')}` : ([c.bairro, c.municipio].filter(Boolean).join(' · ') || 'sem cidade')}</span>
-                                        </button>
+                                        <div key={c.id} className="w-full flex items-center gap-1 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-100">
+                                            <button onClick={() => abrirCliente(c)} className="text-left flex items-center gap-2 p-2 flex-1 min-w-0">
+                                                <span className="font-mono text-[10px] font-bold text-rose-700">{c.code}</span>
+                                                <span className="text-xs text-slate-700 truncate flex-1">{c.name}</span>
+                                                <span className="text-[10px] text-slate-400 truncate max-w-[45%]">{opcoes.length > 1 ? `${opcoes.map(o => o.rota).join(' ou ')}` : ([c.bairro, c.municipio].filter(Boolean).join(' · ') || 'sem cidade')}</span>
+                                            </button>
+                                            <button onClick={() => excluirCliente(c, null, showMessage)} title="Excluir cliente"
+                                                    className="px-2 py-2 text-slate-300 hover:text-red-600 text-xs">🗑️</button>
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -8375,6 +8431,18 @@
             const [isAdding, setIsAdding] = useState(false);
             const [rawClientText, setRawClientText] = useState('');
             const [selectedClient, setSelectedClient] = useState(null);
+            // 🗑️ Lixeira de clientes — carregada só quando aberta, pra não pesar a tela à toa.
+            const [lixeiraCli, setLixeiraCli] = useState(null);
+            const [lixeiraCliBusy, setLixeiraCliBusy] = useState(false);
+            const abrirLixeiraCli = async () => {
+                if (lixeiraCli) { setLixeiraCli(null); return; }
+                setLixeiraCliBusy(true);
+                try {
+                    const snap = await db.collection('clients_lixeira').orderBy('removidoEm', 'desc').limit(200).get();
+                    setLixeiraCli(soMeus(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                } catch (e) { showMessage('Não consegui abrir a lixeira.', 'error'); }
+                setLixeiraCliBusy(false);
+            };
             const [editForm, setEditForm] = useState({});
             const [rawHistoryText, setRawHistoryText] = useState('');
             const [isExtractingHistory, setIsExtractingHistory] = useState(false);
@@ -8960,6 +9028,10 @@
                                                     <p className="text-[10px] text-slate-400 mt-1">Deixe vazio para usar o Endereço acima. Dica: no Google Maps, clique com o botão direito no local e copie as coordenadas.</p>
                                                 </div>
                                                 <button onClick={handleUpdateClient} className="w-full py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-bold shadow-md transition-colors">Salvar Alterações</button>
+                                                <button onClick={async () => { if (await excluirCliente(selectedClient, null, showMessage)) setSelectedClient(null); }}
+                                                        className="w-full mt-2 py-2.5 bg-white border-2 border-slate-200 hover:border-red-400 hover:text-red-600 text-slate-500 rounded-xl text-sm font-bold transition-colors">
+                                                    🗑️ Excluir cliente
+                                                </button>
                                             </div>
                                         </div>
                                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
@@ -9047,6 +9119,31 @@
                             <button onClick={() => fileInputRef.current && fileInputRef.current.click()} className="bg-white border-2 border-slate-200 hover:border-emerald-400 text-slate-700 font-bold py-2.5 px-5 rounded-xl shadow-sm flex items-center gap-2 transition-colors"><span className="text-lg">📊</span> Importar Clientes</button>
                             <button onClick={() => histInputRef.current && histInputRef.current.click()} className="bg-white border-2 border-slate-200 hover:border-rose-400 text-slate-700 font-bold py-2.5 px-5 rounded-xl shadow-sm flex items-center gap-2 transition-colors"><span className="text-lg">🛒</span> Importar Histórico</button>
                             <button onClick={() => setIsAdding(true)} className="bg-rose-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-md flex items-center gap-2"><div className="h-5 w-5"><IconPlus/></div> Novo Cliente</button>
+                            <button onClick={abrirLixeiraCli} disabled={lixeiraCliBusy} className="text-xs font-bold text-slate-400 hover:text-slate-700 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors">
+                                {lixeiraCliBusy ? 'Abrindo...' : (lixeiraCli ? 'Fechar lixeira' : '🗑️ Lixeira')}
+                            </button>
+                            {lixeiraCli && (
+                                <div className="w-full mt-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                                    <p className="text-xs font-bold text-slate-600 mb-2">🗑️ Clientes excluídos — o cadastro saiu da carteira, as vendas continuam no histórico.</p>
+                                    {lixeiraCli.length === 0 ? (
+                                        <p className="text-xs text-slate-400">A lixeira está vazia.</p>
+                                    ) : (
+                                        <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                                            {lixeiraCli.map(c => (
+                                                <div key={c.id} className="flex items-center gap-2 bg-white border border-slate-100 rounded-lg p-2">
+                                                    <span className="font-mono text-[10px] font-bold text-slate-400">{c.code}</span>
+                                                    <span className="text-xs text-slate-700 truncate flex-1">{c.name || 'sem nome'}</span>
+                                                    <span className="text-[10px] text-slate-400 whitespace-nowrap">{c.removidoEm ? new Date(c.removidoEm).toLocaleDateString('pt-BR') : ''}</span>
+                                                    <button onClick={async () => { if (await restaurarCliente(c, showMessage)) setLixeiraCli(l => l.filter(x => x.id !== c.id)); }}
+                                                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 whitespace-nowrap">
+                                                        ♻️ Trazer de volta
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -9260,6 +9357,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.47.0', data: '10/11/2026', areas: ['site'], itens: [
+                '🗑️ NOVO: dá pra excluir cliente — pelo card dele em Clientes, ou pelo 🗑️ ao lado do nome em Rotas',
+                '✅ As VENDAS do cliente continuam no histórico e no faturamento. Sai só o cadastro da carteira — apagar as vendas junto mudaria números de meses já fechados',
+                '♻️ Não apaga de verdade: vai pra uma lixeira. O botão "🗑️ Lixeira" em Clientes mostra quem foi excluído e traz de volta',
+                '🔐 Só dá pra excluir cliente da sua própria carteira',
+            ]},
             { versao: '2.46.2', data: '10/11/2026', areas: ['site'], itens: [
                 '🔐 CORRIGIDO o vazamento que sobrou: clientes antigos (de antes da separação) ainda apareciam para um SEGUNDO ADMIN — era assim que o "Promessas" aparecia na conta do colega, no CRM, no Novo pedido e no Resumo',
                 'A regra errada dizia "registro antigo é visível pro admin". Admin é CARGO, não pessoa: no dia em que existiu um segundo admin, ele passou a enxergar a base inteira do primeiro',
@@ -14318,7 +14421,7 @@
                     case 'prospeccao': return <ProspeccaoScreen user={user} clients={clients} showMessage={showMessage} />;
                     case 'lembretes': return <LembretesScreen user={user} showMessage={showMessage} />;
                     case 'leads': return <LeadsScreen user={user} clients={clients} products={products} showMessage={showMessage} setActiveRoute={setActiveRoute} listaNegra={listaNegra} />;
-                    case 'rotas': return <RotasScreen clients={clients} setActiveRoute={setActiveRoute} />;
+                    case 'rotas': return <RotasScreen clients={clients} setActiveRoute={setActiveRoute} showMessage={showMessage} />;
                     case 'radar': return <RadarScreen clients={clients} products={products} setActiveRoute={setActiveRoute} showMessage={showMessage} />;
                     case 'support': return <SupportScreen user={user} />;
                     case 'credits': return <CreditsScreen />;

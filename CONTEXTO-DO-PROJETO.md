@@ -861,6 +861,30 @@ Coberto por `ferramentas/teste-importar-lote.js` (16 checagens), incluindo a con
 consultas contra um Firestore de mentira e uma varredura que falha se a consulta/gravação por pedido
 voltar pra dentro do laço.
 
+## 🗑️ Excluir cliente (2026-11-10, v2.47.0)
+Disponível em **Clientes** (botão no card do cliente) e em **Rotas** (🗑️ ao lado do nome).
+
+**Duas decisões que são o conserto inteiro:**
+
+1. **As vendas NÃO são tocadas.** `purchases` guarda `clienteCode` e `clienteName` próprios, então o
+   histórico e o faturamento continuam inteiros depois da exclusão. Apagar as vendas junto mudaria
+   números de meses já fechados — nunca é isso que a pessoa quer quando pede pra "tirar o cliente da
+   lista". O teste falha se a função encostar em `purchases`.
+2. **Vai pra `clients_lixeira`, não some.** Mesma regra dos pedidos. A cópia é gravada **antes** do
+   delete: na ordem inversa, uma falha no meio deixaria o cliente sem cópia nenhuma.
+
+A checagem de dono fica dentro de `excluirCliente`, não só na tela: a função é chamada de dois
+lugares e nada impede um terceiro passar um cliente que não é do usuário.
+
+⚠️ Em Rotas as linhas eram um `<button>` inteiro. Botão dentro de botão é HTML inválido e o clique
+fica imprevisível — a linha virou `div` com dois botões irmãos. O teste trava isso.
+
+⚠️ `RotasScreen` não recebia `showMessage` e `ClientsScreen` não recebe `user`; os dois são o mesmo
+tropeço de sempre (componente usando o que não recebeu). O primeiro ganhou a prop, o segundo usa o
+usuário logado via `excluirCliente(cliente, null, showMessage)`.
+
+Coberto por `ferramentas/teste-excluir-cliente.js` (15 checagens).
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
