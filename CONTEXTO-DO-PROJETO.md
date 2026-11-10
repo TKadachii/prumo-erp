@@ -763,6 +763,37 @@ migração de dono acima — senão os registros órfãos ficam ilegíveis pra t
 Coberto por `ferramentas/teste-dono-registros.js` (18 checagens), incluindo uma varredura que falha
 se alguma leitura nova de dado pessoal esquecer o `soMeus`.
 
+## ⚡ Importação do Relatório de Vendas em lote (2026-11-10, v2.46.0)
+Queixa: passando de 1.000 pedidos a importação "demora muito". Não era volume, era desenho — para
+CADA pedido o código fazia uma consulta (`where('spamov','==',...)`) e uma gravação, as duas
+sequenciais. **2 idas e voltas por pedido**: 1.000 pedidos = 2.000 viagens em fila indiana, 5+ minutos
+com a tela parada em "Importando..." e sem como interromper.
+
+Agora: as consultas vão **em bloco** (`where('spamov','in',[...30])`, 6 blocos em paralelo) e as
+gravações em **lotes de 450** (`db.batch()`; o teto do Firestore é 500). Os mesmos 1.000 pedidos viram
+~34 consultas paralelas + 3 commits.
+
+⚠️ O `in` com 30 valores é recente; backend antigo só aceita 10. Se a consulta for recusada,
+`buscarExistentes` **refaz tudo com blocos de 10** em vez de derrubar a importação inteira.
+
+Quatro bugs achados na revisão, além da lentidão:
+1. **Pedido que falhava sumia da tela.** O filtro final tirava TODOS os selecionados, não só os que
+   entraram — quem deu erro desaparecia sem deixar como tentar de novo. Agora só sai quem gravou.
+2. **Erro virava só um número.** `catch { falha++ }` engolia o motivo. Agora sai a lista com SPAMOV
+   e motivo.
+3. **O mesmo SPAMOV repetido na mesma leitura criava DOIS documentos** — o segundo consultava o
+   banco e não achava o primeiro, que ainda estava no lote sem commit. A referência nova é guardada
+   no mapa na hora, então o repetido vira atualização do mesmo documento.
+4. **"Nenhum item com peso" era contado como erro**, misturado com falha de rede. São coisas
+   diferentes e agora aparecem com motivo próprio.
+
+A busca em bloco respeita o dono: pedido de OUTRO vendedor com o mesmo número é ignorado. Sem isso a
+importação atualizaria a venda dele com os meus dados — não é lentidão, é perda de dado alheio.
+
+Coberto por `ferramentas/teste-importar-lote.js` (16 checagens), incluindo a contagem real de
+consultas contra um Firestore de mentira e uma varredura que falha se a consulta/gravação por pedido
+voltar pra dentro do laço.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

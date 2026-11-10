@@ -461,7 +461,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 245;
+        const APP_BUILD_VERSION = 246;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -6168,6 +6168,8 @@
             const [pedidos, setPedidos] = useState([]);
             const [selecionados, setSelecionados] = useState({});
             const [importando, setImportando] = useState(false);
+            const [progresso, setProgresso] = useState(null);   // { fase, feitos, total }
+            const [naoEntraram, setNaoEntraram] = useState([]);
             const [importsAntigos, setImportsAntigos] = useState(null); // null = não carregado ainda
             const [carregandoAntigos, setCarregandoAntigos] = useState(false);
             const [limpando, setLimpando] = useState(false);
@@ -6262,15 +6264,83 @@
 
             const toggleSel = (spamov) => setSelecionados(s => ({ ...s, [spamov]: !s[spamov] }));
 
+            // ⚡ IMPORTAÇÃO EM LOTE
+            // Antes: para CADA pedido, uma consulta ("esse SPAMOV já existe?") e uma gravação, as
+            // duas esperando a resposta antes do próximo. São 2 idas e voltas por pedido — com 1.000
+            // pedidos, 2.000 viagens em fila indiana. A ~150 ms cada, passa de 5 minutos, e a tela
+            // fica parada em "Importando..." sem dizer nada.
+            //
+            // Agora: as consultas são feitas EM BLOCO e em paralelo (Firestore aceita `in` com até
+            // 30 valores por consulta), e as gravações vão em lotes de 450 (o limite do Firestore é
+            // 500). Os mesmos 1.000 pedidos viram ~34 consultas paralelas + 3 gravações.
+            const LOTE_GRAVACAO = 450;
+            const cancelarRef = useRef(false);
+
+            // Procura os SPAMOV que já existem, em blocos. Devolve spamov -> doc que é MEU.
+            const buscarExistentes = async (spamovs, aoAndar) => {
+                const mapa = new Map();
+                // ⚠️ O `in` com 30 é recente no Firestore; versões antigas só aceitam 10. Se o SDK
+                // recusar, cai pra 10 sozinho em vez de derrubar a importação inteira.
+                let tamanho = 30;
+                const blocos = (t) => {
+                    const out = [];
+                    for (let i = 0; i < spamovs.length; i += t) out.push(spamovs.slice(i, i + t));
+                    return out;
+                };
+                const rodar = async (t) => {
+                    mapa.clear();
+                    const lista = blocos(t);
+                    let feitos = 0;
+                    // 6 por vez: rápido sem abrir conexão demais no celular.
+                    for (let i = 0; i < lista.length; i += 6) {
+                        if (cancelarRef.current) return;
+                        await Promise.all(lista.slice(i, i + 6).map(async bloco => {
+                            const snap = await db.collection('purchases').where('spamov', 'in', bloco).get();
+                            snap.docs.forEach(d => {
+                                const dado = d.data();
+                                if (!ehMeuRegistro(dado, user)) return;      // o pedido do outro vendedor não conta
+                                const sp = String(dado.spamov || '');
+                                if (sp && !mapa.has(sp)) mapa.set(sp, d.ref);
+                            });
+                            feitos++;
+                            if (aoAndar) aoAndar(Math.min(feitos * t, spamovs.length));
+                        }));
+                    }
+                };
+                try { await rodar(tamanho); }
+                catch (e) { tamanho = 10; await rodar(tamanho); }
+                return mapa;
+            };
+
             const importarTudo = async () => {
                 const alvo = pedidos.filter(p => selecionados[p.spamov] && p.clienteCode && (p.itens || []).length);
                 if (!alvo.length) { showMessage('Nenhum pedido selecionado (ou sem cliente identificado).', 'error'); return; }
+                cancelarRef.current = false;
                 setImportando(true);
-                let ok = 0, falha = 0;
-                for (const p of alvo) {
-                    try {
+                setProgresso({ fase: 'conferindo', feitos: 0, total: alvo.length });
+
+                const problemas = [];
+                const gravados = new Set();
+                try {
+                    const spamovs = [...new Set(alvo.map(p => String(p.spamov)))];
+                    const existentes = await buscarExistentes(spamovs, n =>
+                        setProgresso({ fase: 'conferindo', feitos: Math.min(n, alvo.length), total: alvo.length }));
+                    if (cancelarRef.current) throw new Error('cancelado');
+
+                    setProgresso({ fase: 'gravando', feitos: 0, total: alvo.length });
+                    let batch = db.batch(), naLeva = 0, enviados = 0;
+                    const fechar = async () => {
+                        if (!naLeva) return;
+                        await batch.commit();
+                        batch = db.batch(); naLeva = 0;
+                        setProgresso({ fase: 'gravando', feitos: enviados, total: alvo.length });
+                    };
+
+                    for (const p of alvo) {
+                        if (cancelarRef.current) break;
+                        const sp = String(p.spamov);
                         const itensSafe = p.itens.map(i => ({ code: String(i.code), name: i.name || ('Produto ' + i.code), qty: Number(i.qty) || 1, peso: Number(i.peso) || 0, valorKg: Number(i.valorKg) || 0 })).filter(i => i.code && i.peso > 0);
-                        if (!itensSafe.length) { falha++; continue; }
+                        if (!itensSafe.length) { problemas.push({ spamov: sp, motivo: 'nenhum item com peso' }); continue; }
                         // ➖ DEVOLUÇÃO entra NEGATIVA (valor e peso). Fazendo o sinal aqui, uma vez só,
                         // todo lugar que já soma 'valor' — dashboard, ranking de cliente, fechamento do
                         // mês — passa a dar o número líquido sozinho, sem ter que ensinar devolução pra
@@ -6279,16 +6349,16 @@
                         const valorTotal = sinal * Math.abs(p.faturadoTotal != null ? p.faturadoTotal : Math.round(itensSafe.reduce((a, i) => a + i.peso * i.valorKg, 0) * 100) / 100);
                         const pesoTotal = sinal * Math.round(itensSafe.reduce((a, i) => a + i.peso, 0) * 100) / 100;
                         const cli = (clients || []).find(c => String(c.code) === String(p.clienteCode));
-                        const achados = await db.collection('purchases').where('spamov', '==', String(p.spamov)).limit(10).get();
-                        // ⚠️ "já existe?" é dentro da MINHA carteira. Sem isso, o pedido de um vendedor
-                        // bloquearia — e o update sobrescreveria — o pedido do outro com o mesmo SPAMOV.
-                        const meu = achados.docs.find(d => ehMeuRegistro(d.data(), user));
-                        if (meu) {
-                            await meu.ref.update({
-                                clienteCode: String(p.clienteCode),
-                                clienteName: (cli && cli.name) || p.clienteNome || '',
-                                tipoPessoa: p.tipoPessoa || (cli && cli.tipo) || 'juridica',
-                                itens: itensSafe, valor: valorTotal, pesoTotal, devolucao: !!p.devolucao,
+                        const comum = {
+                            clienteCode: String(p.clienteCode),
+                            clienteName: (cli && cli.name) || p.clienteNome || '',
+                            tipoPessoa: p.tipoPessoa || (cli && cli.tipo) || 'juridica',
+                            itens: itensSafe, valor: valorTotal, pesoTotal, devolucao: !!p.devolucao,
+                        };
+                        const jaExiste = existentes.get(sp);
+                        if (jaExiste) {
+                            batch.update(jaExiste, {
+                                ...comum,
                                 // 📅 A DATA também tem que ser corrigida no reenvio. Sem isso, quem
                                 // importou histórico com a versão que herdava a data da linha de cima
                                 // ficava preso: reimportar arrumava valor, itens e devolução, mas o
@@ -6299,21 +6369,38 @@
                                 origemReal: true, corrigidoEm: Date.now(), corrigidoPor: (user && user.code) || ''
                             });
                         } else {
-                            await db.collection('purchases').add({
-                                clienteCode: String(p.clienteCode),
-                                clienteName: (cli && cli.name) || p.clienteNome || '',
-                                tipoPessoa: p.tipoPessoa || (cli && cli.tipo) || 'juridica',
-                                itens: itensSafe, valor: valorTotal, pesoTotal, devolucao: !!p.devolucao,
-                                spamov: String(p.spamov), condicaoPagamento: '', dia: p.dia || diaStrGlobal(new Date()), ts: Date.now(),
+                            // ⚠️ O mesmo SPAMOV repetido DENTRO da própria leitura criaria dois
+                            // documentos: o segundo não acha o primeiro, que ainda nem foi gravado.
+                            // Guardar a referência aqui faz o repetido virar atualização do mesmo doc.
+                            const ref = db.collection('purchases').doc();
+                            existentes.set(sp, ref);
+                            batch.set(ref, {
+                                ...comum,
+                                spamov: sp, condicaoPagamento: '', dia: p.dia || diaStrGlobal(new Date()), ts: Date.now(),
                                 via: 'relatorio_vendas', ...carimboDono(user), origemReal: true
                             });
                         }
-                        ok++;
-                    } catch (e) { falha++; }
+                        gravados.add(sp);
+                        naLeva++; enviados++;
+                        if (naLeva >= LOTE_GRAVACAO) await fechar();
+                    }
+                    await fechar();
+                } catch (e) {
+                    if (!cancelarRef.current) problemas.push({ spamov: '—', motivo: (e && e.message) || 'falha na gravação' });
                 }
+
                 setImportando(false);
-                showMessage(`${ok} pedido(s) importado(s)/atualizado(s)${falha ? `, ${falha} com erro` : ''}.`, falha ? 'info' : 'success');
-                setPedidos(prev => prev.filter(p => !(selecionados[p.spamov] && p.clienteCode)));
+                setProgresso(null);
+                const feitos = gravados.size;
+                if (cancelarRef.current) {
+                    showMessage(`Importação interrompida. ${feitos} pedido(s) já tinham sido gravados.`, 'info');
+                } else {
+                    showMessage(`${feitos} pedido(s) importado(s)/atualizado(s)${problemas.length ? `, ${problemas.length} não entraram` : ''}.`, problemas.length ? 'info' : 'success');
+                }
+                setNaoEntraram(problemas);
+                // ⚠️ Só some da lista quem REALMENTE entrou. Antes saíam todos os selecionados,
+                // inclusive os que falharam — eles desapareciam da tela e não havia como tentar de novo.
+                setPedidos(prev => prev.filter(p => !gravados.has(String(p.spamov))));
             };
 
             const totalSelecionado = pedidos.filter(p => selecionados[p.spamov]);
@@ -6454,6 +6541,33 @@
                                     })}
                                 </div>
                             </div>
+                            {progresso && (
+                                <div className="mb-3 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                                    <div className="flex items-baseline justify-between gap-3 text-xs">
+                                        <span className="font-bold text-slate-600">
+                                            {progresso.fase === 'conferindo' ? '🔎 Conferindo o que já existe…' : '💾 Gravando…'}
+                                        </span>
+                                        <span className="text-slate-500 tabular-nums">{progresso.feitos} de {progresso.total}</span>
+                                    </div>
+                                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-rose-600 rounded-full transition-all duration-200"
+                                             style={{ width: (progresso.total ? Math.round(progresso.feitos / progresso.total * 100) : 0) + '%' }} />
+                                    </div>
+                                    <button onClick={() => { cancelarRef.current = true; }}
+                                            className="text-[11px] font-bold text-slate-400 hover:text-rose-600">
+                                        interromper
+                                    </button>
+                                    <p className="text-[11px] text-slate-400">Pode interromper: o que já foi gravado fica, e o resto continua na lista pra você mandar depois.</p>
+                                </div>
+                            )}
+                            {!importando && naoEntraram.length > 0 && (
+                                <div className="mb-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                                    <p className="text-xs font-bold text-amber-800">{naoEntraram.length} pedido(s) não entraram — continuam na lista:</p>
+                                    <ul className="mt-1 max-h-32 overflow-y-auto text-[11px] text-amber-700 space-y-0.5">
+                                        {naoEntraram.slice(0, 40).map((x, i) => <li key={i}><b>{x.spamov}</b> — {x.motivo}</li>)}
+                                    </ul>
+                                </div>
+                            )}
                             <button onClick={importarTudo} disabled={importando || !totalSelecionado.length} className="w-full bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white font-black py-3.5 rounded-xl transition-colors">
                                 {importando ? 'Importando...' : `✅ Importar ${totalSelecionado.length} pedido(s) selecionado(s)`}
                             </button>
@@ -9075,6 +9189,14 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.46.0', data: '10/11/2026', areas: ['site'], itens: [
+                '⚡ IMPORTAR VENDAS REAIS FICOU MUITO MAIS RÁPIDO: 1.000 pedidos saíram de ~2.000 idas ao servidor, uma esperando a outra, para ~34 consultas em paralelo e 3 gravações em lote',
+                '📊 Barra de progresso com as duas etapas ("conferindo o que já existe" e "gravando") e o contador X de Y — dá pra ver que está andando',
+                '🛑 Botão de interromper: o que já foi gravado fica, e o resto continua na lista pra mandar depois',
+                '🔁 CORRIGIDO: pedido que dava erro SUMIA da tela junto com os que deram certo — e não havia como tentar de novo. Agora só sai da lista quem realmente entrou',
+                '📋 Quando algum não entra, aparece a lista com o número do SPAMOV e o motivo, em vez de só um total',
+                '🐛 CORRIGIDO: o mesmo SPAMOV repetido na mesma leitura criava DOIS pedidos, porque o segundo não enxergava o primeiro (que ainda nem tinha sido gravado)',
+            ]},
             { versao: '2.45.1', data: '10/11/2026', areas: ['site'], itens: [
                 '🏭 O login do SPAmov saiu do Diagnóstico e foi pra MINHA CONTA — agora todo vendedor cadastra o dele',
                 'Antes ficava numa tela que só abre pra admin: quem não era admin não conseguia cadastrar o próprio login, e ficava sem o "Abrir SPAmov e Logar" e sem o lançamento automático de pedido',

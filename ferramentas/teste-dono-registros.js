@@ -99,8 +99,12 @@ linhas.forEach((l, i) => {
         const ehLeitura = /onSnapshot|\.get\(\)/.test(l);
         if (!ehLeitura) return;
         // a leitura pode mapear na mesma linha ou na seguinte
-        const trecho = l + '\n' + (linhas[i + 1] || '') + '\n' + (linhas[i + 2] || '');
-        if (/\.docs\.map|\.docs\.forEach|snap\.forEach/.test(trecho) && trecho.indexOf('soMeus') === -1) {
+        // Olha algumas linhas à frente: o filtro pode vir na linha do map (soMeus) ou logo dentro
+        // dele, documento a documento (ehMeuRegistro) — são as duas formas da MESMA regra, e a
+        // segunda é a usada quando a leitura já vem recortada por uma consulta `in`.
+        const trecho = linhas.slice(i, i + 6).join('\n');
+        const temFiltro = trecho.indexOf('soMeus') !== -1 || trecho.indexOf('ehMeuRegistro') !== -1;
+        if (/\.docs\.map|\.docs\.forEach|snap\.forEach/.test(trecho) && !temFiltro) {
             escaparam.push(`${i + 1}: ${l.trim().slice(0, 90)}`);
         }
     });
