@@ -446,11 +446,7 @@
             const certos = (lista || []).filter(p => matchProduto(p, q));
             return certos.length ? certos : (lista || []).filter(p => matchProduto(p, q, true));
         };
-        const parsePrice = (priceStr) => {
-            if (!priceStr) return null;
-            let cleanStr = priceStr.includes('.') && priceStr.includes(',') ? priceStr.replace(/\./g, '').replace(',', '.') : priceStr.replace(',', '.');
-            const val = parseFloat(cleanStr); return isNaN(val) ? null : val;
-        };
+;
         const formatPrice = (value) => {
             if (value === null || value === undefined) return 'R$ 0,00';
             return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
@@ -461,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 249;
+        const APP_BUILD_VERSION = 250;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9357,6 +9353,15 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.48.0', data: '10/11/2026', areas: ['site', 'extensao'], itens: [
+                '🎛️ Os botões da extensão no SPAmov viraram UM PAINEL que você ARRASTA e RECOLHE — não ficam mais espalhados em posição fixa por cima da tela',
+                'A posição onde você soltar fica guardada; o painel não se perde pra fora da janela',
+                '🕳️ Acabaram os buracos na pilha: antes, botão que não aparecia naquela tela deixava um vão, e dois deles disputavam a mesma altura',
+                '👁️ O "esconder" agora esconde os avisos e deixa o painel — antes ele conseguiria esconder a si mesmo e você ficava sem como trazer de volta',
+                '🧹 Faxina: removido código que não era mais chamado por ninguém (3 trechos na extensão, 1 no site)',
+                '✏️ Corrigida a mensagem da extensão que ainda mandava salvar o login "no Debug" — é em Minha conta desde a v2.45.1',
+                '⚠️ Esta versão MUDA A EXTENSÃO: baixe de novo pelo site e clique em 🔄 em chrome://extensions',
+            ]},
             { versao: '2.47.0', data: '10/11/2026', areas: ['site'], itens: [
                 '🗑️ NOVO: dá pra excluir cliente — pelo card dele em Clientes, ou pelo 🗑️ ao lado do nome em Rotas',
                 '✅ As VENDAS do cliente continuam no histórico e no faturamento. Sai só o cadastro da carteira — apagar as vendas junto mudaria números de meses já fechados',

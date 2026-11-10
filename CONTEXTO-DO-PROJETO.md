@@ -885,6 +885,39 @@ usuário logado via `excluirCliente(cliente, null, showMessage)`.
 
 Coberto por `ferramentas/teste-excluir-cliente.js` (15 checagens).
 
+## 🎛️ Painel de ações arrastável no SPAmov (2026-11-10, v2.48.0)
+Os botões que a extensão injeta eram `position:fixed` com um `bottom` fixo cada um (18px, 70px,
+120px…). Três defeitos: a pilha ficava com **buracos** quando um botão não aparecia naquela tela
+(eles são condicionais), dois disputavam a mesma altura (220px era do "ocultar" e também do
+"Atualizar Tabela"), e não dava pra tirar da frente quando tapavam algo do SPAmov.
+
+Agora é **um painel** que arrasta (mouse e toque) e recolhe, com a posição lembrada em
+`localStorage.friganso_painel_pos`. O `bottom` não foi jogado fora: virou `style.order`, então a
+sequência já pensada continua valendo — sem buraco.
+
+⚠️ **Os ids dos botões NÃO mudaram, de propósito.** A fila troca o rótulo por `getElementById` e o
+"esconder" varre `[id^="friganso-"]`. Trocar a embalagem não pode quebrar isso — o teste trava os ids.
+
+⚠️ O "👁️ esconder" agora mora DENTRO do painel. Se ele escondesse o painel, esconderia a si mesmo e
+não haveria como trazer nada de volta; por isso ele pula `#friganso-painel` e tudo que está dentro.
+E arrastar é limitado à janela: soltar o painel fora da tela e não achar mais é pior que não arrastar.
+
+No Android nada muda — lá quem manda é `instalarBarraAndroid()` (a barra "✦ PRUMO · abrir ações"),
+e estes botões seguem ocultos. **Essa barra só existe quando `window.__frigInjected === true`**, marca
+que só o navegador interno do APK coloca: é por isso que ela aparece no celular e nunca no Chrome.
+
+Coberto por `ferramentas/teste-painel-acoes.js` (20 checagens).
+
+### 🧹 Vistoria de código morto (2026-11-10)
+Varredura por função declarada e nunca chamada, em `content.js` e `index.html`. Achados e removidos:
+`acharLinhaEntrada`, `naFaixa`, `finalizarPasso` (extensão) e `parsePrice` (site).
+
+⚠️ **Cuidado ao repetir a varredura:** remover strings e comentários com expressão regular antes de
+contar NÃO funciona aqui — uma expressão regular do próprio código que contenha aspas desbalanceia o
+corte e engole metade do arquivo. Na primeira tentativa o resultado foi "135 de 146 funções sem uso",
+que é obviamente falso. Contar no fonte quase cru (tirando só linhas 100% de comentário) erra pra
+menos, que é o lado seguro.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

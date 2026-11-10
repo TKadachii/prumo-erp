@@ -1,13 +1,12 @@
 // ==UserScript==
 // @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
-// @version      2026.11.9.1323
+// @version      2026.11.10.2159
 // @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
 // @author       Prumo
 // @match        https://tkadachii.github.io/*
 // @match        *://*.friganso.com.br/*
 // @match        *://spd1.friganso.com.br/*
-// @match        *://web.whatsapp.com/*
 // @run-at       document-idle
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -1441,15 +1440,6 @@
     }
     async function esperar(cond, ms) { const t = Date.now(); while (Date.now() - t < ms) { if (cond()) return true; await sleep(200); } return false; }
 
-    function acharLinhaEntrada() {
-        const selects = document.querySelectorAll("select");
-        for (let i = 0; i < selects.length; i++) {
-            const s = selects[i];
-            const txt = (s.innerText || "") + " " + Array.from(s.options || []).map(o => o.text).join(" ");
-            if (/PRODUTOS/i.test(txt)) { const tr = s.closest("tr"); if (tr) return tr; }
-        }
-        return null;
-    }
     // Retângulo EXATO da linha de entrada (a do seletor PRODUTOS / "novo orçamento")
     function linhaEntradaRect() {
         const selects = document.querySelectorAll("select");
@@ -1462,8 +1452,6 @@
         for (let i = 0; i < tds.length; i++) { if (/novo or[çc]amento/i.test(tds[i].innerText || "")) { const tr = tds[i].closest("tr"); const r = (tr || tds[i]).getBoundingClientRect(); if (r.height) return r; } }
         return null;
     }
-    // verdadeiro se o centro vertical do elemento está dentro da faixa da linha de entrada
-    function naFaixa(r, el) { const b = el.getBoundingClientRect(); const cy = b.top + b.height / 2; return cy >= r.top - 3 && cy <= r.bottom + 3; }
     function inputsVisiveis() {
         return Array.prototype.slice.call(document.querySelectorAll("input")).filter(function (i) {
             const t = (i.type || "").toLowerCase();
@@ -1676,23 +1664,6 @@
         if (best) return best;
         return clicavelPerto(ref, 100) || ref;
     }
-    // Um passo da finalização: se já está em PA, termina; senão clica no DS/SP/PA
-    async function finalizarPasso() {
-        const run = await getRun();
-        if (!run || !run.ativo) return;
-        const status = statusBox();
-        if (estaEmPA()) { await clearRun(); dlog("✅ chegou em PA — pedido confirmado!"); status("✅ Pedido confirmado (PA)! Tudo pronto. 🎉"); return; }
-        const cliques = run.finalCliques || 0;
-        if (cliques >= 6) { await clearRun(); dlog("⚠️ 6 cliques sem chegar em PA — parei"); status("⚠️ Não cheguei em PA sozinho. Clique no DS até virar PA na mão."); return; }
-        const btn = acharMovBotao();
-        dlog("finalizar: DS/SP/PA " + (btn ? ("clicando <" + btn.tagName + " " + ((btn.className || "") + "").slice(0, 30) + " src=" + ((btn.getAttribute && btn.getAttribute("src")) || "-").slice(-20) + ">") : "NÃO achado") + " (clique " + (cliques + 1) + ")");
-        if (!btn) { await clearRun(); status("Itens lançados! Não achei o botão DS — clique nele até virar PA na mão."); return; }
-        status("Confirmando (DS → SP → PA): clique " + (cliques + 1) + "...");
-        await setRun({ pedido: run.pedido, stage: "finalizar", idx: run.idx, ativo: true, aguardando: false, ultimoCode: "", finalCliques: cliques + 1, ts: Date.now() });
-        clicar(btn);
-        // a página recarrega; no próximo load o finalizar continua
-    }
-
     // ═══ 👀 VIGIA DO LANÇAMENTO (2026-11-09) ═════════════════════════════════════════════════
     // O robô antigo trabalhava "no escuro": marcava o passo como feito ANTES de conferir e só
     // andava quando a página recarregava. Com internet ruim o clique se perdia e o pedido parava
@@ -2483,7 +2454,7 @@
         }, 'linear-gradient(135deg,#0891b2,#0e7490)');
         adicionar('🔑 Login salvo', () => {
             if (!visitar().some(w => w.__frigMobileActions && w.__frigMobileActions.login())) avisar('Você já está logado ou a tela de login ainda não abriu.');
-            else avisar('Login solicitado. Se faltarem credenciais, salve-as em Debug no ERP.');
+            else avisar('Login solicitado. Se faltarem credenciais, cadastre o seu login em Minha conta, no Prumo.');
         });
         adicionar('↩ Voltar ao ERP', () => retornarAoAndroid({ frigansoRetorno: 1, tipo: 'voltar' }));
         barra.append(titulo, acoes, aviso); document.body.appendChild(barra);
@@ -2605,16 +2576,109 @@
     }
 
     // ---------- BOTÕES ----------
+    // 🎛️ PAINEL DE AÇÕES (PC) — um quadro só, que ARRASTA e RECOLHE.
+    // Antes cada botão era `position:fixed` com um `bottom` fixo (18px, 70px, 120px...). Isso tinha
+    // três defeitos: a pilha ficava com BURACOS quando um botão não aparecia naquela tela (eles são
+    // condicionais), dois botões disputavam a mesma altura (220px era do "ocultar" e também do
+    // "Atualizar Tabela"), e não dava pra tirar da frente quando tapavam algo do SPAmov.
+    // O `bottom` NÃO foi jogado fora: virou a ORDEM do botão dentro do painel, então a sequência
+    // que já era pensada continua valendo, só que sem buraco.
+    // ⚠️ Os ids dos botões continuam os mesmos de propósito — a fila troca o rótulo por
+    // getElementById, e o "esconder tudo" varre [id^="friganso-"].
+    const PAINEL_POS = "friganso_painel_pos";
+    function painelAcoes() {
+        let cx = document.getElementById("friganso-painel");
+        if (cx) return cx.querySelector(".friganso-painel-itens");
+        cx = document.createElement("div");
+        cx.id = "friganso-painel";
+        Object.assign(cx.style, {
+            position: "fixed", right: "18px", bottom: "18px", zIndex: "2147483647",
+            display: "flex", flexDirection: "column", gap: "7px", alignItems: "stretch",
+            maxHeight: "82vh", fontFamily: "system-ui,sans-serif",
+        });
+        // posição salva de quando o vendedor arrastou
+        try {
+            const salvo = JSON.parse(window.localStorage.getItem(PAINEL_POS) || "null");
+            if (salvo && typeof salvo.left === "number") {
+                cx.style.left = salvo.left + "px"; cx.style.top = salvo.top + "px";
+                cx.style.right = "auto"; cx.style.bottom = "auto";
+            }
+        } catch (e) {}
+
+        const topo = document.createElement("div");
+        Object.assign(topo.style, {
+            display: "flex", alignItems: "center", gap: "8px", cursor: "move", userSelect: "none",
+            background: "linear-gradient(110deg,#211a37,#12232b)", color: "#fff",
+            border: "1px solid rgba(124,108,255,.25)", borderRadius: "11px", padding: "9px 11px",
+            font: "800 12px system-ui,sans-serif", boxShadow: "0 6px 20px rgba(0,0,0,.3)",
+        });
+        const rotulo = document.createElement("span");
+        rotulo.textContent = "✦ PRUMO"; rotulo.style.flex = "1";
+        const recolher = document.createElement("button");
+        recolher.type = "button"; recolher.textContent = "–"; recolher.title = "Recolher";
+        Object.assign(recolher.style, { background: "rgba(255,255,255,.12)", color: "#fff", border: "none", borderRadius: "7px", width: "24px", height: "24px", cursor: "pointer", font: "800 14px system-ui", lineHeight: "1" });
+        topo.append(rotulo, recolher);
+
+        const itens = document.createElement("div");
+        itens.className = "friganso-painel-itens";
+        Object.assign(itens.style, { display: "flex", flexDirection: "column", gap: "7px", overflowY: "auto", paddingRight: "2px" });
+
+        recolher.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            const fechado = itens.style.display === "none";
+            itens.style.display = fechado ? "flex" : "none";
+            recolher.textContent = fechado ? "–" : "+";
+            rotulo.textContent = fechado ? "✦ PRUMO" : "✦ PRUMO · " + itens.children.length;
+        });
+
+        // arrastar pelo cabeçalho (mouse e toque)
+        let arrastando = false, dx = 0, dy = 0;
+        const pegar = (e) => {
+            const t = e.touches ? e.touches[0] : e;
+            const r = cx.getBoundingClientRect();
+            arrastando = true; dx = t.clientX - r.left; dy = t.clientY - r.top;
+            cx.style.left = r.left + "px"; cx.style.top = r.top + "px";
+            cx.style.right = "auto"; cx.style.bottom = "auto";
+        };
+        const mover = (e) => {
+            if (!arrastando) return;
+            const t = e.touches ? e.touches[0] : e;
+            // não deixa sumir pra fora da janela — arrastar pra fora e não achar mais é pior que não arrastar
+            const larg = cx.offsetWidth, alt = cx.offsetHeight;
+            const x = Math.max(4, Math.min(window.innerWidth - larg - 4, t.clientX - dx));
+            const y = Math.max(4, Math.min(window.innerHeight - alt - 4, t.clientY - dy));
+            cx.style.left = x + "px"; cx.style.top = y + "px";
+            if (e.cancelable) e.preventDefault();
+        };
+        const soltar = () => {
+            if (!arrastando) return;
+            arrastando = false;
+            try { window.localStorage.setItem(PAINEL_POS, JSON.stringify({ left: parseInt(cx.style.left, 10) || 0, top: parseInt(cx.style.top, 10) || 0 })); } catch (e) {}
+        };
+        topo.addEventListener("mousedown", pegar);
+        topo.addEventListener("touchstart", pegar, { passive: true });
+        document.addEventListener("mousemove", mover);
+        document.addEventListener("touchmove", mover, { passive: false });
+        document.addEventListener("mouseup", soltar);
+        document.addEventListener("touchend", soltar);
+
+        cx.append(topo, itens);
+        document.body.appendChild(cx);
+        return itens;
+    }
+
     function botao(id, texto, cor, bottom, onClick) {
         if (document.getElementById(id)) return;
         const b = document.createElement("button");
         b.id = id; b.type = "button"; b.textContent = texto;
-        Object.assign(b.style, { position: "fixed", right: "18px", bottom: bottom, zIndex: "2147483647", background: cor, color: "#fff", border: "none", borderRadius: "12px", padding: "12px 18px", fontSize: "14px", fontWeight: "bold", fontFamily: "system-ui,sans-serif", boxShadow: "0 6px 20px rgba(0,0,0,0.3)", cursor: "pointer" });
+        Object.assign(b.style, { background: cor, color: "#fff", border: "none", borderRadius: "12px", padding: "12px 18px", fontSize: "14px", fontWeight: "bold", fontFamily: "system-ui,sans-serif", boxShadow: "0 6px 20px rgba(0,0,0,0.3)", cursor: "pointer", textAlign: "left", whiteSpace: "nowrap" });
+        // o antigo `bottom` vira a ordem dentro do painel: mantém a sequência já pensada, sem buraco
+        b.style.order = String(parseInt(bottom, 10) || 0);
         // No navegador Android essas ações continuam disponíveis para a automação e para a barra
         // nativa, mas não ficam espalhadas por cima do site antigo.
-        if (ehNavegadorAndroid()) b.style.display = 'none';
+        if (ehNavegadorAndroid()) { b.style.display = 'none'; document.body.appendChild(b); return; }
         b.addEventListener("click", onClick);
-        document.body.appendChild(b);
+        painelAcoes().appendChild(b);
     }
 
     // 👁️ Botão mestre pra esconder/mostrar TODOS os elementos da extensão de uma vez — às vezes eles
@@ -2627,17 +2691,21 @@
         if (document.getElementById("friganso-toggle-btn")) return;
         const btn = document.createElement("button");
         btn.id = "friganso-toggle-btn"; btn.type = "button"; btn.textContent = "👁️ Esconder botões";
-        Object.assign(btn.style, { position: "fixed", right: "18px", bottom: bottom, zIndex: "2147483647", background: "#334155", color: "#fff", border: "none", borderRadius: "12px", padding: "12px 18px", fontSize: "14px", fontWeight: "bold", fontFamily: "system-ui,sans-serif", boxShadow: "0 6px 20px rgba(0,0,0,0.3)", cursor: "pointer" });
+        Object.assign(btn.style, { background: "#334155", color: "#fff", border: "none", borderRadius: "12px", padding: "12px 18px", fontSize: "14px", fontWeight: "bold", fontFamily: "system-ui,sans-serif", boxShadow: "0 6px 20px rgba(0,0,0,0.3)", cursor: "pointer", textAlign: "left", whiteSpace: "nowrap" });
+        btn.style.order = String(parseInt(bottom, 10) || 0);
         let escondido = false;
         btn.addEventListener("click", function () {
             escondido = !escondido;
             document.querySelectorAll('[id^="friganso-"]').forEach(function (el) {
-                if (el.id === "friganso-toggle-btn") return;
+                // ⚠️ O painel NÃO pode se esconder: este botão mora dentro dele, e esconder os dois
+                // juntos deixaria o vendedor sem nenhum jeito de trazer de volta.
+                if (el.id === "friganso-toggle-btn" || el.id === "friganso-painel") return;
+                if (el.closest && el.closest("#friganso-painel")) return;
                 el.style.visibility = escondido ? "hidden" : "";
             });
-            btn.textContent = escondido ? "👁️ Mostrar botões" : "👁️ Esconder botões";
+            btn.textContent = escondido ? "👁️ Mostrar avisos" : "👁️ Esconder avisos";
         });
-        document.body.appendChild(btn);
+        painelAcoes().appendChild(btn);
     }
 
     const temLeitura = temPedidoLeitura(montarPedidoLeitura());
