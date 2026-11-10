@@ -1,1 +1,11 @@
-{ "version": 251 }
+{
+  "version": 252,
+  "versao": "2.49.0",
+  "data": "10/11/2026",
+  "itens": [
+    "🔄 A tela de \"Atualização disponível\" agora MOSTRA O QUE MUDOU, em vez de só pedir pra atualizar",
+    "⚠️ E quando a atualização precisar de algo da sua parte — reinstalar a extensão, por exemplo — isso aparece em destaque, em cima, antes do botão",
+    "Assim você não precisa ir até a aba Atualizações pra descobrir o que veio e o que fazer",
+    "🔁 A lista é montada a partir do próprio CHANGELOG, então nunca vai descrever uma coisa e entregar outra"
+  ]
+}

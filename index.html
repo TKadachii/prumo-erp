@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 251;
+        const APP_BUILD_VERSION = 252;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -1360,18 +1360,55 @@
 
         // 🔄 Atualização OBRIGATÓRIA do site/PWA/PC — sem botão de fechar, sem clicar fora, sem ESC.
         // Só sai daqui clicando em "Atualizar agora" (limpa cache + Service Worker e recarrega).
+        // 🔄 Tela de atualização. Mostra O QUE MUDOU e, quando for o caso, O QUE VOCÊ PRECISA FAZER.
+        //
+        // ⚠️ Detalhe que decide o desenho: quem mostra esta tela é o app ANTIGO, que não conhece o
+        // CHANGELOG da versão nova — ele vive dentro do index.html que ainda não foi baixado. Por isso
+        // a lista de novidades viaja no próprio `web-version.json` (o mesmo arquivo que já é lido pra
+        // detectar a atualização), igual o `apk-version.json` já faz com o campo `novidades`.
+        // Quem monta esse arquivo é `ferramentas/gerar-web-version.js`, a partir da entrada do topo do
+        // CHANGELOG — pra lista nunca divergir do que foi realmente entregue.
+        //
+        // Versão antiga do arquivo (só `{version}`) continua funcionando: sem `itens`, a tela fica
+        // igual à de antes.
         const SiteUpdateModal = ({ siteUpdate, onAtualizar }) => {
             const [atualizando, setAtualizando] = useState(false);
+            const itens = (siteUpdate && siteUpdate.itens) || [];
+            const acao = siteUpdate && siteUpdate.acao;
             return (
                 <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-in fade-in">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 text-center">
-                        <div className="bg-gradient-to-r from-rose-700 to-rose-500 p-6 text-white">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+                        <div className="bg-gradient-to-r from-rose-700 to-rose-500 p-6 text-white text-center flex-shrink-0">
                             <div className="text-4xl mb-2">🔄</div>
                             <h2 className="text-xl font-black">Atualização disponível!</h2>
-                            <p className="text-rose-100 text-sm mt-1">Uma nova versão do sistema já está pronta.</p>
+                            <p className="text-rose-100 text-sm mt-1">
+                                {siteUpdate && siteUpdate.versao ? `Versão ${siteUpdate.versao} já está pronta.` : 'Uma nova versão do sistema já está pronta.'}
+                            </p>
                         </div>
-                        <div className="p-6 space-y-3">
-                            <p className="text-sm text-slate-500">Pra continuar usando, atualize agora — é rápido e não perde nada do que você já salvou.</p>
+
+                        {acao && (
+                            <div className="bg-amber-50 border-b border-amber-200 p-4 flex-shrink-0">
+                                <p className="text-xs font-black text-amber-800 uppercase tracking-wide">⚠️ Precisa da sua mão</p>
+                                <p className="text-sm text-amber-800 mt-1 leading-snug">{acao}</p>
+                            </div>
+                        )}
+
+                        {itens.length > 0 && (
+                            <div className="p-5 overflow-y-auto flex-1 min-h-0">
+                                <p className="text-[11px] font-black text-slate-400 uppercase tracking-wide mb-2">O que mudou</p>
+                                <ul className="space-y-2">
+                                    {itens.map((it, i) => (
+                                        <li key={i} className="text-sm text-slate-600 leading-snug flex gap-2">
+                                            <span className="text-rose-400 flex-shrink-0">•</span>
+                                            <span>{it}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        <div className="p-5 pt-3 space-y-3 flex-shrink-0 border-t border-slate-100">
+                            <p className="text-xs text-slate-400 text-center">Atualizar é rápido e não perde nada do que você já salvou.</p>
                             <button onClick={() => { setAtualizando(true); onAtualizar(); }} disabled={atualizando} className="w-full bg-rose-700 hover:bg-rose-800 disabled:opacity-60 text-white font-black py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
                                 {atualizando ? <><div className="h-5 w-5 animate-spin"><IconLoader2/></div> Atualizando...</> : '🔄 Atualizar agora'}
                             </button>
@@ -9353,6 +9390,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.49.0', data: '10/11/2026', areas: ['site'], itens: [
+                '🔄 A tela de "Atualização disponível" agora MOSTRA O QUE MUDOU, em vez de só pedir pra atualizar',
+                '⚠️ E quando a atualização precisar de algo da sua parte — reinstalar a extensão, por exemplo — isso aparece em destaque, em cima, antes do botão',
+                'Assim você não precisa ir até a aba Atualizações pra descobrir o que veio e o que fazer',
+                '🔁 A lista é montada a partir do próprio CHANGELOG, então nunca vai descrever uma coisa e entregar outra',
+            ]},
             { versao: '2.48.1', data: '10/11/2026', areas: ['extensao'], itens: [
                 '🧹 Faxina final: saíram as 3 funções que faziam o DS→SP→PA automático, que estava desligado e sem ninguém chamando (49 linhas a menos na extensão)',
                 '✍️ Ficou escrito no código que passar de DS pra SP e pra PA é COM VOCÊ, por preferência sua — pra ninguém religar isso achando que era esquecimento',

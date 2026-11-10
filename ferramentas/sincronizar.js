@@ -139,12 +139,14 @@ titulo('🔢 CONFERÊNCIA DE VERSÃO');
 const html = fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8');
 const buildWeb = JSON.parse(fs.readFileSync(path.join(RAIZ, 'web-version.json'), 'utf8')).version;
 const buildApp = Number((/const APP_BUILD_VERSION = (\d+)/.exec(html) || [])[1]);
-const sw = (/friganso-v(\d+)/.exec(fs.readFileSync(path.join(RAIZ, 'sw.js'), 'utf8')) || [])[1];
+// aceita os dois prefixos: o cache virou prumo-vNN no rebrand, e procurar só por "friganso-v"
+// fazia esta conferência imprimir "friganso-vundefined" desde então — quebrada sem avisar.
+const sw = (/(?:prumo|friganso)-v(\d+)/.exec(fs.readFileSync(path.join(RAIZ, 'sw.js'), 'utf8')) || [])[1];
 const versaoCL = atual[0] ? atual[0].versao : '?';
 
 log(`   web-version.json  : ${buildWeb}`);
 log(`   APP_BUILD_VERSION : ${buildApp}`);
-log(`   sw.js (cache)     : friganso-v${sw}`);
+log(`   sw.js (cache)     : v${sw || '??? (não consegui ler o nome do cache no sw.js)'}`);
 log(`   CHANGELOG (topo)  : v${versaoCL}`);
 if (buildWeb !== buildApp) {
     log('');
@@ -153,6 +155,24 @@ if (buildWeb !== buildApp) {
     process.exit(1);
 }
 log('\n   ✅ batem — sem risco do loop de atualização');
+
+// 🔄 O web-version.json também carrega as NOVIDADES que a tela de atualização mostra. Se ele ficou
+// numa versão anterior à do topo do CHANGELOG, a tela vai descrever a entrega errada — e isso não
+// quebra nada, só mente, que é pior de achar.
+try {
+    const wv = JSON.parse(fs.readFileSync(path.join(RAIZ, 'web-version.json'), 'utf8'));
+    if (!wv.itens || !wv.itens.length) {
+        log('\n   ⚠️  web-version.json sem a lista de novidades.');
+        log('      A tela de atualização vai só pedir pra atualizar, sem dizer o que mudou.');
+        log('      Rode:  node ferramentas/gerar-web-version.js');
+    } else if (versaoCL !== '?' && wv.versao !== versaoCL) {
+        log(`\n   ⚠️  web-version.json está descrevendo a v${wv.versao}, mas o CHANGELOG está na v${versaoCL}.`);
+        log('      A tela de atualização vai mostrar as novidades ERRADAS.');
+        log('      Rode:  node ferramentas/gerar-web-version.js');
+    } else {
+        log(`   ✅ novidades da v${wv.versao} prontas pra tela de atualização${wv.acao ? ' (com ação pro usuário)' : ''}`);
+    }
+} catch (e) {}
 
 // ── 5) A extensão mudou? ───────────────────────────────────────────────────
 titulo('🧩 EXTENSÃO');

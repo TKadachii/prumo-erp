@@ -59,6 +59,7 @@ cd friganso-app
 #    (o WebUpdater do app baixa de https://tkadachii.github.io/prumo-erp/content.js —
 #    NÃO de /extensao/content.js. Esquecer isso faz o app nunca receber correções de
 #    automação via auto-atualização, só o index.html. Descoberto em 2026-07-03.)
+node ferramentas/gerar-web-version.js   # <- monta as novidades que a tela de atualização mostra
 git add index.html sw.js web-version.json content.js
 git commit -m "..."
 git push origin main
@@ -931,6 +932,30 @@ contar NÃO funciona aqui — uma expressão regular do próprio código que con
 corte e engole metade do arquivo. Na primeira tentativa o resultado foi "135 de 146 funções sem uso",
 que é obviamente falso. Contar no fonte quase cru (tirando só linhas 100% de comentário) erra pra
 menos, que é o lado seguro.
+
+## 🔄 A tela de atualização diz o que mudou (2026-11-10, v2.49.0)
+Antes ela só pedia pra atualizar. Agora mostra **o que mudou** e, quando a entrega exige algo da
+pessoa (reinstalar a extensão, abrir o app do celular), isso aparece **em destaque, acima da lista**,
+antes do botão.
+
+⚠️ **O detalhe que decide o desenho:** quem mostra essa tela é o app **ANTIGO**. Ele não tem como
+conhecer o CHANGELOG da versão nova — essa lista vive dentro do `index.html` que ainda nem foi
+baixado. A única coisa que ele lê do servidor é o `web-version.json`. Por isso as novidades viajam
+nesse arquivo, igual o `apk-version.json` já fazia com `novidades`.
+
+Se alguém "simplificar" lendo o CHANGELOG local, a tela passa a mostrar as novidades da versão
+**velha** — e ninguém percebe, porque o texto parece certo. O teste trava isso.
+
+**`ferramentas/gerar-web-version.js` monta o arquivo** a partir da entrada do topo do CHANGELOG, e
+entrou no fluxo padrão de publicação. Escrever à mão seria mais um lugar com a mesma informação — e
+a lição recorrente aqui é que, quando a pessoa precisa lembrar de copiar, uma hora não copia. A
+**ação** é derivada das `areas` da entrega, não de alguém lembrar de escrever: `extensao` vira
+"baixe a extensão de novo", `app` vira "abra o app pra ele se atualizar".
+
+O `sincronizar.js` avisa se o `web-version.json` ficou descrevendo uma versão anterior à do
+CHANGELOG. Formato antigo (só `{version}`) continua funcionando: sem `itens`, a tela fica como era.
+
+Coberto por `ferramentas/teste-aviso-atualizacao.js` (11 checagens).
 
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
