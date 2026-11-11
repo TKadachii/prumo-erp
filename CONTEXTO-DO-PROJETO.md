@@ -957,6 +957,21 @@ CHANGELOG. Formato antigo (só `{version}`) continua funcionando: sem `itens`, a
 
 Coberto por `ferramentas/teste-aviso-atualizacao.js` (11 checagens).
 
+## 📦 Estoque da "Procura de Ítens" (2026-11-11, v2.50.0)
+- Janela que abre de dentro do pedido no SPAmov (título "Procura de Ítens", spa.vendedorexterno.spadim).
+  Colunas de estoque: Físico / Externo (sempre vazio) / Comercial / **Disponível** = Comercial − pedidos.
+  O site usa SÓ o Disponível. O preço dessa tela é ignorado (não traz o do cartão).
+- Extensão: `ehTelaEstoqueItens` / `extrairEstoqueItens` / `enviarEstoqueParaApp` → botão
+  "📦 Atualizar Estoque do Site" (`friganso-estoque-btn`) → `friganso_estoque_pendente` → `ESTOQUE_PENDENTE`
+  → `aplicarEstoqueSpamov` (App). Coluna decidida pela CÉLULA do título (os números são alinhados à
+  direita, X do texto ≠ X do título); linha decidida pelo `<tr>` do código (a "Ultima Venda" quebra em 2 linhas).
+- O site continua em kg (`kgUn`). Peso por unidade: kgUn antigo (kg÷un) → `estoqueSpamov.kgPorUn` →
+  campo com "Kg" em pesoItem/tipo (⚠️ nos itens Kg [L] o pesoItem é "1 Pç"; o peso está no `tipo`) → nome
+  (nunca PLT). Cada produto ganha `estoqueSpamov: { fisico, comercial, disponivel, un, kgPorUn, em }`.
+- ⚠️ Produto ausente da lista NÃO é zerado: no 1º teste (843 itens, "Ítens por Página" = 843) faltaram 369
+  produtos com saldo no EST-VENDA. A extensão oferece aumentar o "Ítens por Página" quando lê o limite exato.
+  Se confirmar que a lista completa traz tudo, dá pra voltar a zerar quem não aparece.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

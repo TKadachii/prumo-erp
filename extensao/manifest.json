@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Prumo ERP - Resumo Rápido",
-  "version": "2.48.251",
-  "version_name": "2.48.1 - build 251",
+  "version": "2.50.253",
+  "version_name": "2.50.0 - build 253",
   "description": "Lê o pedido do SPAmov para o Resumo, lança pedidos montados no app e dispara campanhas de WhatsApp sozinho.",
   "icons": {
     "16": "icon16.png",

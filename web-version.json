@@ -1,11 +1,12 @@
 {
-  "version": 252,
-  "versao": "2.49.0",
-  "data": "10/11/2026",
-  "itens": [
-    "🔄 A tela de \"Atualização disponível\" agora MOSTRA O QUE MUDOU, em vez de só pedir pra atualizar",
-    "⚠️ E quando a atualização precisar de algo da sua parte — reinstalar a extensão, por exemplo — isso aparece em destaque, em cima, antes do botão",
-    "Assim você não precisa ir até a aba Atualizações pra descobrir o que veio e o que fazer",
-    "🔁 A lista é montada a partir do próprio CHANGELOG, então nunca vai descrever uma coisa e entregar outra"
-  ]
+    "version":  253,
+    "versao":  "2.50.0",
+    "data":  "11/11/2026",
+    "itens":  [
+                  "📦 NOVO: na janela \"Procura de Ítens\" do SPAmov (a que abre de dentro do pedido) apareceu o botão \"📦 Atualizar Estoque do Site\" — ele lê o estoque de cada item e manda pro site",
+                  "✅ O site agora usa o DISPONÍVEL (o que está liberado pra venda menos o que já está em pedido). Antes usava o EST-VENDA da Lista de Preços, que não desconta pedido — ex.: mostrava 348 cx de frango quando só 4 estavam livres",
+                  "⚖️ O estoque continua em kg: o peso de cada caixa vem do próprio SPAmov (ex.: Acém 23 kg/cx, Frango carcaça 7 kg/cx). Produto que não aparece na lista fica com o estoque que já tinha",
+                  "🔎 Antes de enviar, a extensão mostra um item de exemplo pra você conferir com a tela, e avisa se a lista pode ter vindo cortada pelo \"Ítens por Página\". Passando o mouse na etiqueta 📦 aparece Físico, Disponível e a hora da leitura"
+              ],
+    "acao":  "Esta versão muda a EXTENSÃO. Depois de atualizar, baixe a extensão de novo pelo site, troque os arquivos na pasta e clique no 🔄 em chrome://extensions."
 }

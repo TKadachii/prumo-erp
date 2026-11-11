@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
-// @version      2026.11.10.2203
+// @version      2026.11.11.1629
 // @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
 // @author       Prumo
 // @match        https://tkadachii.github.io/*
 // @match        *://*.friganso.com.br/*
 // @match        *://spd1.friganso.com.br/*
+// @match        *://web.whatsapp.com/*
 // @run-at       document-idle
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -94,6 +95,16 @@
                 if (Date.now() - (pend.ts || 0) > 10 * 60 * 1000) { chrome.storage.local.remove("friganso_clientes_pendente"); return; }
                 chrome.storage.local.remove("friganso_clientes_pendente");
                 try { window.postMessage({ source: "friganso-ext", type: "CLIENTES_PENDENTE", clientes: pend.clientes }, "*"); } catch (e) {}
+            });
+        } catch (e) {}
+        // 📦 Mesma ponte, pro estoque lido da janela "Procura de Ítens".
+        try {
+            chrome.storage.local.get(["friganso_estoque_pendente"], function (r) {
+                const pend = r && r.friganso_estoque_pendente;
+                if (!pend || !pend.itens || !pend.itens.length) return;
+                if (Date.now() - (pend.ts || 0) > 10 * 60 * 1000) { chrome.storage.local.remove("friganso_estoque_pendente"); return; }
+                chrome.storage.local.remove("friganso_estoque_pendente");
+                try { window.postMessage({ source: "friganso-ext", type: "ESTOQUE_PENDENTE", itens: pend.itens, soComEstoque: !!pend.soComEstoque, completo: !!pend.completo, lidoEm: pend.lidoEm || pend.ts }, "*"); } catch (e) {}
             });
         } catch (e) {}
         // 💲 Preços lidos numa conferência. A carga fica no storage porque atravessar todos os itens
@@ -788,13 +799,15 @@
     }
     // 🔢 Campo "Pessoas por Página" e botão "Procurar" da Procura de Pessoas. Ancorados no RÓTULO e no
     // value do botão (não em X fixo — ver a lição do X fixo no CONTEXTO-DO-PROJETO.md).
-    function acharCampoPorPagina() {
+    // `re` opcional: a Procura de Ítens usa o mesmo esquema com o rótulo "Ítens por Página".
+    function acharCampoPorPagina(re) {
+        const reRot = re || /pessoas\s+por\s+p[áa]gina/i;
         let rot = null;
         document.querySelectorAll("td, th, b, font, span, div, nobr, label").forEach(function (el) {
             if (rot) return;
             for (var k = 0; k < el.children.length; k++) { if (el.children[k].tagName !== "BR") return; }
             const t = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
-            if (!/pessoas\s+por\s+p[áa]gina/i.test(t)) return;
+            if (!reRot.test(t)) return;
             const r = el.getBoundingClientRect();
             if (!r.width || !r.height) return;
             rot = { x: r.left, y: r.top };
@@ -891,6 +904,166 @@
         if (ehCelular) { try { (window.top || window).location.href = url; } catch (e) { window.location.href = url; } return; }
         try { const w = (window.top || window).open(url, "friganso_erp_app"); if (w && w.focus) w.focus(); }
         catch (e) { window.open(url, "friganso_erp_app"); }
+    }
+
+    // ================= PROCURA DE ÍTENS (estoque por item) =================
+    // Janela "Procura de Ítens" que abre de dentro do pedido (spa.vendedorexterno.spadim). Cada linha
+    // traz o ESTOQUE em 4 colunas: Físico (o que está na câmara), Externo (sempre vazio até hoje),
+    // Comercial (o que está liberado pra venda) e Disponível (Comercial menos o que já está em pedido).
+    // O site usa o DISPONÍVEL — é o que dá pra vender de verdade. Mapeado em 2026-11-11 com o 🔍 Ler Página
+    // (843 itens). Os números dessa tela vêm alinhados à DIREITA e o "Comercial" vem em <b> dentro
+    // da célula, então o X do texto NÃO bate com o X do cabeçalho (Físico: texto em 1391, título em
+    // 1469). Por isso a coluna é decidida pela CÉLULA (td) do cabeçalho: o centro do número tem que cair
+    // dentro da largura da célula do título. E a linha é decidida pelo <tr> do código, não por Y — a
+    // coluna "Ultima Venda" quebra em duas linhas e deixa algumas linhas mais altas.
+    function folhasVisiveis(raiz) {
+        const out = [];
+        (raiz || document).querySelectorAll("td, th, b, font, span, div, nobr, a, small, strong").forEach(function (el) {
+            if (el.closest && el.closest("#friganso-barra, [id^='friganso-']")) return; // ignora a barra do Prumo
+            for (var k = 0; k < el.children.length; k++) { if (el.children[k].tagName !== "BR") return; }
+            const t = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+            if (!t || t.length > 200) return;
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height) return;
+            out.push({ el: el, t: t, l: r.left, r: r.right, top: r.top, bot: r.bottom, cx: (r.left + r.right) / 2 });
+        });
+        return out;
+    }
+    function ehTelaEstoqueItens() {
+        if (/procura\s+de\s+[íi]tens/i.test(document.title || "")) return true;
+        // ⚠️ a tela do pedido tem "DISPON.COMERCIAL" e "FISICO" num cabeçalho só — por isso aqui exige
+        // as três palavras como títulos SEPARADOS e exatos.
+        const tem = { f: false, c: false, d: false };
+        folhasVisiveis().forEach(function (c) {
+            if (/^f[íi]sico$/i.test(c.t)) tem.f = true;
+            else if (/^comercial$/i.test(c.t)) tem.c = true;
+            else if (/^dispon[íi]vel$/i.test(c.t)) tem.d = true;
+        });
+        return tem.f && tem.c && tem.d;
+    }
+    function extrairEstoqueItens() {
+        const folhas = folhasVisiveis();
+        const fis = folhas.filter(function (c) { return /^f[íi]sico$/i.test(c.t); })[0];
+        if (!fis) return { itens: [], erro: "cabecalho" };
+        // de vários títulos parecidos (a busca no topo também diz "CÓDIGO DE BUSCA"), fica com o mais
+        // perto da linha do "Físico" — é o título da tabela, não o rótulo do campo de busca
+        function titulo(re) {
+            let melhor = null, d = 1e9;
+            folhas.forEach(function (c) {
+                if (!re.test(c.t)) return;
+                const dd = Math.abs(c.top - fis.top);
+                if (dd < d) { d = dd; melhor = c; }
+            });
+            if (!melhor) return null;
+            const cel = melhor.el.closest("td, th") || melhor.el;
+            const r = cel.getBoundingClientRect();
+            return { l: r.left, r: r.right, bot: r.bottom };
+        }
+        const cols = {
+            codigo: titulo(/^c[óo]digo\s+de\s+busca$/i),
+            descricao: titulo(/^descri[çc][ãa]?o$/i),
+            un: titulo(/^un\.?\s*mov\.?$/i),
+            fisico: titulo(/^f[íi]sico$/i),
+            externo: titulo(/^externo$/i),
+            comercial: titulo(/^comercial$/i),
+            disponivel: titulo(/^dispon[íi]vel$/i)
+        };
+        if (!cols.codigo || !cols.fisico || !cols.disponivel) return { itens: [], erro: "cabecalho" };
+        const fimCab = Math.max(cols.fisico.bot, cols.codigo.bot);
+        function dentro(c, col) { return col && c.cx >= col.l - 1 && c.cx <= col.r + 1; }
+        function num(t) { const n = parseFloat(String(t || "").replace(/\s/g, "").replace(",", ".")); return isFinite(n) ? n : 0; }
+
+        const vistos = new Set();
+        const itens = [];
+        folhas.forEach(function (c) {
+            if (c.top < fimCab || !/^\d{3,}$/.test(c.t) || !dentro(c, cols.codigo)) return;
+            const tr = c.el.closest("tr");
+            if (!tr || vistos.has(tr)) return;
+            vistos.add(tr);
+            const linha = folhasVisiveis(tr);
+            function val(col) { const a = linha.filter(function (x) { return dentro(x, col); }); return a.length ? a[0].t : ""; }
+            itens.push({
+                code: c.t,
+                name: val(cols.descricao),
+                un: val(cols.un),
+                fisico: num(val(cols.fisico)),
+                externo: num(val(cols.externo)),
+                comercial: num(val(cols.comercial)),
+                disponivel: num(val(cols.disponivel))
+            });
+        });
+        // caixa "Consultar somente ítens no estoque": quando marcada, quem NÃO aparece está sem saldo
+        let soComEstoque = false;
+        const rot = folhas.filter(function (c) { return /somente\s+[íi]tens\s+no\s+estoque/i.test(c.t); })[0];
+        if (rot) {
+            let melhor = null, d = 1e9;
+            document.querySelectorAll("input[type=checkbox]").forEach(function (el) {
+                const r = el.getBoundingClientRect();
+                const dd = Math.abs(r.left - rot.l) + Math.abs(r.top - rot.top);
+                if (dd < d) { d = dd; melhor = el; }
+            });
+            if (melhor && d < 200) soComEstoque = !!melhor.checked;
+        }
+        return { itens: itens, soComEstoque: soComEstoque };
+    }
+    function enviarEstoqueParaApp() {
+        if (ehNavegadorAndroid()) { statusBox()("O estoque por item ainda só vai pelo computador."); return; }
+        const r = extrairEstoqueItens();
+        const itens = r.itens;
+        if (!itens.length) {
+            alert(
+                "Não consegui ler o estoque nesta tela.\n\n" +
+                "Confira se você já clicou em Procurar (a lista precisa estar aparecendo).\n\n" +
+                "Se a lista está na tela e mesmo assim deu isso, use o 🔍 Ler Página e me mande o arquivo."
+            );
+            return;
+        }
+        // ⚠️ Leu exatamente o tanto de "Ítens por Página"? Então provavelmente tem mais nas próximas
+        // páginas. Mesmo esquema da Procura de Pessoas: oferece aumentar e refazer a busca.
+        const campoPP = acharCampoPorPagina(/[íi]tens\s+por\s+p[áa]gina/i);
+        const porPagina = campoPP ? parseInt(String(campoPP.value).replace(/\D/g, ""), 10) : 0;
+        let completo = true;
+        if (porPagina > 0 && itens.length >= porPagina) {
+            const btnProcurar = acharBotaoProcurar();
+            const aumentar = confirm(
+                "Li " + itens.length + " itens, exatamente o limite de \"Ítens por Página\" — pode ter mais nas próximas páginas.\n\n" +
+                "OK = trago todos (aumento o \"Ítens por Página\" e refaço a busca; depois é só clicar no botão de novo)\n" +
+                "Cancelar = enviar só estes " + itens.length
+            );
+            if (aumentar && campoPP && btnProcurar) {
+                try {
+                    campoPP.value = String(Math.max(3000, itens.length * 2));
+                    campoPP.dispatchEvent(new Event("change", { bubbles: true }));
+                    btnProcurar.click();
+                } catch (e) { alert("Não consegui refazer a busca sozinho. Aumente o campo \"Ítens por Página\" na mão e clique em Procurar."); }
+                return;
+            }
+            completo = false;
+        }
+        // 👀 Mostra uma amostra antes de mandar: se um dia a Friganso mexer na tela e as colunas
+        // trocarem de lugar, você percebe aqui e não estraga o estoque do site.
+        const ex = itens.filter(function (i) { return i.disponivel > 0; })[0] || itens[0];
+        const comSaldo = itens.filter(function (i) { return i.disponivel > 0; }).length;
+        const ok = confirm(
+            "Li " + itens.length + " itens (" + comSaldo + " com saldo disponível).\n\n" +
+            "Confere com a tela?\n" + ex.code + " " + ex.name + "\n" +
+            "Físico " + ex.fisico + " · Comercial " + ex.comercial + " · Disponível " + ex.disponivel + " " + ex.un + "\n\n" +
+            "Os produtos que não estão nesta lista ficam com o estoque que já tinham.\n\n" +
+            "OK = atualizar o estoque do site"
+        );
+        if (!ok) return;
+        const payload = { itens: itens, soComEstoque: !!r.soComEstoque, completo: completo, lidoEm: Date.now(), ts: Date.now() };
+        try {
+            if (window.chrome && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set({ friganso_estoque_pendente: payload }, function () {
+                    const url = APP_URL + "?estoque=pendente";
+                    try { const w = (window.top || window).open(url, "friganso_erp_app"); if (w && w.focus) w.focus(); }
+                    catch (e) { window.open(url, "friganso_erp_app"); }
+                });
+                return;
+            }
+        } catch (e) {}
+        alert("Esta função precisa da extensão do Prumo instalada no Chrome (o Tampermonkey não consegue levar tantos itens).");
     }
 
     // ================= RELATÓRIO DE VENDAS (faturamento real) =================
@@ -2694,6 +2867,9 @@
     // telefone e limite/saldo de crédito) e manda pro site. Usa o mesmo 270px do relatório de vendas
     // sem risco de conflito: as duas telas são diferentes, nunca aparecem juntas.
     if (ehTelaClientes()) botao("friganso-clientes-btn", "👥 Atualizar Clientes do Site", "#0d9488", "270px", enviarClientesParaApp);
+    // 📦 Estoque: só na janela "Procura de Ítens" — lê Físico/Comercial/Disponível de cada item e manda
+    // pro site, que passa a usar o DISPONÍVEL (já descontado o que está em pedido) como estoque.
+    if (ehTelaEstoqueItens()) botao("friganso-estoque-btn", "📦 Atualizar Estoque do Site", "#b45309", "270px", enviarEstoqueParaApp);
 
     instalarBarraAndroid();
 

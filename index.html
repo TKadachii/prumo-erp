@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 252;
+        const APP_BUILD_VERSION = 253;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -3369,9 +3369,12 @@
             const e = lerEstoque(produto && produto.kgUn);
             const nivel = estoqueNivel(produto);
             const texto = nivel === 'ignoto' ? 'estoque —' : nivel === 'zero' ? 'sem estoque' : estoqueKgTexto(e.kg);
-            const titulo = nivel === 'ignoto' ? 'A tabela de hoje não trouxe o estoque deste item'
-                : nivel === 'zero' ? 'Sem saldo na tabela de hoje — evite ofertar'
-                : 'Disponível hoje: ' + estoqueTexto(produto.kgUn);
+            const es = produto && produto.estoqueSpamov;
+            const origem = es ? '\nSPAmov ' + new Date(es.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) +
+                ' · Físico ' + es.fisico + ' · Disponível ' + es.disponivel + (es.un ? ' ' + es.un : '') : '';
+            const titulo = (nivel === 'ignoto' ? 'A tabela de hoje não trouxe o estoque deste item'
+                : nivel === 'zero' ? 'Sem saldo disponível — evite ofertar'
+                : 'Disponível hoje: ' + estoqueTexto(produto.kgUn)) + origem;
             return <span className={'prumo-estoque-tag is-' + nivel + (compacto ? ' is-compacto' : '')} title={titulo}>📦 {texto}</span>;
         };
 
@@ -9390,6 +9393,13 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.50.0', data: '11/11/2026', areas: ['site', 'extensao'], itens: [
+                '📦 NOVO: na janela "Procura de Ítens" do SPAmov (a que abre de dentro do pedido) apareceu o botão "📦 Atualizar Estoque do Site" — ele lê o estoque de cada item e manda pro site',
+                '✅ O site agora usa o DISPONÍVEL (o que está liberado pra venda menos o que já está em pedido). Antes usava o EST-VENDA da Lista de Preços, que não desconta pedido — ex.: mostrava 348 cx de frango quando só 4 estavam livres',
+                '⚖️ O estoque continua em kg: o peso de cada caixa vem do próprio SPAmov (ex.: Acém 23 kg/cx, Frango carcaça 7 kg/cx). Produto que não aparece na lista fica com o estoque que já tinha',
+                '🔎 Antes de enviar, a extensão mostra um item de exemplo pra você conferir com a tela, e avisa se a lista pode ter vindo cortada pelo "Ítens por Página". Passando o mouse na etiqueta 📦 aparece Físico, Disponível e a hora da leitura',
+                '⚠️ Esta versão MUDA A EXTENSÃO: baixe de novo pelo site e clique em 🔄 em chrome://extensions',
+            ]},
             { versao: '2.49.0', data: '10/11/2026', areas: ['site'], itens: [
                 '🔄 A tela de "Atualização disponível" agora MOSTRA O QUE MUDOU, em vez de só pedir pra atualizar',
                 '⚠️ E quando a atualização precisar de algo da sua parte — reinstalar a extensão, por exemplo — isso aparece em destaque, em cima, antes do botão',
@@ -14358,6 +14368,93 @@
 
             const showMessage = (message, type = 'info') => setMessageBox({ message, type });
 
+            // 📦 ESTOQUE DA "PROCURA DE ÍTENS" (2026-11-11). A extensão lê Físico/Comercial/Disponível de
+            // cada item numa janela do pedido no SPAmov. O site passa a usar o DISPONÍVEL (Comercial menos o
+            // que já está em pedido) — o EST-VENDA da Lista de Preços não desconta pedido e chegou a mostrar
+            // 348 cx de frango quando só 4 estavam livres. O preço dessa tela é ignorado (não traz cartão).
+            // A tela dá o saldo em UNIDADE de movimento (CX, PC, SC...), e o resto do site trabalha em kg
+            // (kgUn = "2293.2 Kg/156 Un"). O peso de cada unidade sai, nesta ordem:
+            //  1. do kgUn que o produto já tinha (kg ÷ un) — é o número da própria Friganso;
+            //  2. do peso guardado na última leitura;
+            //  3. da coluna de peso da tabela ("14,4 Kg" / "10 à 12 Kg" -> média);
+            //  4. do nome ("CX/15KG", "CX14.4KG") — nunca pra PLT, onde o KG do nome é da caixa, não do palete.
+            // Sem peso nenhum e com saldo, o kgUn fica vazio ("estoque —") em vez de inventar quilo.
+            const productsRef = useRef(products);
+            productsRef.current = products;
+            const pesoPorUnidade = (p, un) => {
+                const e = lerEstoque(p.kgUn);
+                if (e.tem && e.un > 0 && e.kg > 0) return e.kg / e.un;
+                if (p.estoqueSpamov && p.estoqueSpamov.kgPorUn > 0) return p.estoqueSpamov.kgPorUn;
+                // ⚠️ Só vale texto com "Kg": nos itens Kg [L] o pesoItem vem "1 Pç" e o peso de verdade cai
+                // no `tipo` ("15 à 30 Kg"). Ler o "1" do "1 Pç" deu Acém de 25 kg com 1 kg por caixa no teste.
+                for (const campo of [p.pesoItem, p.tipo]) {
+                    const t = String(campo || '');
+                    if (!/kg/i.test(t) || /kg\s*\[/i.test(t)) continue;
+                    const nums = (t.match(/\d+(?:[.,]\d+)?/g) || []).map(n => parseFloat(n.replace(',', '.'))).filter(n => n > 0);
+                    if (nums.length) return nums.reduce((a, b) => a + b, 0) / nums.length;
+                }
+                if (!/^plt$/i.test(String(un || '').trim())) {
+                    const ms = String(p.name || '').match(/(\d+(?:[.,]\d+)?)\s*KG\b/gi);
+                    if (ms && ms.length) { const v = parseFloat(ms[ms.length - 1].replace(/kg/i, '').replace(',', '.')); if (v > 0) return v; }
+                }
+                return null;
+            };
+            const aplicarEstoqueSpamov = (itens, info) => {
+                const lidoEm = Number(info && info.lidoEm) || Date.now();
+                try { if (window.localStorage.getItem('prumo_estoque_lido_em') === String(lidoEm)) return; } catch (e) {}
+                const mapa = new Map((itens || []).filter(i => i && i.code != null).map(i => [String(i.code).trim(), i]));
+                if (!mapa.size) return;
+                // ⚠️ Quem NÃO veio na lista fica com o estoque que já tinha — NÃO zera. No teste com a lista
+                // real (843 itens), 369 produtos da Tabela com saldo no EST-VENDA não apareceram (fígado,
+                // filé de coxa, sassami...). Pode ser a lista cortada pelo "Ítens por Página" ou um filtro da
+                // janela pelo pedido aberto; até descobrir, zerar isso tiraria das campanhas produto que existe.
+                let achados = 0, comSaldo = 0, ausentes = 0, semPeso = 0;
+                const novos = (productsRef.current || []).map(p => {
+                    const it = mapa.get(String(p.code).trim());
+                    if (!it) { if (p.ativo !== false) ausentes++; return p; }
+                    achados++;
+                    const disp = Math.max(0, Number(it.disponivel) || 0);
+                    const kgPorUn = pesoPorUnidade(p, it.un);
+                    let kgUn;
+                    if (disp <= 0) kgUn = '0 Kg/0 Un';
+                    else if (kgPorUn) kgUn = (Math.round(disp * kgPorUn * 10) / 10) + ' Kg/' + disp + ' Un';
+                    else { kgUn = ''; semPeso++; }
+                    if (disp > 0) comSaldo++;
+                    return { ...p, kgUn, estoqueSpamov: { fisico: Number(it.fisico) || 0, comercial: Number(it.comercial) || 0, disponivel: Number(it.disponivel) || 0, un: it.un || '', kgPorUn: kgPorUn ? Math.round(kgPorUn * 1000) / 1000 : null, em: lidoEm } };
+                });
+                if (!achados) { showMessage('Li ' + mapa.size + ' itens do estoque, mas nenhum código bateu com a Tabela deste aparelho. Atualize a Tabela primeiro.', 'error'); return; }
+                setProductsState(novos);
+                try {
+                    window.localStorage.setItem('friganso_products', JSON.stringify(novos));
+                    // mesmo motivo do carregarTabela: sem isso a sincronização da nuvem trataria a última
+                    // tabela distribuída como "mais nova" e apagaria o estoque recém-lido
+                    window.localStorage.setItem('friganso_tabela_sync_ms', String(Date.now()));
+                    window.localStorage.setItem('prumo_estoque_lido_em', String(lidoEm));
+                } catch (e) {}
+                showMessage('📦 Estoque atualizado direto do SPAmov: ' + achados + ' produtos da Tabela (' + comSaldo + ' com saldo' +
+                    (ausentes ? '; ' + ausentes + ' da Tabela não vieram na lista e ficaram com o estoque antigo' : '') +
+                    (semPeso ? ', ' + semPeso + ' sem peso conhecido' : '') +
+                    '). Toque em "Distribuir Tabela" pra todo mundo receber.', 'success');
+            };
+            const aplicarEstoqueRef = useRef(aplicarEstoqueSpamov);
+            aplicarEstoqueRef.current = aplicarEstoqueSpamov;
+            useEffect(() => {
+                const raw = window.sessionStorage.getItem('friganso_estoque_json');
+                if (raw) {
+                    window.sessionStorage.removeItem('friganso_estoque_json');
+                    try { const d = JSON.parse(raw); aplicarEstoqueRef.current(d.itens, d); } catch (e) {}
+                }
+                const onMsg = (e) => {
+                    const d = e.data;
+                    if (!d || d.source !== 'friganso-ext' || d.type !== 'ESTOQUE_PENDENTE' || !d.itens) return;
+                    window.sessionStorage.removeItem('friganso_estoque_json');
+                    aplicarEstoqueRef.current(d.itens, d);
+                    setActiveRoute('pdf');
+                };
+                window.addEventListener('message', onMsg);
+                return () => window.removeEventListener('message', onMsg);
+            }, []);
+
             const [conferenciaPrecosItens, setConferenciaPrecosItens] = useState(null);
             const aplicarPrecosConferidos = async (itensRecebidos, cliente, notificar = true) => {
                 const hoje = diaStrGlobal(new Date());
@@ -14974,6 +15071,11 @@
                 window.sessionStorage.setItem('friganso_initial_route', 'clients');
                 if (window.history.replaceState) window.history.replaceState({}, '', window.location.pathname);
             }
+            // 📦 Estoque da "Procura de Ítens": chega por postMessage, aqui só abre na tela da Tabela
+            if (p.get('estoque') === 'pendente') {
+                window.sessionStorage.setItem('friganso_initial_route', 'pdf');
+                if (window.history.replaceState) window.history.replaceState({}, '', window.location.pathname);
+            }
         })();
 
         // 📥 Tabela de Preços entregue pela extensão via chrome.storage (URL curta, evita "I/O error"
@@ -15009,6 +15111,15 @@
                 try {
                     window.sessionStorage.setItem('friganso_clientes_json', JSON.stringify(d.clientes));
                     window.sessionStorage.setItem('friganso_initial_route', 'clients');
+                } catch (err) {}
+                return;
+            }
+            // 📦 Estoque entregue pela extensão (janela "Procura de Ítens" do SPAmov). Guarda pro App
+            // aplicar quando montar; se ele já estiver montado, o próprio listener dele aplica e limpa.
+            if (d && d.source === 'friganso-ext' && d.type === 'ESTOQUE_PENDENTE' && d.itens) {
+                try {
+                    window.sessionStorage.setItem('friganso_estoque_json', JSON.stringify({ itens: d.itens, soComEstoque: !!d.soComEstoque, completo: !!d.completo, lidoEm: d.lidoEm || Date.now() }));
+                    window.sessionStorage.setItem('friganso_initial_route', 'pdf');
                 } catch (err) {}
                 return;
             }
