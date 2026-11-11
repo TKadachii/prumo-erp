@@ -971,6 +971,10 @@ Coberto por `ferramentas/teste-aviso-atualizacao.js` (11 checagens).
 - ⚠️ Produto ausente da lista NÃO é zerado: no 1º teste (843 itens, "Ítens por Página" = 843) faltaram 369
   produtos com saldo no EST-VENDA. A extensão oferece aumentar o "Ítens por Página" quando lê o limite exato.
   Se confirmar que a lista completa traz tudo, dá pra voltar a zerar quem não aparece.
+- Etiqueta 📦 (v2.50.1): `estoqueRotulo` mostra as UNIDADES disponíveis + kg ("84 cx · 1.210 kg"; compacto
+  = "84 cx") — o vendedor pediu o número de caixas. `estoqueNivel` com `estoqueSpamov` decide pelo Disponível.
+- ⚠️ "Atualizar Tabela" depois do estoque volta o `kgUn` pro EST-VENDA e descarta o `estoqueSpamov`
+  (o `carregarTabela` monta o produto campo a campo). Ordem certa no dia: Tabela primeiro, Estoque depois.
 
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço

@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 253;
+        const APP_BUILD_VERSION = 254;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -3354,27 +3354,47 @@
         // só pra cor da etiqueta: sem informação / zerado / acabando (<100kg) / tranquilo
         const estoqueNivel = (p) => {
             const e = lerEstoque(p && p.kgUn);
+            const es = p && p.estoqueSpamov;
+            // lido da Procura de Ítens: quem decide se tem é o DISPONÍVEL (mesmo sem peso conhecido)
+            if (es) { if (!(Number(es.disponivel) > 0)) return 'zero'; if (!e.tem) return 'ok'; }
             if (!e.tem) return 'ignoto';
             if (e.kg <= 0) return 'zero';
             return e.kg < 100 ? 'baixo' : 'ok';
         };
+        // 📦 Texto da etiqueta: QUANTAS UNIDADES estão disponíveis (pedido do vendedor em 11/11/2026 — é o
+        // número que ele usa pra vender) e os kg do lado. Unidade = a de movimento do SPAmov (CX, PC, SC…)
+        // quando o estoque veio da Procura de Ítens; senão o "Un" do EST-VENDA. `compacto` = só as unidades,
+        // pras listas apertadas.
+        const estoqueRotulo = (p, compacto) => {
+            const e = lerEstoque(p && p.kgUn);
+            const es = p && p.estoqueSpamov;
+            const nivel = estoqueNivel(p);
+            if (nivel === 'ignoto') return 'estoque —';
+            if (nivel === 'zero') return 'sem estoque';
+            const qtd = es ? Math.max(0, Number(es.disponivel) || 0) : e.un;
+            const unid = (es && es.un ? String(es.un) : 'un').toLowerCase();
+            const un = qtd > 0 ? qtd.toLocaleString('pt-BR') + ' ' + unid : '';
+            const kg = e.tem && e.kg > 0 ? estoqueKgTexto(e.kg) : '';
+            if (compacto) return un || kg;
+            return [un, kg].filter(Boolean).join(' · ');
+        };
         // ⚠️ Tira o que não tem saldo, MAS só se ainda sobrar gente pra ofertar. Tabela antiga sem a
         // coluna EST-VENDA (ou dia em que tudo zerou) não pode deixar a campanha sair vazia.
         const comEstoque = (lista, minimo) => {
-            const tem = (lista || []).filter(p => estoqueKg(p) > 0);
+            const tem = (lista || []).filter(p => { const n = estoqueNivel(p); return n === 'ok' || n === 'baixo'; });
             return tem.length >= Math.max(1, minimo || 1) ? tem : (lista || []).slice();
         };
 
         const EstoqueBadge = ({ produto, compacto }) => {
             const e = lerEstoque(produto && produto.kgUn);
             const nivel = estoqueNivel(produto);
-            const texto = nivel === 'ignoto' ? 'estoque —' : nivel === 'zero' ? 'sem estoque' : estoqueKgTexto(e.kg);
+            const texto = estoqueRotulo(produto, compacto);
             const es = produto && produto.estoqueSpamov;
             const origem = es ? '\nSPAmov ' + new Date(es.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) +
                 ' · Físico ' + es.fisico + ' · Disponível ' + es.disponivel + (es.un ? ' ' + es.un : '') : '';
             const titulo = (nivel === 'ignoto' ? 'A tabela de hoje não trouxe o estoque deste item'
                 : nivel === 'zero' ? 'Sem saldo disponível — evite ofertar'
-                : 'Disponível hoje: ' + estoqueTexto(produto.kgUn)) + origem;
+                : 'Disponível hoje: ' + (e.tem ? estoqueTexto(produto.kgUn) : estoqueRotulo(produto))) + origem;
             return <span className={'prumo-estoque-tag is-' + nivel + (compacto ? ' is-compacto' : '')} title={titulo}>📦 {texto}</span>;
         };
 
@@ -9393,6 +9413,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.50.1', data: '11/11/2026', areas: ['site'], itens: [
+                '📦 A etiqueta de estoque agora mostra QUANTAS CAIXAS (ou peças, sacos…) estão disponíveis, com os kg do lado — ex.: "📦 84 cx · 1.210 kg". Nas listas apertadas aparece só "📦 84 cx"',
+                'O número é o DISPONÍVEL lido da Procura de Ítens do SPAmov. Quando o estoque veio da Lista de Preços, aparece em "un"',
+                '🐞 Item com caixas disponíveis mas sem peso conhecido mostrava "estoque —" e ficava de fora das campanhas. Agora mostra as caixas e entra normalmente',
+            ]},
             { versao: '2.50.0', data: '11/11/2026', areas: ['site', 'extensao'], itens: [
                 '📦 NOVO: na janela "Procura de Ítens" do SPAmov (a que abre de dentro do pedido) apareceu o botão "📦 Atualizar Estoque do Site" — ele lê o estoque de cada item e manda pro site',
                 '✅ O site agora usa o DISPONÍVEL (o que está liberado pra venda menos o que já está em pedido). Antes usava o EST-VENDA da Lista de Preços, que não desconta pedido — ex.: mostrava 348 cx de frango quando só 4 estavam livres',
