@@ -1,13 +1,11 @@
 {
-    "version":  255,
-    "versao":  "2.51.0",
+    "version":  256,
+    "versao":  "2.52.0",
     "data":  "13/11/2026",
     "itens":  [
-                  "📲 TABELA PRA TODO MUNDO NA HORA: quem carregar a tabela — pela extensão, pelo PDF ou pelo celular — já manda pra TODAS as contas, admin ou vendedor. Não precisa mais tocar em \"Distribuir\"",
-                  "📦 O estoque da Procura de Ítens também vai pra todos na hora",
-                  "🕒 Na tela da Tabela aparece \"✅ Última atualização: 13/11 às 14:32 · por Fulano · tabela do SPAmov\", e muda sozinho no instante em que alguém atualiza",
-                  "📥 Quem está com o Prumo aberto recebe um aviso: \"Tabela atualizada por Fulano — 13/11 às 14:32\"",
-                  "🔁 O antigo \"Distribuir Tabela\" (que só aparecia pra admin) virou \"Enviar pra todos\", pra qualquer um — serve pra reenviar se a tabela foi carregada sem internet",
-                  "🐞 Produto que saiu da tabela voltava como ativo nos outros aparelhos ao receber a tabela distribuída. Agora chega certo"
+                  "📵 RELATÓRIO DOS CLIENTES SEM TELEFONE: em Campanhas, no filtro \"📵 Sem número\", tem o botão \"📄 Baixar relatório (PDF)\"",
+                  "O PDF traz código, nome, contato, CNPJ/CPF, endereço, bairro, cidade/UF e CEP de cada cliente, em ordem de cidade e bairro pra montar a rota de visita",
+                  "📍 Tocar no endereço dentro do PDF abre o lugar no Google Maps",
+                  "Se tiver busca digitada, o PDF sai só com quem aparece na busca"
               ]
 }

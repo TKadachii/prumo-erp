@@ -995,6 +995,12 @@ Queixa: vendedor carregava a tabela e ninguém recebia — o "Distribuir Tabela"
 - Testado com as gravações interceptadas (nada foi pra nuvem no teste): vendedor carrega → 1 set + 1
   histórico com `atualizadoPor`; estoque → 1 set; receber → inativos respeitados, aviso aparece.
 
+## 📵 Relatório PDF dos clientes sem telefone (v2.52.0)
+
+- Campanhas (DisparosScreen) → filtro `semtel` mostra a faixa com "📄 Baixar relatório (PDF)". Usa a `lista` já filtrada (respeita a busca).
+- Gerador: `gerarPdfRelatorioClientes(clientes, titulo, layout)` (perto de `gerarPdfConferenciaTabela`), A4 deitado, mesmo visual escuro (`pdfPintarPagina`/`pdfRodape`). Colunas: código, cliente/contato, CNPJ/CPF, endereço, bairro, cidade/UF, CEP. Ordem cidade → bairro → nome, vazios no fim.
+- Endereço tem link pro Google Maps (`doc.link`). Rodapé avisa que é relatório interno (tem CNPJ e endereço).
+- A função é genérica (recebe qualquer lista de clientes) — dá pra reaproveitar em outros filtros.
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

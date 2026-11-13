@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 255;
+        const APP_BUILD_VERSION = 256;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -3730,6 +3730,93 @@
             });
             const n = doc.internal.getNumberOfPages();
             for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7); doc.text('Página ' + i + ' de ' + n, 290, 205, { align: 'right' }); }
+            return doc;
+        };
+
+        // 📵 RELATÓRIO DE CLIENTES (Campanhas → "Sem número"): uma linha por cliente com código, nome,
+        // contato, CNPJ e endereço completo, pra correr atrás do telefone de quem não tem. Ordenado por
+        // cidade → bairro → nome, pra dar pra montar a rota de visita olhando o papel. É relatório
+        // INTERNO (tem CNPJ e endereço): o rodapé avisa pra não encaminhar.
+        const gerarPdfRelatorioClientes = (clientes, titulo, layout) => {
+            const JsPDF = window.jspdf && window.jspdf.jsPDF;
+            if (!JsPDF) throw new Error('sem-lib');
+            const L = PDF_LAYOUTS[layout] || PDF_LAYOUTS[lerLayoutPdf()];
+            const W = 297, H = 210, FUNDO = H - 8;
+            const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+            const docFmt = (v) => {
+                const d = String(v || '').replace(/\D/g, '');
+                if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+                if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+                return String(v || '').trim();
+            };
+            const cepFmt = (v) => { const d = String(v || '').replace(/\D/g, ''); return d.length === 8 ? d.slice(0, 5) + '-' + d.slice(5) : String(v || '').trim(); };
+            const txt = (v) => String(v || '').trim();
+            // vazio vai pro FIM (com '~' o ICU punha antes das letras)
+            const cmp = (a, b) => (!a && b) ? 1 : (a && !b) ? -1 : a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
+            const lista = (clientes || []).slice().sort((a, b) =>
+                cmp(txt(a.municipio), txt(b.municipio)) || cmp(txt(a.bairro), txt(b.bairro)) || cmp(txt(a.name), txt(b.name)));
+            const semCnpj = lista.filter(c => String(c.cnpj || '').replace(/\D/g, '').length < 11).length;
+            const semEnd = lista.filter(c => !txt(c.address) && !txt(c.municipio)).length;
+            const agora = new Date();
+            const subtitulo = lista.length + ' cliente(s)  ·  ' + semCnpj + ' sem CNPJ  ·  ' + semEnd + ' sem endereço  ·  gerado em ' +
+                agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '  ·  toque no endereço pra abrir no mapa';
+
+            // ⚠️ Larguras somam 277mm (A4 deitado com 10mm de margem). Se acrescentar coluna, refaça a conta.
+            const COLS = [
+                { t: 'CÓD.', x: 10, w: 14 },      { t: 'CLIENTE / CONTATO', x: 24, w: 68 },
+                { t: 'CNPJ / CPF', x: 92, w: 31 }, { t: 'ENDEREÇO', x: 123, w: 78 },
+                { t: 'BAIRRO', x: 201, w: 34 },    { t: 'CIDADE / UF', x: 235, w: 33 },
+                { t: 'CEP', x: 268, w: 19 },
+            ];
+            let y = 0;
+            const cabecalho = () => {
+                pdfPintarPagina(doc, L, W, H, titulo || 'RELATÓRIO DE CLIENTES', subtitulo);
+                doc.setFillColor(...L.thead); doc.rect(10, 29, 277, 7, 'F');
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...L.theadTexto);
+                COLS.forEach(c => doc.text(c.t, c.x + 1, 33.6));
+                y = 37;
+            };
+            const corta = (t, larg) => { t = String(t || ''); if (doc.getTextWidth(t) <= larg) return t; while (doc.getTextWidth(t + '…') > larg && t.length > 3) t = t.slice(0, -1); return t + '…'; };
+
+            cabecalho();
+            lista.forEach((c, idx) => {
+                // nome e endereço quebram linha (nunca cortados); o resto cabe numa linha
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+                const linhasNome = doc.splitTextToSize(txt(c.name) || '(sem nome)', COLS[1].w - 2);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+                const linhasEnd = doc.splitTextToSize(txt(c.address) || '—', COLS[3].w - 2);
+                const contato = txt(c.contactName);
+                const nLinhas = Math.max(linhasNome.length + (contato ? 1 : 0), linhasEnd.length, 1);
+                const altura = Math.max(6, nLinhas * 3.2 + 2.6);
+                if (y + altura > FUNDO) { doc.addPage(); cabecalho(); }
+                if (idx % 2 === 0) { doc.setFillColor(...L.zebra); doc.rect(10, y, 277, altura, 'F'); }
+                doc.setDrawColor(...L.linha); doc.setLineWidth(0.2); doc.line(10, y + altura, 287, y + altura);
+                const base = y + 3.8;
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...L.cod);
+                doc.text(corta(txt(c.code), COLS[0].w - 2), COLS[0].x + 1, base);
+                doc.setFontSize(7.5); doc.setTextColor(...L.texto);
+                doc.text(linhasNome, COLS[1].x + 1, base, { lineHeightFactor: 1.2 });
+                if (contato) {
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...L.suave);
+                    doc.text(corta('Contato: ' + contato, COLS[1].w - 2), COLS[1].x + 1, base + linhasNome.length * 3.2);
+                }
+                const cnpj = docFmt(c.cnpj);
+                doc.setFont('helvetica', cnpj ? 'bold' : 'normal'); doc.setFontSize(7); doc.setTextColor(...(cnpj ? L.texto : L.suave));
+                doc.text(corta(cnpj || '—', COLS[2].w - 2), COLS[2].x + 1, base);
+                doc.setFont('helvetica', 'normal'); doc.setTextColor(...L.texto);
+                doc.text(linhasEnd, COLS[3].x + 1, base, { lineHeightFactor: 1.2 });
+                // 📍 tocar no endereço abre o Google Maps (só no PDF aberto no celular/PC; impresso é texto)
+                const local = [txt(c.address), txt(c.bairro), txt(c.municipio), txt(c.uf)].filter(Boolean).join(', ');
+                if (local) doc.link(COLS[3].x, y, COLS[3].w, altura, { url: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(local) });
+                doc.text(corta(txt(c.bairro) || '—', COLS[4].w - 2), COLS[4].x + 1, base);
+                const cidade = [txt(c.municipio), txt(c.uf)].filter(Boolean).join(' / ');
+                doc.text(corta(cidade || '—', COLS[5].w - 2), COLS[5].x + 1, base);
+                doc.text(corta(cepFmt(c.cep) || '—', COLS[6].w - 2), COLS[6].x + 1, base);
+                y += altura;
+            });
+            if (!lista.length) { doc.setTextColor(...L.suave); doc.setFontSize(9); doc.text('Nenhum cliente nesta lista.', 12, y + 6); }
+
+            pdfRodape(doc, L, W, H, 'Relatório interno — contém CNPJ e endereço, não encaminhar');
             return doc;
         };
 
@@ -9474,6 +9561,12 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.52.0', data: '13/11/2026', areas: ['site'], itens: [
+                '📵 RELATÓRIO DOS CLIENTES SEM TELEFONE: em Campanhas, no filtro "📵 Sem número", tem o botão "📄 Baixar relatório (PDF)"',
+                'O PDF traz código, nome, contato, CNPJ/CPF, endereço, bairro, cidade/UF e CEP de cada cliente, em ordem de cidade e bairro pra montar a rota de visita',
+                '📍 Tocar no endereço dentro do PDF abre o lugar no Google Maps',
+                'Se tiver busca digitada, o PDF sai só com quem aparece na busca',
+            ]},
             { versao: '2.51.0', data: '13/11/2026', areas: ['site'], itens: [
                 '📲 TABELA PRA TODO MUNDO NA HORA: quem carregar a tabela — pela extensão, pelo PDF ou pelo celular — já manda pra TODAS as contas, admin ou vendedor. Não precisa mais tocar em "Distribuir"',
                 '📦 O estoque da Procura de Ítens também vai pra todos na hora',
@@ -12977,7 +13070,24 @@
                 return base;
             }, [clients, filtro, busca, produtosAlvo]);
 
-            const toggle = (id) => { const s = new Set(selecionados); s.has(id) ? s.delete(id) : s.add(id); setSelecionados(s); };
+            // 📵 PDF com quem está na lista "Sem número" (respeita a busca), pra ir atrás do telefone
+            const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
+            const baixarRelatorioSemNumero = async () => {
+                if (!lista.length) { showMessage('Nenhum cliente sem número nessa lista.', 'error'); return; }
+                setGerandoRelatorio(true);
+                try {
+                    await window.prumoLib('jspdf');
+                    const doc = gerarPdfRelatorioClientes(lista, 'CLIENTES SEM TELEFONE', lerLayoutPdf());
+                    const d = new Date();
+                    doc.save('clientes-sem-telefone-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf');
+                    showMessage(lista.length + ' clientes no PDF! Procure em Downloads. 📄', 'success');
+                } catch (e) {
+                    if (e && e.message === 'sem-lib') showMessage('O gerador de PDF não carregou. Conecte na internet e atualize a página uma vez.', 'error');
+                    else showMessage('Erro ao gerar o PDF: ' + (e && e.message ? e.message : e), 'error');
+                } finally { setGerandoRelatorio(false); }
+            };
+
+            const toggle =(id) => { const s = new Set(selecionados); s.has(id) ? s.delete(id) : s.add(id); setSelecionados(s); };
             const marcarTodos = () => setSelecionados(new Set(lista.map(c => c.id)));
             const limparSel = () => setSelecionados(new Set());
 
@@ -13269,6 +13379,12 @@
                                     <button key={k} onClick={() => escolherFiltro(k)} className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${filtro === k ? 'bg-rose-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{lbl}{k === 'baixou' && baixaram.length ? ' (' + baixaram.length + ')' : ''}</button>
                                 ))}
                             </div>
+                            {filtro === 'semtel' && (
+                                <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
+                                    <p className="text-xs font-bold text-slate-600">📵 {lista.length} cliente(s) sem telefone. Baixe a lista com CNPJ e endereço pra correr atrás do número.</p>
+                                    <button onClick={baixarRelatorioSemNumero} disabled={gerandoRelatorio || !lista.length} className="text-xs font-bold px-3 py-2 rounded-lg bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-50">{gerandoRelatorio ? '⏳ Gerando…' : '📄 Baixar relatório (PDF)'}</button>
+                                </div>
+                            )}
                             {/* 📦/📉 Seletor de produtos: escolhe produtos (ou os que abaixaram) e o sistema lista quem já compra */}
                             {(filtro === 'produto' || filtro === 'baixou') && (
                                 <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-3 space-y-2">
