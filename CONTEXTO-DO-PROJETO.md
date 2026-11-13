@@ -976,6 +976,25 @@ Coberto por `ferramentas/teste-aviso-atualizacao.js` (11 checagens).
 - ⚠️ "Atualizar Tabela" depois do estoque volta o `kgUn` pro EST-VENDA e descarta o `estoqueSpamov`
   (o `carregarTabela` monta o produto campo a campo). Ordem certa no dia: Tabela primeiro, Estoque depois.
 
+## 📲 Tabela e estoque vão pra TODO MUNDO na hora (2026-11-13, v2.51.0)
+Queixa: vendedor carregava a tabela e ninguém recebia — o "Distribuir Tabela" era `user.role === 'admin'`.
+- `distribuirTabelaNuvem(lista, user, {motivo, versao})` (módulo) grava `system_data/shared_pdf` com
+  `atualizadoPor {nome, code}` e `motivo` (spamov / pdf / estoque / manual). Chamado SOZINHO por
+  `carregarTabela` (extensão, PDF, retorno do APK) e por `aplicarEstoqueSpamov`. Estoque usa
+  `versao:false` (não enche `pdf_versions` com cópia de ~500 KB a cada leitura). O botão virou
+  "Enviar pra todos", pra qualquer conta — só reenvio, ex.: carregou sem internet.
+- Sem regra do Firebase no caminho: todo mundo entra anônimo, vendedor grava igual admin.
+- `mesclarTabela` (módulo) = a mescla que o `setProducts` sempre fez; quem carrega manda pra nuvem
+  exatamente o que ficou no aparelho dele (com `ativo:false` nos que saíram).
+- ⚠️ Quem RECEBE usa `receberTabelaNuvem`, não `setProducts`: o `setProducts` marcava tudo como ativo,
+  e produto que saiu da tabela voltava pras ofertas nos outros aparelhos.
+- `infoTabelaNuvem(data)` → "13/11 às 14:32 · por Fulano · tabela do SPAmov": na Tabela (onSnapshot,
+  ao vivo) e no aviso "📥 Tabela atualizada por…" de quem recebe (não aparece na 1ª abertura, `localMs > 0`).
+- Tamanho medido: ~430 KB (tabela) / ~500 KB (com estoque) — limite do documento Firestore é 1 MB.
+  Se a tabela crescer muito, vai precisar dividir o documento.
+- Testado com as gravações interceptadas (nada foi pra nuvem no teste): vendedor carrega → 1 set + 1
+  histórico com `atualizadoPor`; estoque → 1 set; receber → inativos respeitados, aviso aparece.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

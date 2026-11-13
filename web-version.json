@@ -1,10 +1,13 @@
 {
-    "version":  254,
-    "versao":  "2.50.1",
-    "data":  "11/11/2026",
+    "version":  255,
+    "versao":  "2.51.0",
+    "data":  "13/11/2026",
     "itens":  [
-                  "📦 A etiqueta de estoque agora mostra QUANTAS CAIXAS (ou peças, sacos…) estão disponíveis, com os kg do lado — ex.: \"📦 84 cx · 1.210 kg\". Nas listas apertadas aparece só \"📦 84 cx\"",
-                  "O número é o DISPONÍVEL lido da Procura de Ítens do SPAmov. Quando o estoque veio da Lista de Preços, aparece em \"un\"",
-                  "🐞 Item com caixas disponíveis mas sem peso conhecido mostrava \"estoque —\" e ficava de fora das campanhas. Agora mostra as caixas e entra normalmente"
+                  "📲 TABELA PRA TODO MUNDO NA HORA: quem carregar a tabela — pela extensão, pelo PDF ou pelo celular — já manda pra TODAS as contas, admin ou vendedor. Não precisa mais tocar em \"Distribuir\"",
+                  "📦 O estoque da Procura de Ítens também vai pra todos na hora",
+                  "🕒 Na tela da Tabela aparece \"✅ Última atualização: 13/11 às 14:32 · por Fulano · tabela do SPAmov\", e muda sozinho no instante em que alguém atualiza",
+                  "📥 Quem está com o Prumo aberto recebe um aviso: \"Tabela atualizada por Fulano — 13/11 às 14:32\"",
+                  "🔁 O antigo \"Distribuir Tabela\" (que só aparecia pra admin) virou \"Enviar pra todos\", pra qualquer um — serve pra reenviar se a tabela foi carregada sem internet",
+                  "🐞 Produto que saiu da tabela voltava como ativo nos outros aparelhos ao receber a tabela distribuída. Agora chega certo"
               ]
 }
