@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 258;
+        const APP_BUILD_VERSION = 259;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9570,6 +9570,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.53.0', data: '17/11/2026', areas: ['site'], itens: [
+                '📸 ESCOLHER FOTOS NO CATÁLOGO: botão "📸 Escolher fotos" mostra, pra cada produto sem foto, até 6 fotos achadas na internet. Toque na certa e ela já vai pro Catálogo de todo mundo — quem ver primeiro salva',
+                'Se nenhuma servir, toque em "🚫 Nenhuma serve" e o produto sai da lista (dá pra pôr foto pelo jeito normal)',
+                'A foto escolhida é centralizada num quadrado branco, sem cortar a embalagem',
+            ]},
             { versao: '2.52.2', data: '17/11/2026', areas: ['site'], itens: [
                 '✅ PDF DA TABELA DE PREÇOS com a coluna DISPONÍVEL: do lado do ESTOQUE aparece quantas caixas/peças estão disponíveis (ex.: "121 cx"), lido da Procura de Ítens do SPAmov',
                 'Item que a Procura de Ítens não trouxe sai com "—" nessa coluna',
@@ -10851,6 +10856,17 @@
             const [crop, setCrop] = useState(null); // { code, file } enquanto o modal de recorte está aberto
             // 🖼️ Modo "montar catálogo": toca no card pra marcar/desmarcar em vez de trocar a foto.
             const [modoCatalogo, setModoCatalogo] = useState(false);
+            // 📸 Sugestões de foto achadas na internet (fotos_sugestoes/{code}): a equipe escolhe a melhor
+            // e quem tocar primeiro salva pra todo mundo. Ao escolher (ou "nenhuma serve"), a sugestão some.
+            const [sugestoes, setSugestoes] = useState({});
+            const [modoSugestoes, setModoSugestoes] = useState(false);
+            useEffect(() => {
+                const unsub = db.collection('fotos_sugestoes').onSnapshot(snap => {
+                    const m = {}; snap.docs.forEach(d => { m[d.id] = d.data(); }); setSugestoes(m);
+                }, () => {});
+                return () => unsub();
+            }, []);
+            const pendentesFoto = useMemo(() => (products || []).filter(p => p.ativo !== false && sugestoes[String(p.code)] && !(produtoFotos && produtoFotos[String(p.code)])), [products, sugestoes, produtoFotos]);
             const [selecionados, setSelecionados] = useState(new Set());
             const [gerando, setGerando] = useState(false);
             const [posterUrls, setPosterUrls] = useState(null); // array de URLs, uma por página
@@ -10982,6 +10998,50 @@
                 } catch (e) { showMessage('Erro ao enviar a foto.', 'error'); }
                 finally { setEnviando(prev => { const n = { ...prev }; delete n[code]; return n; }); }
             };
+            // Baixa a foto sugerida (a grande; se o site dela bloquear, a miniatura do Bing) e centraliza
+            // num quadrado branco 800x800 — sem cortar a embalagem — antes de subir igual a uma foto normal.
+            const fotoQuadrada = (blob) => new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const L = 800, cv = document.createElement('canvas'); cv.width = L; cv.height = L;
+                    const ctx = cv.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, L, L);
+                    const s = Math.min(L / img.width, L / img.height);
+                    const w = img.width * s, h = img.height * s;
+                    ctx.drawImage(img, (L - w) / 2, (L - h) / 2, w, h);
+                    cv.toBlob(b => b ? resolve(b) : reject(new Error('falha ao montar a foto')), 'image/jpeg', 0.85);
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('imagem inválida')); };
+                img.src = url;
+            });
+            const baixarImagem = async (u) => {
+                if (!u) throw new Error('sem endereço');
+                const r = await fetch(u);
+                if (!r.ok) throw new Error('status ' + r.status);
+                const b = await r.blob();
+                if (!/^image\//.test(b.type) || b.size < 1500) throw new Error('não é imagem');
+                return b;
+            };
+            const usarSugestao = async (code, c) => {
+                code = String(code);
+                if (enviando[code]) return;
+                if (produtoFotos && produtoFotos[code]) { showMessage('Alguém já escolheu a foto desse produto. 👍', 'success'); return; }
+                setEnviando(prev => ({ ...prev, [code]: true }));
+                try {
+                    let bruto;
+                    try { bruto = await baixarImagem(c.img); } catch (e) { bruto = await baixarImagem(c.thumb); }
+                    const blob = await fotoQuadrada(bruto);
+                    await subirFotoBlob(code, blob);
+                    await db.collection('fotos_sugestoes').doc(code).delete().catch(() => {});
+                    showMessage('Foto salva! Todo mundo já vê. 📸', 'success');
+                } catch (e) { showMessage('Não consegui baixar essa foto. Tente outra.', 'error'); }
+                finally { setEnviando(prev => { const n = { ...prev }; delete n[code]; return n; }); }
+            };
+            const descartarSugestoes = async (code) => {
+                try { await db.collection('fotos_sugestoes').doc(String(code)).delete(); }
+                catch (e) { showMessage('Erro ao descartar.', 'error'); }
+            };
             const apagarFoto = async (code) => {
                 if (!window.confirm('Remover a foto desse produto?')) return;
                 setEnviando(prev => ({ ...prev, [code]: true }));
@@ -11100,8 +11160,9 @@
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                             <h1 className="text-2xl font-bold text-rose-800 flex items-center gap-2"><span>🍽️</span> Cardápio</h1>
                             <div className="flex flex-wrap gap-2">
+                                {pendentesFoto.length > 0 && <button onClick={() => { setModoSugestoes(v => !v); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoSugestoes ? 'bg-slate-900 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'}`}>{modoSugestoes ? '✕ Fechar sugestões' : '📸 Escolher fotos (' + pendentesFoto.length + ')'}</button>}
                                 <button onClick={() => abrirArteProduto({ code: 'avulso', name: '' })} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-sm">✨ Nova arte avulsa</button>
-                                <button onClick={() => { setModoCatalogo(v => !v); setSelecionados(new Set()); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoCatalogo ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+                                <button onClick={() => { setModoCatalogo(v => !v); setModoSugestoes(false); setSelecionados(new Set()); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoCatalogo ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
                                     {modoCatalogo ? '✕ Cancelar seleção' : '🖼️ Montar Catálogo'}
                                 </button>
                             </div>
@@ -11127,7 +11188,35 @@
                             </div>
                         )}
                     </header>
-                    {products.length === 0 ? (
+                    {modoSugestoes && (
+                        <div className="space-y-3">
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-sm text-emerald-900">
+                                <b>📸 {pendentesFoto.length} produto(s) esperando foto.</b> Toque na foto certa e ela já vai pro Catálogo de todo mundo. Se nenhuma servir, toque em "Nenhuma serve" — o produto sai daqui e pode receber foto pelo jeito normal.
+                            </div>
+                            {(busca.trim() ? filtrarProdutos(pendentesFoto, busca.trim()) : pendentesFoto).slice(0, 40).map(p => {
+                                const code = String(p.code); const s = sugestoes[code] || {}; const subindo = !!enviando[code];
+                                return (
+                                    <div key={code} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3">
+                                        <div className="flex items-baseline gap-2 mb-2">
+                                            <span className="text-[11px] font-mono font-bold text-slate-400">{code}</span>
+                                            <span className="text-sm font-bold text-slate-800 leading-tight">{p.name}</span>
+                                            {subindo && <span className="text-xs font-bold text-emerald-600">⏳ Salvando…</span>}
+                                        </div>
+                                        <div className="flex gap-2 overflow-x-auto pb-1">
+                                            {(s.c || []).map((c, i) => (
+                                                <button key={i} onClick={() => usarSugestao(code, c)} disabled={subindo} title={c.t} className="flex-shrink-0 w-28 rounded-xl border-2 border-slate-200 hover:border-emerald-500 bg-white p-1 disabled:opacity-50">
+                                                    <img src={c.thumb || c.img} alt={c.t || 'sugestão'} loading="lazy" className="w-full aspect-square object-contain rounded-lg" />
+                                                </button>
+                                            ))}
+                                            <button onClick={() => descartarSugestoes(code)} disabled={subindo} className="flex-shrink-0 w-28 rounded-xl border-2 border-dashed border-slate-300 hover:border-red-400 text-xs font-bold text-slate-500 hover:text-red-500 p-2">🚫 Nenhuma serve</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {pendentesFoto.length > 40 && <p className="text-center text-xs text-slate-400">Mostrando 40 — conforme escolher, aparecem os próximos. Dá pra usar a busca acima.</p>}
+                        </div>
+                    )}
+                    {modoSugestoes ? null : products.length === 0 ? (
                         <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-400">Carregue a Tabela do Dia primeiro pra ver os produtos aqui.</div>
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">

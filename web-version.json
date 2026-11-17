@@ -1,9 +1,10 @@
 {
-    "version":  258,
-    "versao":  "2.52.2",
+    "version":  259,
+    "versao":  "2.53.0",
     "data":  "17/11/2026",
     "itens":  [
-                  "✅ PDF DA TABELA DE PREÇOS com a coluna DISPONÍVEL: do lado do ESTOQUE aparece quantas caixas/peças estão disponíveis (ex.: \"121 cx\"), lido da Procura de Ítens do SPAmov",
-                  "Item que a Procura de Ítens não trouxe sai com \"—\" nessa coluna"
+                  "📸 ESCOLHER FOTOS NO CATÁLOGO: botão \"📸 Escolher fotos\" mostra, pra cada produto sem foto, até 6 fotos achadas na internet. Toque na certa e ela já vai pro Catálogo de todo mundo — quem ver primeiro salva",
+                  "Se nenhuma servir, toque em \"🚫 Nenhuma serve\" e o produto sai da lista (dá pra pôr foto pelo jeito normal)",
+                  "A foto escolhida é centralizada num quadrado branco, sem cortar a embalagem"
               ]
 }

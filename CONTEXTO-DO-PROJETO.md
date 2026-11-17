@@ -1010,6 +1010,12 @@ Queixa: vendedor carregava a tabela e ninguém recebia — o "Distribuir Tabela"
 
 - `gerarPdfTabelaPrecos`: nova coluna DISPONÍVEL (`disponivelTexto(p)` = `estoqueSpamov.disponivel` + unidade) entre ESTOQUE e À VISTA. PRODUTO encolheu de 98 pra 80 mm; `COL_AVISTA` = 6. Sem `estoqueSpamov` sai '—'.
 
+## 📸 Sugestões de foto no Catálogo (v2.53.0, 17/11)
+
+- Coleção `fotos_sugestoes/{code}` = {code, name, c:[{img, thumb, t}] (até 6), criadoEm}. Carregada em 17/11 com 378 produtos (com estoque >= 6, sem PLT/P.IND., sem foto), fotos achadas no Bing Imagens.
+- `CardapioScreen`: botão "📸 Escolher fotos (N)" (N = ativos sem foto com sugestão). Tocar numa foto: baixa `img` (ou `thumb` do Bing se o site bloquear CORS), centraliza em quadrado branco 800x800 (`fotoQuadrada`), `subirFotoBlob` e apaga a sugestão. "Nenhuma serve" só apaga a sugestão.
+- Pra recarregar sugestões: gerar a lista de novo e gravar em `fotos_sugestoes` (ver Downloads\fotos-catalogo\subir-sugestoes.html).
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
