@@ -1001,6 +1001,11 @@ Queixa: vendedor carregava a tabela e ninguém recebia — o "Distribuir Tabela"
 - Gerador: `gerarPdfRelatorioClientes(clientes, titulo, layout)` (perto de `gerarPdfConferenciaTabela`), A4 deitado, mesmo visual escuro (`pdfPintarPagina`/`pdfRodape`). Colunas: código, cliente/contato, CNPJ/CPF, endereço, bairro, cidade/UF, CEP. Ordem cidade → bairro → nome, vazios no fim.
 - Endereço tem link pro Google Maps (`doc.link`). Rodapé avisa que é relatório interno (tem CNPJ e endereço).
 - A função é genérica (recebe qualquer lista de clientes) — dá pra reaproveitar em outros filtros.
+## 🚫 Grupo 80 sem desconto por tempo indeterminado (v2.52.1, 17/11)
+
+- `BLOQUEIO_DESCONTO_PADRAO` agora tem `ate: ''` (sem fim). Também foi gravado `system_data/bloqueio_desconto = {ativo:true, grupos:['80'], ate:''}` na nuvem, que vale mais que o padrão e pega até quem está com versão velha.
+- Pra liberar: admin desliga em ⚙️ Configurações (ou põe uma data).
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

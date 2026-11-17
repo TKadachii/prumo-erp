@@ -1,11 +1,9 @@
 {
-    "version":  256,
-    "versao":  "2.52.0",
-    "data":  "13/11/2026",
+    "version":  257,
+    "versao":  "2.52.1",
+    "data":  "17/11/2026",
     "itens":  [
-                  "📵 RELATÓRIO DOS CLIENTES SEM TELEFONE: em Campanhas, no filtro \"📵 Sem número\", tem o botão \"📄 Baixar relatório (PDF)\"",
-                  "O PDF traz código, nome, contato, CNPJ/CPF, endereço, bairro, cidade/UF e CEP de cada cliente, em ordem de cidade e bairro pra montar a rota de visita",
-                  "📍 Tocar no endereço dentro do PDF abre o lugar no Google Maps",
-                  "Se tiver busca digitada, o PDF sai só com quem aparece na busca"
+                  "🚫 Grupo 80 continua SEM DESCONTO, agora sem data pra acabar — fica travado até um admin desligar em ⚙️ Configurações",
+                  "O aviso passa a dizer \"sem desconto até segunda ordem\""
               ]
 }
