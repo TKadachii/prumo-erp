@@ -1006,6 +1006,10 @@ Queixa: vendedor carregava a tabela e ninguém recebia — o "Distribuir Tabela"
 - `BLOQUEIO_DESCONTO_PADRAO` agora tem `ate: ''` (sem fim). Também foi gravado `system_data/bloqueio_desconto = {ativo:true, grupos:['80'], ate:''}` na nuvem, que vale mais que o padrão e pega até quem está com versão velha.
 - Pra liberar: admin desliga em ⚙️ Configurações (ou põe uma data).
 
+## ✅ Coluna DISPONÍVEL no PDF da Tabela de Preços (v2.52.2, 17/11)
+
+- `gerarPdfTabelaPrecos`: nova coluna DISPONÍVEL (`disponivelTexto(p)` = `estoqueSpamov.disponivel` + unidade) entre ESTOQUE e À VISTA. PRODUTO encolheu de 98 pra 80 mm; `COL_AVISTA` = 6. Sem `estoqueSpamov` sai '—'.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

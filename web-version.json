@@ -1,9 +1,9 @@
 {
-    "version":  257,
-    "versao":  "2.52.1",
+    "version":  258,
+    "versao":  "2.52.2",
     "data":  "17/11/2026",
     "itens":  [
-                  "🚫 Grupo 80 continua SEM DESCONTO, agora sem data pra acabar — fica travado até um admin desligar em ⚙️ Configurações",
-                  "O aviso passa a dizer \"sem desconto até segunda ordem\""
+                  "✅ PDF DA TABELA DE PREÇOS com a coluna DISPONÍVEL: do lado do ESTOQUE aparece quantas caixas/peças estão disponíveis (ex.: \"121 cx\"), lido da Procura de Ítens do SPAmov",
+                  "Item que a Procura de Ítens não trouxe sai com \"—\" nessa coluna"
               ]
 }

@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 257;
+        const APP_BUILD_VERSION = 258;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -3843,16 +3843,25 @@
             // levava pro PDF. Sem ela não dá pra montar cotação olhando só o papel: você escolhe um
             // item e descobre depois que não tem quilo pra atender.
             const COLS = [
-                { t: 'CÓD.', x: 10, w: 14 },  { t: 'PRODUTO', x: 24, w: 98 },
-                { t: 'TIPO', x: 122, w: 9 },  { t: 'PESO', x: 131, w: 15 },
-                { t: 'ESTOQUE', x: 146, w: 26, dir: true },
+                { t: 'CÓD.', x: 10, w: 14 },  { t: 'PRODUTO', x: 24, w: 80 },
+                { t: 'TIPO', x: 104, w: 9 },  { t: 'PESO', x: 113, w: 15 },
+                { t: 'ESTOQUE', x: 128, w: 26, dir: true },
+                // ✅ DISPONÍVEL = coluna Disponível da Procura de Ítens do SPAmov (estoqueSpamov), na
+                // unidade de movimento ("84 CX"). Sem a leitura da Procura de Ítens, sai "—".
+                { t: 'DISPONÍVEL', x: 154, w: 18, dir: true },
                 { t: 'À VISTA', x: 172, w: 16, dir: true }, { t: 'CARTÃO', x: 188, w: 15, dir: true },
                 { t: '7 DIAS', x: 203, w: 12, dir: true },  { t: '14 DIAS', x: 215, w: 12, dir: true },
                 { t: '21 DIAS', x: 227, w: 12, dir: true }, { t: '28 DIAS', x: 239, w: 12, dir: true },
                 { t: '30 DIAS', x: 251, w: 12, dir: true }, { t: '35 DIAS', x: 263, w: 12, dir: true },
                 { t: '45 DIAS', x: 275, w: 12, dir: true },
             ];
-            const COL_AVISTA = 5;   // índice da coluna destacada (mudou ao entrar o ESTOQUE)
+            const disponivelTexto = (p) => {
+                const es = p && p.estoqueSpamov;
+                if (!es || es.disponivel == null || es.disponivel === '') return '—';
+                const n = Math.max(0, Number(es.disponivel) || 0);
+                return n.toLocaleString('pt-BR') + ' ' + String(es.un || 'un').toLowerCase();
+            };
+            const COL_AVISTA = 6;   // índice da coluna destacada (mudou ao entrar o ESTOQUE e o DISPONÍVEL)
             const ALTURA = 5.4;
             let y = 0;
             const cabecalho = () => {
@@ -3895,13 +3904,13 @@
                 doc.setDrawColor(...L.linha); doc.setLineWidth(0.2); doc.line(10, y + altura, 287, y + altura);
                 const pz = p.precosPrazo || {};
                 const vals = [String(p.code), p.name, String(p.tipo || ''), String(p.pesoItem || ''),
-                              estoqueTexto(p.kgUn),
+                              estoqueTexto(p.kgUn), disponivelTexto(p),
                               brl(p.originalPrice), brl(p.precoCartao),
                               brl(pz[7]), brl(pz[14]), brl(pz[21]), brl(pz[28]), brl(pz[30]), brl(pz[35]), brl(pz[45])];
                 const base = y + 3.7;
                 COLS.forEach((c, k) => {
                     const destaque = k === COL_AVISTA; // à vista em destaque: é o preço de referência de toda venda
-                    const ehEstoque = k === 4;
+                    const ehEstoque = k === 4 || k === 5;
                     doc.setFont('helvetica', destaque || ehEstoque || k <= 1 ? 'bold' : 'normal');
                     doc.setFontSize(destaque || k === 0 ? 8 : 7.5); // código maior e claro: é o que se procura no Ctrl+F
                     doc.setTextColor(...(destaque ? L.destaque : ehEstoque ? L.desce : k === 0 ? L.cod : (k === 1 || k > COL_AVISTA) ? L.texto : L.suave));
@@ -9561,6 +9570,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.52.2', data: '17/11/2026', areas: ['site'], itens: [
+                '✅ PDF DA TABELA DE PREÇOS com a coluna DISPONÍVEL: do lado do ESTOQUE aparece quantas caixas/peças estão disponíveis (ex.: "121 cx"), lido da Procura de Ítens do SPAmov',
+                'Item que a Procura de Ítens não trouxe sai com "—" nessa coluna',
+            ]},
             { versao: '2.52.1', data: '17/11/2026', areas: ['site'], itens: [
                 '🚫 Grupo 80 continua SEM DESCONTO, agora sem data pra acabar — fica travado até um admin desligar em ⚙️ Configurações',
                 'O aviso passa a dizer "sem desconto até segunda ordem"',
