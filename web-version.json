@@ -1,12 +1,10 @@
 {
-    "version":  260,
-    "versao":  "2.54.0",
+    "version":  261,
+    "versao":  "2.55.0",
     "data":  "24/11/2026",
     "itens":  [
-                  "🔄 OFERTA POR TIPO DE COMÉRCIO AUTOMÁTICA: Padaria, Açougue, Mercado, Restaurante, Pizzaria e Lanchonete agora mostram sozinhos só os itens com 6 ou mais disponíveis no estoque de hoje",
-                  "A lista se atualiza assim que a extensão da Friganso manda o estoque novo — item que acabou sai, item que chegou entra",
-                  "Palete (PLT) e produto de indústria nunca entram na oferta",
-                  "\"⚙️ Ajustar itens deste perfil\" continua valendo: o que você tirar fica fora e o que adicionar entra sempre que tiver estoque",
-                  "As sugestões das Campanhas do WhatsApp usam a mesma lista automática"
+                  "📸 FOTOS DO CATÁLOGO: 359 produtos ganharam foto (escolhidas entre as sugestões da internet). Elas ficam no próprio site, sem depender do Firebase",
+                  "\"📷 Adicionar foto\" voltou a funcionar: o Firebase Storage tinha passado a recusar fotos novas (limite do plano grátis). Agora a foto fica salva no banco do Prumo",
+                  "A lista \"📸 Escolher fotos\" zerou — todos os itens já foram resolvidos"
               ]
 }

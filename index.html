@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 260;
+        const APP_BUILD_VERSION = 261;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9650,6 +9650,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.55.0', data: '24/11/2026', areas: ['site'], itens: [
+                '📸 FOTOS DO CATÁLOGO: 359 produtos ganharam foto (escolhidas entre as sugestões da internet). Elas ficam no próprio site, sem depender do Firebase',
+                '"📷 Adicionar foto" voltou a funcionar: o Firebase Storage tinha passado a recusar fotos novas (limite do plano grátis). Agora a foto fica salva no banco do Prumo',
+                'A lista "📸 Escolher fotos" zerou — todos os itens já foram resolvidos',
+            ] },
             { versao: '2.54.0', data: '24/11/2026', areas: ['site'], itens: [
                 '🔄 OFERTA POR TIPO DE COMÉRCIO AUTOMÁTICA: Padaria, Açougue, Mercado, Restaurante, Pizzaria e Lanchonete agora mostram sozinhos só os itens com 6 ou mais disponíveis no estoque de hoje',
                 'A lista se atualiza assim que a extensão da Friganso manda o estoque novo — item que acabou sai, item que chegou entra',
@@ -10488,10 +10493,39 @@
         });
         // 📤 Sobe um blob (já cortado/comprimido pelo CropFotoModal) pro Firebase Storage (foto grande, pra
         // exibir normal) e salva também uma miniatura base64 num doc por produto (só pro catálogo).
+        // 🔁 v2.55.0 (24/11/2026): o Firebase Storage do projeto passou a recusar envio ("quota exceeded",
+        // plano gratuito) e o dono não quer pagar Storage. A foto agora vai pro FIRESTORE, como texto
+        // base64, num doc por produto: `produto_fotos_img/{code}` = { data, em }. No mapa de fotos fica
+        // "fs:{code}:{carimbo}" e o App troca isso pela imagem na hora de mostrar (ver FOTO_FS_PREFIXO).
+        // As 359 fotos da internet ficam no próprio site (pasta fotos/ do GitHub) e não passam por aqui.
+        const FOTO_FS_PREFIXO = 'fs:';
+        // Enquanto a foto do Firestore não chega, mostra um quadrado cinza (o item continua "com foto").
+        const FOTO_CARREGANDO = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="#e5e7eb"/></svg>');
+        const blobParaDataUrlLimitado = (blob, maxDim = 640, maxChars = 700000) => new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                const s = Math.min(1, maxDim / Math.max(img.width, img.height));
+                const cv = document.createElement('canvas');
+                cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
+                const ctx = cv.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+                ctx.drawImage(img, 0, 0, cv.width, cv.height);
+                // Doc do Firestore aguenta 1 MB: baixa a qualidade até caber com folga.
+                for (const q of [0.82, 0.7, 0.55, 0.4]) {
+                    const d = cv.toDataURL('image/jpeg', q);
+                    if (d.length <= maxChars) return resolve(d);
+                }
+                reject(new Error('foto grande demais'));
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('imagem inválida')); };
+            img.src = url;
+        });
         const subirFotoBlob = async (code, blob) => {
-            const ref = storage.ref().child('produto-fotos/' + code + '.jpg');
-            await ref.put(blob, { contentType: 'image/jpeg' });
-            const url = await ref.getDownloadURL();
+            code = String(code);
+            const data = await blobParaDataUrlLimitado(blob);
+            await db.collection('produto_fotos_img').doc(code).set({ data, em: new Date() });
+            const url = FOTO_FS_PREFIXO + code + ':' + Date.now();
             await db.collection('system_data').doc('produto_fotos').set({ fotos: { [code]: url } }, { merge: true });
             try {
                 const thumb = await gerarThumbBase64(blob);
@@ -10501,6 +10535,7 @@
         };
         const removerFotoProduto = async (code) => {
             try { await storage.ref().child('produto-fotos/' + code + '.jpg').delete(); } catch (e) {}
+            await db.collection('produto_fotos_img').doc(String(code)).delete().catch(() => {});
             await db.collection('system_data').doc('produto_fotos').update({ ['fotos.' + code]: firebase.firestore.FieldValue.delete() }).catch(() => {});
             await db.collection('produto_fotos_thumbs').doc(String(code)).delete().catch(() => {});
         };
@@ -14686,13 +14721,38 @@
             };
 
             // 🍽️ Fotos do Cardápio — compartilhadas na nuvem (qualquer conta pode subir/trocar).
-            const [produtoFotos, setProdutoFotos] = useState({});
+            const [fotosBrutas, setFotosBrutas] = useState({});
             useEffect(() => {
                 const unsub = db.collection('system_data').doc('produto_fotos').onSnapshot(d => {
-                    setProdutoFotos((d && d.exists && d.data() && d.data().fotos) || {});
+                    setFotosBrutas((d && d.exists && d.data() && d.data().fotos) || {});
                 }, () => {});
                 return () => unsub();
             }, []);
+            // 🔁 v2.55.0: fotos salvas no Firestore ("fs:{code}:{carimbo}") viram a imagem de verdade aqui,
+            // assim TODAS as telas (Cardápio, Catálogo, Arte) continuam recebendo um `src` que funciona.
+            const [fotosFs, setFotosFs] = useState({}); // { "fs:...": dataURL }
+            useEffect(() => {
+                const faltam = Object.values(fotosBrutas).filter(v => typeof v === 'string' && v.startsWith(FOTO_FS_PREFIXO) && !fotosFs[v]);
+                if (!faltam.length) return;
+                let vivo = true;
+                Promise.all(faltam.map(async v => {
+                    const code = v.slice(FOTO_FS_PREFIXO.length).split(':')[0];
+                    try { const d = await db.collection('produto_fotos_img').doc(code).get(); return [v, d.exists ? d.data().data : null]; }
+                    catch (e) { return [v, null]; }
+                })).then(pares => {
+                    if (!vivo) return;
+                    const novos = {}; pares.forEach(([v, data]) => { if (data) novos[v] = data; });
+                    if (Object.keys(novos).length) setFotosFs(prev => ({ ...prev, ...novos }));
+                });
+                return () => { vivo = false; };
+            }, [fotosBrutas]);
+            const produtoFotos = useMemo(() => {
+                const out = {};
+                Object.entries(fotosBrutas).forEach(([code, v]) => {
+                    out[code] = (typeof v === 'string' && v.startsWith(FOTO_FS_PREFIXO)) ? (fotosFs[v] || FOTO_CARREGANDO) : v;
+                });
+                return out;
+            }, [fotosBrutas, fotosFs]);
 
             // 📋 Rodapé de contato do Gerador de Catálogo — editável (mudar/excluir/adicionar linhas),
             // compartilhado na nuvem, com um padrão inicial caso ninguém tenha configurado ainda.

@@ -1033,6 +1033,17 @@ a extensão da Friganso manda o estoque. Antes cada perfil era lista FIXA em `of
 - Mercearia perdeu as palavras 'caixa' e 'cx ' (pegavam a tabela inteira) e ganhou cortes/embutidos.
 - Campanhas (vitrine do dia) usa a mesma lista automática; se sobrar < 5, cai no comportamento antigo.
 
+## 📸 v2.55.0 (24/11/2026) — Fotos sem Firebase Storage
+- O Firebase Storage do projeto recusa envio ("storage/quota-exceeded", plano gratuito) e o dono NÃO
+  quer pagar/ativar Blaze. Nunca mais depender de Storage pra foto.
+- As 359 fotos escolhidas das sugestões estão no repo em `fotos/{code}.jpg` (800x800, fundo branco) e
+  `system_data/produto_fotos.fotos[code] = https://tkadachii.github.io/prumo-erp/fotos/{code}.jpg`.
+  `fotos_sugestoes` foi zerada. Escolhas/dados de origem: `Downloads\fotos-catalogo\` no PC do dono.
+- Foto nova pelo site (`subirFotoBlob`): vai pro Firestore `produto_fotos_img/{code} = {data (dataURL
+  JPEG ≤640px, ≤700k chars), em}` e o mapa recebe `"fs:{code}:{carimbo}"`. O App (`fotosBrutas` →
+  `produtoFotos`) troca esse valor pela imagem; enquanto carrega mostra `FOTO_CARREGANDO`.
+  `removerFotoProduto` apaga também o doc de `produto_fotos_img`. Miniatura continua em `produto_fotos_thumbs`.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
