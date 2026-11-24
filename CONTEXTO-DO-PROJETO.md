@@ -1065,8 +1065,10 @@ idem, então o ganho é de menu/tela: no app (`isCapacitor`) somem "Importar ven
 rota mostra `SoNoPcAviso`), os cartões "Aplicativo Mobile/Desktop" e "Extensão do Chrome" em Minha
 conta e a nota da extensão no Login do SPAmov (o login fica: o app usa no SpamovActivity).
 Ficaram no app (funcionam no celular): Tabela (PDF), Leads, Clientes, Campanhas (balão), etc.
-⚠️ Ainda usa Firebase Storage (cota estourada): anexo de prova da `ConferenciaPedidoModal`
-(`provas-pedido/...`) — vai falhar enquanto não migrar pro Firestore.
+(v2.58.0) A prova da `ConferenciaPedidoModal` saiu do Storage: vai pra `provas_pedido/{id}` =
+{data (dataURL), tipo, nome, em}, venda guarda `prova.url = "fs-prova:{id}"`; arquivo máx. ~720 KB.
+`ProvaVisor` mostra a prova no Histórico (antes nenhuma tela mostrava). Prova antiga (link do
+Storage) abre direto. Nada mais do site grava no Firebase Storage.
 
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço

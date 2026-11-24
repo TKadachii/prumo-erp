@@ -1,8 +1,9 @@
 {
-    "version":  264,
-    "versao":  "2.57.1",
+    "version":  265,
+    "versao":  "2.58.0",
     "data":  "24/11/2026",
     "itens":  [
-                  "🔧 Catálogo: a janela de detalhes do produto e a de recorte de foto agora abrem por cima de tudo — no zoom 100% o menu e a barra de cima cobriam e cortavam o nome do produto"
+                  "📎 Conferência de pedido: o print/áudio de prova voltou a funcionar — agora fica salvo no banco do Prumo (o Firebase Storage estava sem espaço e recusava o envio)",
+                  "📎 Histórico de vendas: pedido com prova ganha a etiqueta \"📎 prova\" e, ao abrir, o botão \"Ver prova\" mostra o print ou toca o áudio — pra mostrar pro supervisor se cobrarem"
               ]
 }

@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 264;
+        const APP_BUILD_VERSION = 265;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -2942,6 +2942,39 @@
             catch (e) { showMessage && showMessage('Não consegui copiar. Tente de novo.', 'error'); }
         };
 
+        // 📎 Mostra a prova da Conferência de pedido dentro do Histórico (v2.58.0 — antes ela era gravada
+        // junto da venda mas nenhuma tela mostrava). Prova nova está no Firestore ("fs-prova:{id}" →
+        // provas_pedido/{id}.data); prova antiga é link do Firebase Storage e abre direto.
+        // Fora do HistoricoScreen de propósito (componente dentro de componente remonta a cada render).
+        const ProvaVisor = ({ prova }) => {
+            const [src, setSrc] = useState(null);
+            const [carregando, setCarregando] = useState(false);
+            const [erro, setErro] = useState('');
+            const url = prova.url || '';
+            const abrir = async () => {
+                if (!url) return;
+                if (!url.startsWith('fs-prova:')) { setSrc(url); return; }
+                setCarregando(true); setErro('');
+                try {
+                    const d = await db.collection('provas_pedido').doc(url.slice('fs-prova:'.length)).get();
+                    if (d.exists && d.data().data) setSrc(d.data().data); else setErro('Prova não encontrada.');
+                } catch (e) { setErro('Não consegui abrir a prova.'); }
+                setCarregando(false);
+            };
+            return (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-bold">📎 Prova do pedido — {prova.tipo === 'print' ? 'print da conversa' : prova.tipo === 'audio' ? 'áudio do cliente' : 'foi por ligação'}{prova.ts ? ' · ' + new Date(prova.ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                        {url && !src && <button onClick={abrir} disabled={carregando} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold">{carregando ? 'Abrindo...' : 'Ver prova'}</button>}
+                    </div>
+                    {prova.anotacao && <p className="mt-1">“{prova.anotacao}”</p>}
+                    {erro && <p className="mt-1 text-rose-600 font-bold">{erro}</p>}
+                    {src && prova.tipo === 'print' && <img src={src} alt="prova" className="mt-2 rounded-lg border border-emerald-200 max-h-96" />}
+                    {src && prova.tipo === 'audio' && <audio src={src} controls className="mt-2 w-full" />}
+                </div>
+            );
+        };
+
         const HistoricoScreen = ({ user, showMessage }) => {
             const [purchases, setPurchases] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -3107,6 +3140,7 @@
                                         {p.via && <Badge>via {p.via}</Badge>}
                                         {dono === 'lix' && <Badge cor="bg-slate-800 text-white">🗑️ removido {p.removidoEm ? new Date(p.removidoEm).toLocaleDateString('pt-BR') : ''}{p.removidoPor ? ' por ' + p.removidoPor : ''}</Badge>}
                                         {p.editadoEm && <Badge cor="bg-amber-50 text-amber-700">✏️ editado {new Date(p.editadoEm).toLocaleDateString('pt-BR')}</Badge>}
+                                        {p.prova && p.prova.tipo && p.prova.tipo !== 'pulado' && <Badge cor="bg-emerald-50 text-emerald-700">📎 prova: {p.prova.tipo === 'print' ? 'print' : p.prova.tipo === 'audio' ? 'áudio' : 'ligação'}</Badge>}
                                     </div>
                                 </div>
                             </div>
@@ -3117,6 +3151,7 @@
                         </button>
                         {aberto && (
                             <div className="border-t border-slate-100 p-4 bg-slate-50 overflow-x-auto space-y-3">
+                                {p.prova && p.prova.tipo && p.prova.tipo !== 'pulado' && <ProvaVisor prova={p.prova} />}
                                 <table className="w-full text-xs min-w-[480px]">
                                     <thead>
                                         <tr className="text-slate-400 text-left">
@@ -4785,9 +4820,12 @@
         // aparece grande e por inteiro na tela, e o upload fica embaixo. Se um dia alguém quiser
         // "simplificar" isso escondendo o resumo, o mecanismo perde a razão de existir.
         //
-        // A prova sobe pro Firebase Storage e o link fica gravado junto da venda em `purchases`,
+        // A prova sobe pro Firestore (provas_pedido; até a v2.57 era Firebase Storage) e o link fica gravado junto da venda em `purchases`,
         // então também serve de defesa se o supervisor cobrar depois.
         // ═══════════════════════════════════════════════════════════════════════════════════════
+        // Prova no Firestore (v2.58.0): doc tem limite de 1 MB → dataURL até ~980 mil caracteres.
+        const PROVA_FS_PREFIXO = 'fs-prova:';
+        const PROVA_MAX_CHARS = 980000;
         const CONFERENCIA_KEY = 'friganso_conferencia_pedido';
         const CONFERENCIA_PULOS = 'friganso_conferencia_pulos';
         const lerConferenciaAtiva = () => { try { return window.localStorage.getItem(CONFERENCIA_KEY) === '1'; } catch (e) { return false; } };
@@ -4851,7 +4889,9 @@
                 e.target.value = '';
                 if (!f) return;
                 const b = qual === 'print' ? await comprimirPrint(f) : f;
-                if (b.size > 15 * 1024 * 1024) { showMessage('Arquivo muito grande (máx. 15 MB).', 'error'); return; }
+                // Limite do Firestore (~730 KB de arquivo). Print já vem comprimido; áudio do WhatsApp
+                // tem uns 10–20 KB por minuto, então só barra gravação muito longa.
+                if (b.size > 720 * 1024) { showMessage(qual === 'print' ? 'Esse print ficou grande demais. Tente um print menor.' : 'Áudio grande demais (máx. ~700 KB, uns 5 min de áudio do WhatsApp).', 'error'); return; }
                 setArquivo({ blob: b, nome: f.name, qual });
                 if (previewUrl) { try { URL.revokeObjectURL(previewUrl); } catch (er) {} }
                 setPreviewUrl(URL.createObjectURL(b));
@@ -4864,12 +4904,14 @@
                 try {
                     let url = '';
                     if (arquivo) {
-                        const ext = arquivo.qual === 'print' ? '.jpg' : (/\.(\w{2,5})$/.exec(arquivo.nome || '') || [, 'ogg'])[1];
-                        const caminho = 'provas-pedido/' + hojeStr().slice(0, 7) + '/' + Date.now() + '_' + Math.floor(Math.random() * 10000) +
-                                        (arquivo.qual === 'print' ? '.jpg' : '.' + ext);
-                        const ref = storage.ref().child(caminho);
-                        await ref.put(arquivo.blob, { contentType: arquivo.blob.type || (arquivo.qual === 'print' ? 'image/jpeg' : 'audio/ogg') });
-                        url = await ref.getDownloadURL();
+                        // v2.58.0: o Firebase Storage está sem cota (e não vai ser pago) — a prova vai pro
+                        // Firestore em `provas_pedido/{id}` = { data (dataURL), tipo, nome, em } e a venda
+                        // guarda "fs-prova:{id}". Prova antiga (link do Storage) continua abrindo normal.
+                        const data = await new Promise((ok, erro) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => erro(new Error('não consegui ler o arquivo')); fr.readAsDataURL(arquivo.blob); });
+                        if (data.length > PROVA_MAX_CHARS) throw new Error(arquivo.qual === 'print' ? 'o print ficou grande demais' : 'o áudio é grande demais (máx. uns 5 minutos de áudio do WhatsApp)');
+                        const id = hojeStr() + '_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+                        await db.collection('provas_pedido').doc(id).set({ data, tipo: arquivo.qual, nome: arquivo.nome || '', em: new Date() });
+                        url = PROVA_FS_PREFIXO + id;
                     }
                     onConfirmar({ tipo: tipo || 'ligacao', url, anotacao: anotacao.trim(), ts: Date.now() });
                 } catch (err) {
@@ -9663,6 +9705,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.58.0', data: '24/11/2026', areas: ['site'], itens: [
+                '📎 Conferência de pedido: o print/áudio de prova voltou a funcionar — agora fica salvo no banco do Prumo (o Firebase Storage estava sem espaço e recusava o envio)',
+                '📎 Histórico de vendas: pedido com prova ganha a etiqueta "📎 prova" e, ao abrir, o botão "Ver prova" mostra o print ou toca o áudio — pra mostrar pro supervisor se cobrarem',
+            ] },
             { versao: '2.57.1', data: '24/11/2026', areas: ['site'], itens: [
                 '🔧 Catálogo: a janela de detalhes do produto e a de recorte de foto agora abrem por cima de tudo — no zoom 100% o menu e a barra de cima cobriam e cortavam o nome do produto',
             ] },
