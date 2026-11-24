@@ -1,12 +1,9 @@
 {
-    "version":  262,
-    "versao":  "2.56.0",
+    "version":  263,
+    "versao":  "2.57.0",
     "data":  "24/11/2026",
     "itens":  [
-                  "🎨 ESTÚDIO DE ARTES (só no PC): editor estilo Canva no Catálogo. Modelos prontos (Oferta do dia, Vários produtos, Natal), produto com foto + preço de hoje num clique, textos, selos, formas, fundos, desfazer, baixar PNG e copiar pro WhatsApp Web",
-                  "As artes salvas no Estúdio ficam na nuvem pra toda a equipe; \"🔄 Atualizar preços\" troca os preços pela tabela do dia",
-                  "🔎 Tocar no produto do Catálogo agora abre os DETALHES: foto grande, preços (à vista, cartão, a prazo), estoque e as ações de foto",
-                  "✂️ \"Editar capa\" reenquadra a foto atual (dá pra encaixar a embalagem inteira com fundo branco) e 🙋 \"Pedir troca de foto\" avisa a equipe — o pedido some sozinho quando alguém salva foto nova",
-                  "No app de celular o Estúdio mostra o aviso \"só no PC\" e o editor nem é baixado, pra não pesar"
+                  "📱 App mais enxuto: no celular saíram as coisas que só funcionam no computador — \"Importar vendas\" (usa a extensão do Chrome), o cartão da extensão e o de instalar app/baixar programa em Minha conta",
+                  "No PC continua tudo igual"
               ]
 }

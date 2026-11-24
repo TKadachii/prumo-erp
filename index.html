@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 262;
+        const APP_BUILD_VERSION = 263;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -1810,10 +1810,23 @@
                         <button onClick={abrirELogar} className="flex-1 min-w-[180px] bg-rose-700 hover:bg-rose-800 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"><span>🚀</span> Abrir SPAmov e Logar</button>
                         <button onClick={salvar} className="bg-white border-2 border-slate-200 hover:border-rose-400 text-slate-700 font-bold py-3 px-5 rounded-xl transition-colors">💾 Salvar</button>
                     </div>
-                    <p className="text-[11px] text-slate-400">A extensão precisa estar instalada e com acesso aos sites. Ao clicar em "Abrir e Logar", a página do SPAmov abre e a extensão preenche e clica em <b>Log In</b>.</p>
+                    {!isCapacitor && <p className="text-[11px] text-slate-400">A extensão precisa estar instalada e com acesso aos sites. Ao clicar em "Abrir e Logar", a página do SPAmov abre e a extensão preenche e clica em <b>Log In</b>.</p>}
                 </div>
             );
         };
+
+        // 🖥️ Tela de "isso é só no PC" (v2.57.0) — aparece no app Android quando se chega numa função de
+        // computador por algum atalho (o item do menu já some no app).
+        const SoNoPcAviso = ({ titulo, motivo }) => (
+            <div className="flex items-center justify-center min-h-[50vh] p-4">
+                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 max-w-sm text-center">
+                    <div className="text-5xl mb-2">🖥️</div>
+                    <h3 className="text-lg font-black text-slate-800">{titulo} — só no PC</h3>
+                    <p className="text-sm text-slate-500 mt-2">{motivo}</p>
+                    <p className="text-xs text-slate-400 mt-3">Abra o Prumo no computador: tkadachii.github.io/prumo-erp</p>
+                </div>
+            </div>
+        );
 
         const ProfileAdminScreen = ({ user, showMessage, setActiveRoute }) => {
             // 📇 Portfólio do vendedor — dados extras (cargo/tempo de casa/especialidades/whatsapp) pra
@@ -2013,8 +2026,8 @@
                         )}
                     </div>
 
-                    {/* Card de instalação do app */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+                    {/* Card de instalação do app — no próprio app Android não faz sentido (já está instalado). */}
+                    {!isCapacitor && <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
                         <h3 className="text-base font-bold text-slate-800 mb-1">Aplicativo Mobile / Desktop</h3>
                         <p className="text-sm text-slate-500 mb-4">Instale o Prumo ERP no seu dispositivo para acesso rápido, mesmo sem internet.</p>
                         <div className="flex flex-wrap gap-3 items-center">
@@ -2049,10 +2062,10 @@
                                 <span className="prumo-apk-download-arrow">↓</span>
                             </a>
                         </div>
-                    </div>
+                    </div>}
 
-                    {/* Card da Extensão do Chrome (SPAmov -> Resumo) */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+                    {/* Card da Extensão do Chrome (SPAmov -> Resumo) — extensão só existe no Chrome do PC. */}
+                    {!isCapacitor && <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
                         <div className="flex items-start gap-3 mb-1">
                             <span className="text-2xl">🔌</span>
                             <div>
@@ -2077,7 +2090,7 @@
                             <p>3. Clique em <b>Carregar sem compactação</b> e escolha a pasta descompactada.</p>
                             <p>4. No SPAmov, libere o acesso ao site e use o botão <b>📋 Enviar pro Prumo ERP</b>.</p>
                         </div>
-                    </div>
+                    </div>}
 
                     {user.role === 'admin' && (
                         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
@@ -9650,6 +9663,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.57.0', data: '24/11/2026', areas: ['site'], itens: [
+                '📱 App mais enxuto: no celular saíram as coisas que só funcionam no computador — "Importar vendas" (usa a extensão do Chrome), o cartão da extensão e o de instalar app/baixar programa em Minha conta',
+                'No PC continua tudo igual',
+            ] },
             { versao: '2.56.0', data: '24/11/2026', areas: ['site'], itens: [
                 '🎨 ESTÚDIO DE ARTES (só no PC): editor estilo Canva no Catálogo. Modelos prontos (Oferta do dia, Vários produtos, Natal), produto com foto + preço de hoje num clique, textos, selos, formas, fundos, desfazer, baixar PNG e copiar pro WhatsApp Web',
                 'As artes salvas no Estúdio ficam na nuvem pra toda a equipe; "🔄 Atualizar preços" troca os preços pela tabela do dia',
@@ -15737,7 +15754,7 @@
                     case 'fila': return <FilaScreen showMessage={showMessage} setActiveRoute={setActiveRoute} products={products} clients={clients} user={user} />;
                     case 'historico': return <HistoricoScreen user={user} showMessage={showMessage} />;
                     case 'vendidos': return <VendidosScreen showMessage={showMessage} />;
-                    case 'importarVendas': return <RelatorioVendasScreen user={user} clients={clients} showMessage={showMessage} />;
+                    case 'importarVendas': return isCapacitor ? <SoNoPcAviso titulo="Importar vendas" motivo="A importação lê os pedidos direto do SPAmov pela extensão do Chrome, que só existe no computador." /> : <RelatorioVendasScreen user={user} clients={clients} showMessage={showMessage} />;
                     case 'orcamentos': return <OrcamentosScreen products={products} showMessage={showMessage} activeRoute={activeRoute} listaNegra={listaNegra} />;
                     case 'disparos': return <DisparosScreen clients={clients} products={products} user={user} showMessage={showMessage} setActiveRoute={setActiveRoute} listaNegra={listaNegra} />;
                     case 'pedido': return <FazerPedidoScreen products={products} clients={clients} user={user} showMessage={showMessage} />;
@@ -15948,7 +15965,8 @@
                             <NavButton route="fila" icon={IconReceipt} label="Fila de pedidos" />
                             <NavButton route="historico" icon={IconFileText} label="Histórico de vendas" />
                             <NavButton route="vendidos" icon={IconTag} label="Produtos vendidos" />
-                            <NavButton route="importarVendas" icon={IconCloudUpload} label="Importar vendas" />
+                            {/* 🖥️ Só PC (v2.57.0): a importação lê o SPAmov pela extensão do Chrome — no app não tem como. */}
+                            {!isCapacitor && <NavButton route="importarVendas" icon={IconCloudUpload} label="Importar vendas" />}
                             <NavButton route="orcamentos" icon={IconWhatsApp} label="Criar ofertas" />
                             <NavButton route="disparos" icon={IconWhatsApp} label="Campanhas WhatsApp" />
 

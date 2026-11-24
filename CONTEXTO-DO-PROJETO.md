@@ -1059,6 +1059,15 @@ a extensão da Friganso manda o estoque. Antes cada perfil era lista FIXA em `of
   Botão "🙋 Pedidos de troca (N)" filtra o grid. `CropFotoModal` agora aceita zoom < 1 (foto inteira
   com fundo branco) e `titulo`.
 
+## 📱 v2.57.0 (24/11/2026) — Coisas só-de-PC fora do APK
+Revisão pedida pelo usuário. Bibliotecas pesadas já eram sob demanda (`window.prumoLib`) e o Estúdio
+idem, então o ganho é de menu/tela: no app (`isCapacitor`) somem "Importar vendas" (usa a extensão;
+rota mostra `SoNoPcAviso`), os cartões "Aplicativo Mobile/Desktop" e "Extensão do Chrome" em Minha
+conta e a nota da extensão no Login do SPAmov (o login fica: o app usa no SpamovActivity).
+Ficaram no app (funcionam no celular): Tabela (PDF), Leads, Clientes, Campanhas (balão), etc.
+⚠️ Ainda usa Firebase Storage (cota estourada): anexo de prova da `ConferenciaPedidoModal`
+(`provas-pedido/...`) — vai falhar enquanto não migrar pro Firestore.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
