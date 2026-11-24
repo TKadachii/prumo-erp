@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 265;
+        const APP_BUILD_VERSION = 266;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9705,6 +9705,11 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.59.0', data: '24/11/2026', areas: ['site'], itens: [
+                '📝 DESCRIÇÃO DO PRODUTO: abrindo o item no Catálogo aparece "Sobre o produto" — o que é, pra que serve, destaques, marca, embalagem, peso e conservação. Vem pronta pra ~700 itens e a equipe pode editar',
+                '🖼️ FOTOS EXTRAS: cada item pode ter várias fotos além da capa (➕ foto extra). Dá pra transformar uma extra em capa',
+                '📤 FICHA PRO CLIENTE: marque as fotos e toque em "🖼️ Gerar ficha" — sai uma imagem bonita com fotos, descrição, peso e (se quiser) o preço do dia, pronta pra mandar no WhatsApp. "💬 Copiar texto" manda a mesma informação em texto',
+            ] },
             { versao: '2.58.0', data: '24/11/2026', areas: ['site'], itens: [
                 '📎 Conferência de pedido: o print/áudio de prova voltou a funcionar — agora fica salvo no banco do Prumo (o Firebase Storage estava sem espaço e recusava o envio)',
                 '📎 Histórico de vendas: pedido com prova ganha a etiqueta "📎 prova" e, ao abrir, o botão "Ver prova" mostra o print ou toca o áudio — pra mostrar pro supervisor se cobrarem',
@@ -11056,15 +11061,262 @@
             return canvas;
         };
 
+        // ═══ 📝 FICHA DO PRODUTO (v2.59.0 — pedido 24/11/2026) ═══════════════════════════════════════
+        // Cliente pergunta "como é essa mussarela?". O detalhe do produto agora tem: descrição (texto
+        // escrito por nós por TIPO de produto — não copiado de site, que tem dono e fala de outra marca;
+        // a equipe pode editar e aí vale o texto dela), fotos extras, e gera uma FICHA em PNG + texto
+        // pronto pro WhatsApp com as fotos marcadas.
+        //   produto_info/{code}         = { descricao, destaques: [], por, em }   (só quando alguém edita)
+        //   produto_fotos_extra/{auto}  = { code, data (dataURL ≤ 800px), por, em }
+        const MARCAS_CONHECIDAS = ['IMPERIO', 'IMPÉRIO', 'SEARA', 'SADIA', 'PERDIGAO', 'PERDIGÃO', 'FRIGANSO', 'ITALATE', 'LATVIDA', 'LITORAL', 'SUPREMA', 'LATSUL', 'BEM BRASIL', 'MC CAIN', 'MCCAIN', 'RIVELLI', 'LAR', 'AURORA', 'COOPAVEL', 'FRIBOI', 'QUALY', 'CLAYBOM', 'CATUPIRY', 'DANUBIO', 'POLENGHI', 'TIROLEZ', 'VIGOR', 'BATAVO', 'ITAMBE', 'PRIMOR', 'DORIANA', 'ALLIZ', 'FRANGOSUL', 'GUIBOM', 'BELLO', 'JAGUA', 'A GOSTO', 'BELLA CARNE', 'ASTRA', 'FRIGOURIAS', 'MAFRINORTE', 'FRIALTO', 'PIF PAF', 'MASTER', 'NAVICO', 'DALSUR', 'NOVA PESCA', 'KINGSUN', 'CAPTAIN FOODS', 'MENCUCIMI', 'MAIS BATATA', 'QUINTAL', 'NORDIC WILDFISH', 'SCAN MAR', 'BACALANOR', 'SOFFICE', 'VALE DO PARDO', 'CRIOULO', 'TEIXEIRA', 'OLE', 'OLÉ'];
+        const fatosDoProduto = (p) => {
+            const nome = String((p && p.name) || '').toUpperCase();
+            const semAcento = nome.normalize('NFD').replace(/[̀-ͯ]/g, '');
+            const marca = MARCAS_CONHECIDAS.find(m => new RegExp('(^|[^A-Z])' + m.normalize('NFD').replace(/[̀-ͯ]/g, '') + '([^A-Z]|$)').test(semAcento));
+            const conservacao = /\bCONG/.test(semAcento) ? 'Congelado' : /\bRESF/.test(semAcento) ? 'Resfriado' : /\bSALG/.test(semAcento) ? 'Salgado' : /\bDEF\b|DEFUM/.test(semAcento) ? 'Defumado' : '';
+            const temperado = /\bTEMP/.test(semAcento);
+            const emb = semAcento.match(/\b(CX|PCT|PC|SC|FD|BD|BALDE|BISN)\b/);
+            const pesoNome = semAcento.match(/(\d+(?:[.,]\d+)?)\s*KG/);
+            const embalagem = emb ? ({ CX: 'Caixa', PCT: 'Pacote', PC: 'Peça', SC: 'Saco', FD: 'Fardo', BD: 'Balde', BALDE: 'Balde', BISN: 'Bisnaga' })[emb[1]] : '';
+            const peso = (p && p.tipo && /kg/i.test(p.tipo)) ? String(p.tipo) : (pesoNome ? pesoNome[1].replace('.', ',') + ' kg' : '');
+            const aproximado = /\+\s*-|\+\/-|\+-|±/.test(nome);
+            return { marca: marca ? marca.toLowerCase().replace(/(^|\s)\S/g, s => s.toUpperCase()) : '', conservacao, temperado, embalagem, peso: peso ? (aproximado ? 'aprox. ' : '') + peso : '' };
+        };
+        // Descrições por tipo. Ordem importa: a primeira que bater vale (mais específica primeiro).
+        const DESCRICOES_TIPO = [
+            // ⚠️ Primeiro os que têm palavra de OUTRO tipo no nome (peru "manteiga/ervas", pão "c/ parmesão",
+            // batata "steak house", bacalhau "polaca") — senão caíam na descrição errada (achado no teste).
+            [/CHESTER|AVE NATALINA|AVEFEST/, 'Ave natalina temperada, pronta para ir ao forno. Carne macia e suculenta, protagonista da ceia de fim de ano.', ['Já temperada', 'Vai direto ao forno', 'Destaque da ceia']],
+            [/^(?!.*PEITO).*\bPERU\b|AVE PERU/,'Peru temperado, pronto para assar. Carne macia e saborosa, tradicional nas festas de fim de ano.', ['Já temperado', 'Tradição de Natal', 'Serve muita gente']],
+            [/\bPAO\b|\bPÃO\b/, 'Pão pronto para assar, prático e saboroso, ótimo para padarias, lanchonetes e lanche da tarde.', ['Prático', 'Assa rapidinho', 'Cheiro de padaria']],
+            [/BATATA|CRINKLE|NOISETTE|BEM BRASIL/, 'Batata pré-frita congelada: vai direto para a fritadeira ou airfryer, sem descongelar. Sequinha, crocante e padronizada.', ['Direto do freezer', 'Crocante', 'Padronizada para porção']],
+            [/BACALHAU|SAITHE|SAITH/, 'Bacalhau salgado e seco, tradicional da Páscoa e do Natal. Depois de dessalgado, vai em bacalhoada, bolinho, risoto e saladas.', ['Tradição de fim de ano', 'Dessalgar antes de usar', 'Rende pratos especiais']],
+            [/LASANHA|MINI CHICKEN|PRATO PRONTO/, 'Produto pronto e congelado, prático para refeições rápidas: é só aquecer no forno, airfryer ou micro-ondas.', ['Pronto em minutos', 'Prático', 'Sem desperdício']],
+            [/IOGURTE/, 'Iogurte cremoso, ótimo para o café da manhã, lanches, vitaminas e sobremesas.', ['Cremoso', 'Prático', 'Café da manhã e lanche']],
+            [/MINAS|RICOTA/, 'Queijo branco fresco, leve e de sabor suave, para café da manhã, lanches naturais, saladas e recheios.', ['Leve', 'Sabor suave', 'Fresquinho']],
+            [/MUSSARELA|MUCARELA|MOZZARELLA/,'Queijo mussarela de massa filada, sabor suave e ótimo derretimento. É o queijo mais usado em pizza, lanche, misto-quente e gratinados.', ['Derrete por igual', 'Fácil de fatiar ou ralar', 'Alto rendimento na cozinha']],
+            [/PROVOLONE/, 'Queijo provolone de massa filada, sabor marcante e levemente picante. Muito pedido em tábuas de frios, petiscos, pizza e na chapa ou churrasco.', ['Sabor forte e defumado', 'Vai bem na brasa e na chapa', 'Ótimo para petisco']],
+            [/COALHO/, 'Queijo coalho de textura firme, que não derrete na brasa: doura por fora e fica macio por dentro. Clássico de churrasco, espetinho e petisco.', ['Pode ir direto na brasa', 'Não escorre', 'Campeão de espetinho']],
+            [/PRATO/, 'Queijo prato de textura macia e sabor suave, que derrete bem. Muito usado em sanduíche, misto, hambúrguer e receitas gratinadas.', ['Derrete bem', 'Sabor suave', 'Fácil de fatiar']],
+            [/PARMESAO|PARMESÃO|RALADO/, 'Queijo de sabor intenso e textura firme, ideal para ralar sobre massas, risotos, saladas e gratinados.', ['Sabor intenso', 'Rende muito', 'Perfeito para gratinar']],
+            [/GORGONZOLA/, 'Queijo azul de sabor forte e cremoso, muito usado em molhos, pizzas especiais, risotos e tábuas de frios.', ['Sabor marcante', 'Ótimo em molho', 'Valoriza pratos especiais']],
+            [/CREAM CHEESE/, 'Cream cheese de textura cremosa e sabor levemente ácido, para recheios, sushi, cheesecake, coberturas e pães.', ['Cremoso', 'Doce ou salgado', 'Fácil de espalhar']],
+            [/REQ|REQUEIJ|CATUPIRY|CHEDDAR/, 'Requeijão cremoso de sabor suave, muito usado para rechear pizzas, salgados, pastéis, lanches e massas. Em bisnaga, facilita o uso na produção.', ['Cremoso e estável no forno', 'Ideal para borda e recheio', 'Prático na produção']],
+            [/MANTEIGA/, 'Manteiga de sabor rico, para pães, massas, molhos, confeitaria e para finalizar carnes na chapa.', ['Sabor de manteiga de verdade', 'Doce e salgado', 'Vai na chapa e no forno']],
+            [/MARGARINA/, 'Margarina para uso em panificação, confeitaria e cozinha: massas, bolos, pães e refogados.', ['Boa para massa e bolo', 'Rende bem', 'Uso diário na cozinha']],
+            [/LOMBO CANADENSE/, 'Lombo canadense: lombo suíno curado e defumado, magro e de sabor suave. Fatiado vai em lanches, pizzas, saladas e tábuas de frios.', ['Carne magra', 'Sabor defumado suave', 'Pronto para consumo']],
+            [/TENDER|PRES\. TENRO|PRESUNTO TENRO/, 'Tender: pernil suíno curado e defumado, tradicional nas festas de fim de ano. É só aquecer e glacear para servir.', ['Clássico de Natal', 'Fácil de preparar', 'Serve muita gente']],
+            [/PRES|PRESUNTO|APRESUNTADO/, 'Presunto cozido de sabor suave, para lanches, pizzas, misto-quente, salgados e tábuas de frios.', ['Fatia fácil', 'Sabor suave', 'Base de lanche e pizza']],
+            [/PEITO DE PERU|BLANQUET/, 'Peito de peru cozido e defumado, leve e com pouca gordura. Bom para lanches naturais, saladas e tábuas de frios.', ['Leve e magro', 'Sabor defumado suave', 'Opção mais saudável']],
+            [/MORTADELA|\bMORT\./,'Mortadela de sabor tradicional, para lanches, sanduíche na chapa, petiscos e tábuas de frios.', ['Sabor tradicional', 'Ótimo custo-benefício', 'Campeã de lanche']],
+            [/SALAME|PEPPERONI/, 'Embutido curado de sabor intenso, para pizzas, tábuas de frios e petiscos.', ['Sabor intenso', 'Pronto para consumo', 'Ótimo em pizza']],
+            [/CALABRESA|\bCALAB/,'Linguiça calabresa defumada, de sabor marcante e levemente apimentado. Essencial para pizza, feijoada, farofa, petiscos e lanches.', ['Defumada', 'Fatia sem desmanchar', 'Campeã de pizza e petisco']],
+            [/BACON/, 'Bacon defumado, de sabor intenso. Dá sabor a hambúrgueres, feijão, farofas, massas, pizzas e petiscos.', ['Defumado', 'Fica crocante', 'Realça o sabor de tudo']],
+            [/SALSICHA|SALSICHAO|SALSICHÃO/, 'Salsicha de sabor suave e textura macia, para cachorro-quente, molhos, petiscos e lanches rápidos.', ['Prática', 'Rápida de preparar', 'Campeã de cachorro-quente']],
+            [/\bLING\.|\bLING |LINGUICA|LINGUIÇA/,'Linguiça de carne temperada, ótima para churrasco, na chapa, assada ou em pedaços em receitas como feijão, farofa e arroz.', ['Já temperada', 'Vai na brasa e na chapa', 'Muito versátil']],
+            [/CARNE SECA|CHARQUE|JERKED/, 'Carne seca (carne bovina salgada e curada). Depois de dessalgar, vai em escondidinho, feijoada, arroz carreteiro, baião e recheios.', ['Sabor marcante', 'Dessalgar antes de usar', 'Rende muito desfiada']],
+            [/PICANHA SUINA|PICANHA SUÍNA/, 'Picanha suína: corte macio e suculento com capa de gordura, ótimo para churrasco, assado ou na chapa.', ['Macia', 'Capa de gordura dá sabor', 'Ótima no churrasco']],
+            [/PICANHA/, 'Picanha bovina, o corte mais famoso do churrasco: macia, suculenta e com capa de gordura que dá sabor. Vai na brasa, no forno ou em bifes.', ['Corte nobre', 'Capa de gordura', 'Rainha do churrasco']],
+            [/CONTRA.?FILE|CONTRAFILE|BIFE ANCHO|ANCHO|CHORIZO|ENTRECOT|\bNOIX\b/,'Corte bovino macio e suculento, com boa marmorização. Excelente para bifes, churrasco e grelhados.', ['Macio e suculento', 'Ótimo em bife e grelha', 'Corte nobre']],
+            [/MIGNON/, 'Filé mignon, o corte mais macio do boi. Ideal para medalhões, estrogonofe, bifes e pratos especiais.', ['O mais macio', 'Pouca gordura', 'Pratos especiais']],
+            [/ALCATRA|MAMINHA|CORAC.O DA ALCATRA|BABY BEEF/, 'Corte bovino macio e versátil, ótimo para bifes, churrasco, assados e iscas.', ['Macio', 'Muito versátil', 'Ótimo custo-benefício']],
+            [/FRALDINHA/, 'Fraldinha: corte bovino suculento, de fibras longas e muito sabor. Ótima no churrasco, assada ou em tiras.', ['Muito suculenta', 'Sabor intenso', 'Ótima no churrasco']],
+            [/CUPIM/, 'Cupim: corte bovino com gordura entremeada, que fica macio e desmanchando quando assado lentamente ou no bafo.', ['Assa devagar e desmancha', 'Muito sabor', 'Clássico de churrasco']],
+            [/COSTELA BOVINA|COSTELA MINGA|COSTELA JANELA|COSTELA BOV|ROJAO/,'Costela bovina, corte com osso e gordura que fica macio e saboroso no fogo lento: no bafo, assada ou na panela de pressão.', ['Muito sabor', 'Fica desmanchando', 'Clássica de churrasco']],
+            [/PATINHO|COXAO|COXÃO|LAGARTO|PATINHO/, 'Corte bovino magro e versátil, ideal para bifes, carne moída, carne de panela, assados e estrogonofe.', ['Carne magra', 'Muito versátil', 'Bom rendimento']],
+            [/ACEM|ACÉM|PA |PÁ |PALETA BOV|MIOLO|PEITO BOV|MUSCULO|MÚSCULO|PEIXINHO|DIANTEIRO|CARNE IND/, 'Corte bovino de dianteiro, cheio de sabor, ideal para cozidos, carne de panela, ensopados, carne moída e desfiados.', ['Muito sabor', 'Ótimo em panela', 'Bom custo-benefício']],
+            [/MOIDA|MOÍDA/, 'Carne bovina moída, prática para molhos, recheios, hambúrguer caseiro, almôndegas e escondidinho.', ['Prática', 'Muito versátil', 'Pronta para usar']],
+            [/HAMB/, 'Hambúrguer pronto para a chapa: prático, padronizado e saboroso, ideal para lanchonetes e lanches em casa.', ['Padronizado', 'Rápido na chapa', 'Prático']],
+            [/MOELA|CORACAO DE FRANGO|CORACAO FRANGO|CORAÇÃO DE FRANGO|CORAÇÃO FRANGO|PES DE FRANGO|PÉS DE FRANGO|PESCOCO DE FRANGO|PESCOÇO DE FRANGO|SAMBIQUIRA|\bCMS\b/, 'Miúdo de frango para petiscos, espetinhos, caldos e receitas caseiras.', ['Petisco campeão', 'Ótimo custo', 'Espetinho e caldo']],
+            [/BUCHO|MOCOTO|MOCOTÓ|RABADA|LINGUA BOV|LÍNGUA BOV|CORACAO BOV|CORAÇÃO BOV|FIGADO|FÍGADO|RINS|OSSO DO PESCO|OSSO BUCO/, 'Miúdo bovino tradicional da cozinha brasileira, para pratos como dobradinha, mocotó, rabada, língua ao molho e caldos.', ['Pratos tradicionais', 'Rende caldos encorpados', 'Ótimo custo']],
+            [/PERNIL/, 'Pernil suíno, corte carnudo e saboroso, perfeito para assados, pernil desfiado em lanches, churrasco e festas.', ['Rende muito', 'Ótimo assado ou desfiado', 'Clássico de festa']],
+            [/LOMBO|COPA LOMBO|\bCARRE\b|CARRÉ|FILE MIGNON SUINO/,'Corte suíno macio e magro, ótimo para assados, bistecas, medalhões e na grelha.', ['Macio e magro', 'Assado ou grelhado', 'Muito versátil']],
+            [/COSTELA SUINA|COSTELA SUÍNA|RIBS|COST\./, 'Costela suína, saborosa e suculenta, ideal para churrasco, assada no forno, com barbecue ou no bafo.', ['Muito saborosa', 'Ótima com barbecue', 'Churrasco e forno']],
+            [/BARRIGA|PANCETA|TOUCINHO|PAPADA|GARG|ORELHA|PE SUINO|PÉ SUÍNO|PE SALG|RABO/, 'Corte suíno com bastante gordura e sabor, usado em torresmo, feijoada, panceta assada e para dar sabor a receitas.', ['Muito sabor', 'Fica crocante', 'Tradicional de feijoada']],
+            [/BANDA SUINA|SUIN|LEITAO|LEITÃO/,'Carne suína de qualidade para cortes, assados, churrasco e preparo de diversos pratos.', ['Saborosa', 'Versátil', 'Bom rendimento']],
+            [/CHESTER|AVE NATALINA|AVEFEST/, 'Ave natalina temperada, pronta para ir ao forno. Carne macia e suculenta, protagonista da ceia de fim de ano.', ['Já temperada', 'Vai direto ao forno', 'Destaque da ceia']],
+            [/PERU/, 'Peru temperado, pronto para assar. Carne macia e saborosa, tradicional nas festas de fim de ano.', ['Já temperado', 'Tradição de Natal', 'Serve muita gente']],
+            [/FRANGO CARC|CARCAÇA|FRANGO INT|FRANGO TEMP/, 'Frango inteiro, ótimo para assar, frango de padaria (televisão de cachorro), cozidos e para cortar em pedaços.', ['Inteiro', 'Ótimo para assar', 'Rende a família toda']],
+            [/FILE DE PEITO|FILÉ DE PEITO|FILEZINHO|SASSAMI|PEITO DE FRANGO|PEITO RESF|PEITO CONG|PEITO/, 'Peito de frango, carne magra e versátil: grelhado, empanado, desfiado, em iscas, strogonoff e recheios.', ['Carne magra', 'Muito versátil', 'Rende bem']],
+            [/COXA|SOBRECOXA|S\/COXA|DRUM|\bASA\b|TULIPA|MEIO DA ASA/,'Corte de frango suculento e saboroso, ótimo assado, frito, na airfryer, no churrasco ou em ensopados.', ['Suculento', 'Assado ou frito', 'Ótimo custo-benefício']],
+            [/MOELA|CORACAO DE FRANGO|CORAÇÃO DE FRANGO|PES DE FRANGO|PÉS DE FRANGO|CMS/, 'Miúdo de frango para petiscos, espetinhos, caldos e receitas caseiras.', ['Petisco campeão', 'Ótimo custo', 'Espetinho e caldo']],
+            [/NUGGET|EMPANAD|STEAK|ISCA/, 'Produto empanado pronto para fritar, assar ou airfryer. Prático e crocante, ótimo para porções e refeições rápidas.', ['Crocante', 'Pronto em minutos', 'Ótimo para porção']],
+            [/TILAPIA|TILÁPIA/, 'Filé de tilápia, peixe de carne branca, macia e sabor suave, sem espinhas. Grelhado, empanado, assado ou em moqueca.', ['Sem espinhas', 'Sabor suave', 'Muito versátil']],
+            [/MERLUZ|PANGA|POLACA|PESCADA|CACAO|CAÇÃO|SALMAO|SALMÃO|PACU|CORVINA|SARDINHA|PEIXE/,'Peixe de carne branca e sabor suave, ótimo empanado, assado, em moquecas, ensopados e iscas.', ['Carne branca', 'Sabor suave', 'Fácil de preparar']],
+            [/BACALHAU|SAITHE|SAITH/, 'Bacalhau salgado e seco, tradicional da Páscoa e do Natal. Depois de dessalgado, vai em bacalhoada, bolinho, risoto e saladas.', ['Tradição de fim de ano', 'Dessalgar antes de usar', 'Rende pratos especiais']],
+            [/CAMARAO|CAMARÃO/, 'Camarão limpo, pronto para preparar: risotos, moquecas, massas, petiscos e empanados.', ['Já limpo', 'Rápido de preparar', 'Pratos especiais']],
+            [/BATATA/, 'Batata pré-frita congelada: vai direto para a fritadeira ou airfryer, sem descongelar. Sequinha, crocante e padronizada.', ['Direto do freezer', 'Crocante', 'Padronizada para porção']],
+            [/BROCOLIS|BRÓCOLIS|ERVILHA|SELETA|MILHO|LEGUME|CEBOLA|MORANGO|POLPA/, 'Vegetal congelado já higienizado e pronto para usar, sem desperdício. Prático para refogados, saladas, sucos e acompanhamentos.', ['Já higienizado', 'Sem desperdício', 'Pronto para usar']],
+            [/PAO|PÃO/, 'Pão pronto para assar, prático e saboroso, ótimo para padarias, lanchonetes e lanche da tarde.', ['Prático', 'Assa rapidinho', 'Cheiro de padaria']],
+            [/ARROZ/, 'Arroz de grãos selecionados, soltinhos depois de cozidos, para o dia a dia de restaurantes e famílias.', ['Grãos selecionados', 'Fica soltinho', 'Uso diário']],
+        ];
+        const descricaoSugerida = (p) => {
+            const nome = String((p && p.name) || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+            const achou = DESCRICOES_TIPO.find(([re]) => re.test(nome) || re.test(String((p && p.name) || '').toUpperCase()));
+            const f = fatosDoProduto(p);
+            let texto = achou ? achou[1] : 'Produto de qualidade selecionado pela Friganso, com procedência e entrega garantida.';
+            const destaques = achou ? achou[2].slice() : [];
+            if (f.temperado && !/temperad/i.test(texto)) { texto += ' Já vem temperado, é só preparar.'; destaques.unshift('Já temperado'); }
+            if (f.conservacao === 'Congelado') texto += ' Mantenha congelado (−18 °C) e descongele na geladeira.';
+            else if (f.conservacao === 'Resfriado') texto += ' Mantenha refrigerado (0 a 4 °C).';
+            else if (f.conservacao === 'Salgado') texto += ' Guarde em local fresco; dessalgue antes do preparo.';
+            return { texto, destaques: destaques.slice(0, 4) };
+        };
+        // Texto pronto pro WhatsApp (estilo Zap do Prumo).
+        const textoClienteProduto = (p, info, mostrarPreco) => {
+            const f = fatosDoProduto(p); const r = checkDiscountRules(p.code, p.name, p.originalPrice);
+            const reais = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const un = String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase();
+            let t = `🥩 *${String(p.name || '').trim()}*\n\n${info.descricao}\n`;
+            if (info.destaques && info.destaques.length) t += '\n' + info.destaques.map(d => '✅ ' + d).join('\n') + '\n';
+            const linhas = [];
+            if (f.marca) linhas.push('🏷️ Marca: ' + f.marca);
+            if (f.embalagem || f.peso) linhas.push('📦 Embalagem: ' + [f.embalagem, f.peso].filter(Boolean).join(' · '));
+            if (f.conservacao) linhas.push('❄️ Conservação: ' + f.conservacao);
+            linhas.push('🔢 Código: ' + p.code);
+            t += '\n' + linhas.join('\n') + '\n';
+            if (mostrarPreco && Number(p.originalPrice) > 0) t += r.hasDiscount ? `\n💰 Valor: ~${reais(r.origPrice)}~ por *${reais(r.unitFinalPrice)}/${un}* 🔥 (Com 3% de Desconto)\n` : `\n💰 Valor: *${reais(r.unitFinalPrice)}/${un}*\n`;
+            return t.trim();
+        };
+        // 🖼️ Ficha em PNG 1080×1350 (formato 4:5, aparece grande no WhatsApp). Canvas puro (sem Fabric),
+        // então funciona também no app de celular.
+        const gerarFichaProduto = async ({ produto: p, fotos, info, mostrarPreco, contatos }) => {
+            const W = 1080, H = 1350, M = 60;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d');
+            const fonte = (peso, tam) => `${peso} ${tam}px Montserrat, "Segoe UI", system-ui, sans-serif`;
+            const f = fatosDoProduto(p); const r = checkDiscountRules(p.code, p.name, p.originalPrice);
+            const reais = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const ret = (x, y, w, h, rr, cor) => { roundRectPath(ctx, x, y, w, h, rr); ctx.fillStyle = cor; ctx.fill(); };
+            // fundo + faixa
+            ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, W, H);
+            const g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, '#7f1d1d'); g.addColorStop(1, '#dc2626');
+            ctx.fillStyle = g; ctx.fillRect(0, 0, W, 150);
+            try { const logo = await carregarImagemCanvas(FRIGANSO_LOGO_PNG); const lh = 110, lw = logo.width * (lh / logo.height); ret(M - 10, 20, lw + 20, lh + 10, 18, '#ffffff'); ctx.drawImage(logo, M, 25, lw, lh); } catch (e) {}
+            ctx.fillStyle = '#ffffff'; ctx.textAlign = 'right'; ctx.font = fonte(900, 40); ctx.fillText('FICHA DO PRODUTO', W - M, 88);
+            ctx.font = fonte(600, 24); ctx.fillText('Cód. ' + p.code, W - M, 122); ctx.textAlign = 'left';
+            // fotos
+            const imgs = [];
+            for (const s of (fotos || []).slice(0, 4)) { try { imgs.push(await carregarImagemCanvas(s, !/^data:/.test(s))); } catch (e) {} }
+            const desenhaFoto = (img, x, y, w, h) => {
+                ret(x, y, w, h, 28, '#ffffff'); ctx.save(); roundRectPath(ctx, x, y, w, h, 28); ctx.clip();
+                const s = Math.min(w / img.width, h / img.height) * 0.94; const iw = img.width * s, ih = img.height * s;
+                ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); ctx.restore();
+                ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 2; roundRectPath(ctx, x, y, w, h, 28); ctx.stroke();
+            };
+            // 470 de altura nas fotos deixa espaço pra ~4 linhas de descrição + destaques + preço.
+            const topo = 175, alt = 470;
+            if (imgs.length === 1) desenhaFoto(imgs[0], (W - alt) / 2, topo, alt, alt);
+            else if (imgs.length === 2) { const w = (W - M * 2 - 24) / 2; desenhaFoto(imgs[0], M, topo, w, alt); desenhaFoto(imgs[1], M + w + 24, topo, w, alt); }
+            else if (imgs.length >= 3) {
+                const big = alt, small = (alt - 24 * (imgs.length - 2)) / (imgs.length - 1);
+                desenhaFoto(imgs[0], M, topo, big, big);
+                imgs.slice(1).forEach((im, i) => desenhaFoto(im, M + big + 24, topo + i * (small + 24), W - M * 2 - big - 24, small));
+            }
+            let y = imgs.length ? topo + alt + 55 : topo + 40;
+            // nome
+            ctx.fillStyle = '#0f172a'; ctx.font = fonte(900, 42);
+            y = quebrarTexto(ctx, String(p.name || '').toUpperCase(), M, y, W - M * 2, 50, 2) + 6;
+            // etiquetas
+            const tags = [f.marca && ('🏷️ ' + f.marca), (f.embalagem || f.peso) && ('📦 ' + [f.embalagem, f.peso].filter(Boolean).join(' · ')), f.conservacao && ('❄️ ' + f.conservacao)].filter(Boolean);
+            let x = M; ctx.font = fonte(700, 24);
+            tags.forEach(t => { const w = ctx.measureText(t).width + 32; if (x + w > W - M) return; ret(x, y - 30, w, 44, 22, '#fee2e2'); ctx.fillStyle = '#991b1b'; ctx.fillText(t, x + 16, y); x += w + 12; });
+            y += 54;
+            // descrição + destaques
+            ctx.fillStyle = '#334155'; ctx.font = fonte(500, 27);
+            const reservaRodape = mostrarPreco ? 265 : 130;
+            const linhasMax = Math.max(3, Math.floor((H - reservaRodape - y - Math.min(4, (info.destaques || []).length) * 40) / 36));
+            y = quebrarTexto(ctx, info.descricao || '', M, y, W - M * 2, 36, linhasMax) + 8;
+            ctx.font = fonte(700, 26); ctx.fillStyle = '#15803d';
+            (info.destaques || []).slice(0, 4).forEach(d => { if (y < H - reservaRodape) { ctx.fillText('✔ ' + d, M, y); y += 40; } });
+            // preço
+            if (mostrarPreco && Number(p.originalPrice) > 0) {
+                const by = H - 250, un = '/' + String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase();
+                ret(M, by, W - M * 2, 120, 26, '#facc15');
+                ctx.fillStyle = '#7f1d1d'; ctx.font = fonte(700, 26); ctx.fillText(r.hasDiscount ? 'À VISTA (com 3% de desconto)' : 'VALOR', M + 30, by + 44);
+                if (r.hasDiscount) { ctx.font = fonte(600, 26); ctx.fillStyle = '#92400e'; const de = 'de ' + reais(r.origPrice); ctx.fillText(de, M + 30, by + 88); const wde = ctx.measureText(de).width; ctx.fillRect(M + 30 + ctx.measureText('de ').width, by + 79, wde - ctx.measureText('de ').width, 3); }
+                ctx.textAlign = 'right'; ctx.fillStyle = '#7f1d1d'; ctx.font = fonte(900, 64); ctx.fillText(reais(r.unitFinalPrice) + un, W - M - 30, by + 86); ctx.textAlign = 'left';
+                const d = new Date(); d.setDate(d.getDate() + 1);
+                ctx.font = fonte(500, 20); ctx.fillStyle = '#64748b'; ctx.fillText('Preço válido até ' + d.toLocaleDateString('pt-BR') + ' ou enquanto durar o estoque.', M, by + 150);
+            }
+            // rodapé
+            ctx.fillStyle = g; ctx.fillRect(0, H - 80, W, 80);
+            ctx.fillStyle = '#ffffff'; ctx.font = fonte(700, 26); ctx.textAlign = 'center';
+            const contato = (contatos || []).map(c => `${c.icone || ''} ${c.texto || ''}`.trim()).filter(Boolean).join('    ') || 'Friganso';
+            ctx.fillText(contato, W / 2, H - 30); ctx.textAlign = 'left';
+            return cv;
+        };
+
         // 🍽️ Cardápio: cada produto pode ter uma foto, compartilhada com todo mundo que usa o sistema.
         // 🔎 DETALHES DO PRODUTO (v2.56.0 — pedido 24/11/2026): tocar no card do Catálogo abre isto em vez
         // de ir direto pro "trocar foto". Mostra foto grande, preços, estoque e dá as ações de foto:
         // nova foto, editar capa (reenquadrar a atual), pedir troca (fica registrado em fotos_pedidos/{code}
         // pra equipe ver; some sozinho quando alguém salva foto nova), criar arte e remover foto.
-        const ProdutoDetalheModal = ({ produto, foto, pedido, subindo, onFechar, onNovaFoto, onEditarCapa, onPedirTroca, onResolverPedido, onCriarArte, onRemoverFoto }) => {
+        const ProdutoDetalheModal = ({ produto, foto, pedido, subindo, onFechar, onNovaFoto, onEditarCapa, onPedirTroca, onResolverPedido, onCriarArte, onRemoverFoto, onFotoExtra, usuario, catalogoContatos, showMessage }) => {
             const [motivo, setMotivo] = useState('');
             const [pedindo, setPedindo] = useState(false);
             const p = produto;
+            const code = String(p.code);
+            // 📝 descrição (salva pela equipe ou sugerida por tipo) + 🖼️ fotos extras (v2.59.0)
+            const [infoSalva, setInfoSalva] = useState(undefined); // undefined = carregando, null = sem texto salvo
+            const [extras, setExtras] = useState([]);
+            const [editando, setEditando] = useState(false);
+            const [rascunho, setRascunho] = useState({ descricao: '', destaques: '' });
+            const [ativa, setAtiva] = useState('capa');                // foto grande mostrada
+            const [marcadas, setMarcadas] = useState(new Set(['capa'])); // vão pra ficha
+            const [comPreco, setComPreco] = useState(true);
+            const [ficha, setFicha] = useState(null);                  // dataURL da ficha gerada
+            const [gerando, setGerando] = useState(false);
+            useEffect(() => {
+                const u1 = db.collection('produto_info').doc(code).onSnapshot(d => setInfoSalva(d.exists ? d.data() : null), () => setInfoSalva(null));
+                const u2 = db.collection('produto_fotos_extra').where('code', '==', code).onSnapshot(s => {
+                    setExtras(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ((a.em && a.em.toMillis ? a.em.toMillis() : 0) - (b.em && b.em.toMillis ? b.em.toMillis() : 0))));
+                }, () => {});
+                return () => { u1(); u2(); };
+            }, [code]);
+            const sugerida = useMemo(() => descricaoSugerida(p), [p]);
+            const info = infoSalva && infoSalva.descricao ? { descricao: infoSalva.descricao, destaques: infoSalva.destaques || [] } : { descricao: sugerida.texto, destaques: sugerida.destaques };
+            const fatos = fatosDoProduto(p);
+            const fotosLista = [...(foto && foto !== FOTO_CARREGANDO ? [{ id: 'capa', src: foto, capa: true }] : []), ...extras.map(e => ({ id: e.id, src: e.data }))];
+            const fotoAtiva = (fotosLista.find(f => f.id === ativa) || fotosLista[0] || {}).src;
+            const toggleMarcada = (id) => setMarcadas(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+            const abrirEdicao = () => { setRascunho({ descricao: info.descricao, destaques: (info.destaques || []).join('\n') }); setEditando(true); };
+            const salvarInfo = async () => {
+                const dados = { descricao: rascunho.descricao.trim(), destaques: rascunho.destaques.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 6), por: (usuario && usuario.name) || '', em: new Date() };
+                try { await db.collection('produto_info').doc(code).set(dados); setInfoSalva(dados); setEditando(false); showMessage('Descrição salva pra toda a equipe. 📝', 'success'); }
+                catch (e) { showMessage('Erro ao salvar a descrição.', 'error'); }
+            };
+            const voltarSugestao = async () => {
+                if (!window.confirm('Voltar pra descrição automática? O texto editado será apagado.')) return;
+                try { await db.collection('produto_info').doc(code).delete(); setInfoSalva(null); setEditando(false); } catch (e) { showMessage('Erro.', 'error'); }
+            };
+            const apagarExtra = async (id) => {
+                if (!window.confirm('Apagar esta foto extra?')) return;
+                try { await db.collection('produto_fotos_extra').doc(id).delete(); setMarcadas(prev => { const n = new Set(prev); n.delete(id); return n; }); if (ativa === id) setAtiva('capa'); } catch (e) { showMessage('Erro ao apagar.', 'error'); }
+            };
+            const virarCapa = async (ex) => {
+                try { const blob = await (await fetch(ex.data)).blob(); await subirFotoBlob(code, blob); showMessage('Agora essa é a foto de capa. ⭐', 'success'); }
+                catch (e) { showMessage('Erro ao trocar a capa.', 'error'); }
+            };
+            const gerarFicha = async () => {
+                const srcs = fotosLista.filter(f => marcadas.has(f.id)).map(f => f.src);
+                setGerando(true);
+                try { const cv = await gerarFichaProduto({ produto: p, fotos: srcs, info, mostrarPreco: comPreco, contatos: catalogoContatos }); setFicha(cv.toDataURL('image/png')); }
+                catch (e) { showMessage('Não consegui montar a ficha.', 'error'); }
+                setGerando(false);
+            };
+            const nomeArquivo = 'ficha-' + code + '.png';
+            const baixarFicha = () => { const a = document.createElement('a'); a.href = ficha; a.download = nomeArquivo; a.click(); };
+            const compartilharFicha = async () => {
+                try {
+                    const blob = await (await fetch(ficha)).blob();
+                    const file = new File([blob], nomeArquivo, { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: textoClienteProduto(p, info, comPreco) }); return; }
+                    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showMessage('Ficha copiada! Cole (Ctrl+V) na conversa do WhatsApp. 📋', 'success'); return; }
+                    baixarFicha();
+                } catch (e) { if (e && e.name !== 'AbortError') baixarFicha(); }
+            };
+            const copiarTextoCliente = () => { navigator.clipboard.writeText(textoClienteProduto(p, info, comPreco)).then(() => showMessage('Texto copiado pro WhatsApp! 💬', 'success'), () => showMessage('Não consegui copiar.', 'error')); };
             const r = checkDiscountRules(p.code, p.name, p.originalPrice);
             const es = p.estoqueSpamov;
             const reais = (v) => (v == null || isNaN(Number(v)) || Number(v) <= 0) ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -11072,7 +11324,20 @@
             const linha = (rotulo, valor) => valor ? <div className="flex justify-between gap-3 py-1.5 border-b border-slate-800/60 text-sm"><span className="text-slate-400">{rotulo}</span><span className="font-bold text-slate-100 text-right">{valor}</span></div> : null;
             return (
                 <div className="fixed inset-0 z-[998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3" onClick={onFechar}>
-                    <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[94vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    {ficha && (
+                        <div className="fixed inset-0 z-[1001] bg-slate-950/90 flex items-center justify-center p-3" onClick={e => { e.stopPropagation(); setFicha(null); }}>
+                            <div className="bg-[#0b0d17] border border-violet-400/30 rounded-3xl p-4 max-w-md w-full max-h-[94vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-3"><span className="font-black text-white">🖼️ Ficha pronta</span><button onClick={() => setFicha(null)} className="h-8 w-8 rounded-full bg-slate-800 text-slate-300 text-lg">×</button></div>
+                                <img src={ficha} alt="Ficha do produto" className="w-full rounded-xl border border-slate-700" />
+                                <div className="grid grid-cols-2 gap-2 mt-3">
+                                    <button onClick={compartilharFicha} className="py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-black">📤 Enviar / copiar</button>
+                                    <button onClick={baixarFicha} className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-black">⬇️ Baixar PNG</button>
+                                </div>
+                                <button onClick={copiarTextoCliente} className="w-full mt-2 py-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-200 text-xs font-bold">💬 Copiar texto pra mandar junto</button>
+                            </div>
+                        </div>
+                    )}
+                    <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[94vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-start justify-between gap-3">
                             <div><span className="font-mono text-xs font-black text-violet-300">{p.code}</span><h3 className="text-lg font-black text-white leading-tight">{p.name}</h3></div>
                             <button onClick={onFechar} className="h-9 w-9 flex-shrink-0 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xl">×</button>
@@ -11080,7 +11345,34 @@
                         <div className="grid sm:grid-cols-2 gap-5 p-4 sm:p-5">
                             <div>
                                 <div className="aspect-square rounded-2xl overflow-hidden bg-white flex items-center justify-center">
-                                    {foto ? <img src={foto} alt={p.name} className="w-full h-full object-contain" /> : <span className="text-6xl">🍖</span>}
+                                    {fotoAtiva ? <img src={fotoAtiva} alt={p.name} className="w-full h-full object-contain" /> : <span className="text-6xl">🍖</span>}
+                                </div>
+                                {/* 🖼️ galeria: capa + fotos extras. ✓ = vai pra ficha. */}
+                                <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
+                                    {fotosLista.map(f => (
+                                        <div key={f.id} className={`relative flex-shrink-0 h-16 w-16 rounded-lg overflow-hidden bg-white border-2 cursor-pointer ${ativa === f.id ? 'border-violet-500' : 'border-slate-700'}`} onClick={() => setAtiva(f.id)}>
+                                            <img src={f.src} alt="" className="w-full h-full object-contain" />
+                                            <button onClick={e => { e.stopPropagation(); toggleMarcada(f.id); }} title="Usar na ficha" className={`absolute top-0.5 right-0.5 h-5 w-5 rounded-full text-[11px] font-black border ${marcadas.has(f.id) ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white/90 border-slate-300 text-transparent'}`}>✓</button>
+                                            {f.capa && <span className="absolute bottom-0 inset-x-0 bg-slate-900/80 text-[9px] font-black text-amber-300 text-center">CAPA</span>}
+                                        </div>
+                                    ))}
+                                    <button onClick={onFotoExtra} disabled={subindo} className="flex-shrink-0 h-16 w-16 rounded-lg border-2 border-dashed border-slate-600 hover:border-violet-400 text-slate-400 text-[10px] font-bold leading-tight disabled:opacity-40">➕<br />foto extra</button>
+                                </div>
+                                {ativa !== 'capa' && extras.find(e => e.id === ativa) && (
+                                    <div className="flex gap-2 mt-1">
+                                        <button onClick={() => virarCapa(extras.find(e => e.id === ativa))} className="flex-1 text-[11px] font-bold py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300">⭐ Virar capa</button>
+                                        <button onClick={() => apagarExtra(ativa)} className="flex-1 text-[11px] font-bold py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-rose-950 text-rose-300">🗑️ Apagar esta</button>
+                                    </div>
+                                )}
+                                {/* 📤 ficha pro cliente */}
+                                <div className="mt-3 rounded-2xl border border-emerald-400/25 bg-emerald-950/20 p-3">
+                                    <p className="text-xs font-black text-emerald-200">📤 Mandar pro cliente</p>
+                                    <p className="text-[11px] text-emerald-200/70 mt-0.5">Marque ✓ as fotos que vão na ficha ({fotosLista.filter(f => marcadas.has(f.id)).length} marcada{fotosLista.filter(f => marcadas.has(f.id)).length === 1 ? '' : 's'}).</p>
+                                    <label className="flex items-center gap-2 text-xs text-emerald-100 mt-2"><input type="checkbox" checked={comPreco} onChange={e => setComPreco(e.target.checked)} className="accent-emerald-500" /> Mostrar o preço de hoje</label>
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <button onClick={gerarFicha} disabled={gerando} className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black">{gerando ? 'Montando...' : '🖼️ Gerar ficha'}</button>
+                                        <button onClick={copiarTextoCliente} className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-black">💬 Copiar texto</button>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 mt-3">
                                     <button onClick={onNovaFoto} disabled={subindo} className="py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-black">📷 {foto ? 'Nova foto' : 'Adicionar foto'}</button>
@@ -11091,6 +11383,36 @@
                                 {subindo && <p className="text-xs text-violet-300 font-bold mt-2 text-center">Enviando foto...</p>}
                             </div>
                             <div>
+                                {/* 📝 Descrição — o que falar pro cliente */}
+                                <div className="rounded-2xl bg-[#10131f] border border-violet-400/25 p-4 mb-3">
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                        <span className="text-xs font-black uppercase tracking-wider text-violet-300">📝 Sobre o produto</span>
+                                        {!editando && <button onClick={abrirEdicao} className="text-[11px] font-bold text-violet-200 bg-violet-500/15 hover:bg-violet-500/25 px-2.5 py-1 rounded-lg">✏️ Editar</button>}
+                                    </div>
+                                    {editando ? (
+                                        <>
+                                            <textarea value={rascunho.descricao} onChange={e => setRascunho(r => ({ ...r, descricao: e.target.value }))} rows="5" className="w-full rounded-xl border border-violet-500/30 bg-[#080a12] px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-400" />
+                                            <label className="text-[11px] font-bold text-slate-400 mt-2 block">Destaques (um por linha)</label>
+                                            <textarea value={rascunho.destaques} onChange={e => setRascunho(r => ({ ...r, destaques: e.target.value }))} rows="3" className="w-full rounded-xl border border-violet-500/30 bg-[#080a12] px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-400" />
+                                            <div className="flex gap-2 mt-2">
+                                                <button onClick={() => setEditando(false)} className="flex-1 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold">Cancelar</button>
+                                                <button onClick={salvarInfo} disabled={!rascunho.descricao.trim()} className="flex-1 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-xs font-black">💾 Salvar</button>
+                                            </div>
+                                            {infoSalva && <button onClick={voltarSugestao} className="mt-2 text-[10px] text-slate-500 hover:text-rose-300 font-bold">↺ voltar pra descrição automática</button>}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-sm text-slate-200 leading-relaxed">{info.descricao}</p>
+                                            {(info.destaques || []).length > 0 && <ul className="mt-2 space-y-0.5">{info.destaques.map((d, i) => <li key={i} className="text-xs text-emerald-300 font-bold">✔ {d}</li>)}</ul>}
+                                            <div className="flex flex-wrap gap-1.5 mt-3">
+                                                {fatos.marca && <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-200">🏷️ {fatos.marca}</span>}
+                                                {(fatos.embalagem || fatos.peso) && <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-200">📦 {[fatos.embalagem, fatos.peso].filter(Boolean).join(' · ')}</span>}
+                                                {fatos.conservacao && <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-200">❄️ {fatos.conservacao}</span>}
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 mt-2">{infoSalva ? `Texto da equipe${infoSalva.por ? ' · ' + infoSalva.por : ''}` : 'Descrição automática pelo tipo do produto — toque em ✏️ Editar pra ajustar.'}</p>
+                                        </>
+                                    )}
+                                </div>
                                 <div className="rounded-2xl bg-[#10131f] border border-slate-800 p-4 mb-3">
                                     <div className="flex items-center justify-between gap-2 mb-2"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Preço de hoje</span>{produtoForaTabelaHoje(p) && <ProdutoForaTabelaBadge compacto />}</div>
                                     {r.hasDiscount
@@ -11771,22 +12093,29 @@
             };
 
             // Só ESCOLHE o arquivo aqui — quem faz o recorte (arrastar/zoom, estilo WhatsApp) é o CropFotoModal.
-            const escolherFoto = (code) => {
+            // `destino: 'extra'` (v2.59.0) = a foto vai pra galeria do produto em vez de virar a capa.
+            const escolherFoto = (code, destino) => {
                 const input = document.createElement('input');
                 input.type = 'file'; input.accept = 'image/*';
                 input.onchange = () => {
                     const file = input.files && input.files[0];
-                    if (file) setCrop({ code, file });
+                    if (file) setCrop({ code, file, destino, titulo: destino === 'extra' ? 'Foto extra' : undefined });
                 };
                 input.click();
             };
             const confirmarCrop = async (blob) => {
-                const code = crop.code;
+                const code = crop.code, destino = crop.destino;
                 setCrop(null);
                 setEnviando(prev => ({ ...prev, [code]: true }));
                 try {
-                    await subirFotoBlob(code, blob);
-                    showMessage('Foto atualizada! Todo mundo já vê. 📸', 'success');
+                    if (destino === 'extra') {
+                        const data = await blobParaDataUrlLimitado(blob, 800);
+                        await db.collection('produto_fotos_extra').add({ code: String(code), data, por: (usuario && usuario.name) || '', em: new Date() });
+                        showMessage('Foto extra adicionada! 🖼️', 'success');
+                    } else {
+                        await subirFotoBlob(code, blob);
+                        showMessage('Foto atualizada! Todo mundo já vê. 📸', 'success');
+                    }
                 } catch (e) { showMessage('Erro ao enviar a foto.', 'error'); }
                 finally { setEnviando(prev => { const n = { ...prev }; delete n[code]; return n; }); }
             };
@@ -11903,6 +12232,10 @@
                         onResolverPedido={() => resolverPedidoFoto(detalheCode)}
                         onCriarArte={() => { setDetalheCode(null); criarArteDe(detalheProduto); }}
                         onRemoverFoto={() => apagarFoto(detalheCode)}
+                        onFotoExtra={() => escolherFoto(detalheCode, 'extra')}
+                        usuario={usuario}
+                        catalogoContatos={catalogoContatos}
+                        showMessage={showMessage}
                     />, document.body)}
                     {arteProduto && arteForm && (
                         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 z-[999]" onClick={fecharArteProduto}>

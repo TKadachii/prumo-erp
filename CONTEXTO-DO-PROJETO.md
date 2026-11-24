@@ -1070,6 +1070,20 @@ Ficaram no app (funcionam no celular): Tabela (PDF), Leads, Clientes, Campanhas 
 `ProvaVisor` mostra a prova no Histórico (antes nenhuma tela mostrava). Prova antiga (link do
 Storage) abre direto. Nada mais do site grava no Firebase Storage.
 
+## 📝 v2.59.0 (24/11/2026) — Descrição, fotos extras e Ficha do produto
+Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que falar + mandar foto.
+- `DESCRICOES_TIPO` (regex por tipo, ORDEM IMPORTA — os ambíguos primeiro) + `descricaoSugerida(p)`
+  e `fatosDoProduto(p)` (marca por `MARCAS_CONHECIDAS`, embalagem, peso, conservação, temperado).
+  Textos ESCRITOS por nós (não copiados de site). Cobertura 701/751 ativos; o resto cai num genérico.
+  Editado pela equipe vale mais: `produto_info/{code} = {descricao, destaques[], por, em}`.
+- Fotos extras: `produto_fotos_extra/{auto} = {code, data (dataURL ≤800px), por, em}`; galeria no
+  `ProdutoDetalheModal` com ✓ pra escolher o que vai na ficha, "⭐ Virar capa" e apagar.
+  `escolherFoto(code, 'extra')` → crop → `confirmarCrop` grava como extra.
+- `gerarFichaProduto` (canvas puro 1080×1350, funciona no APK): logo, até 4 fotos, nome, etiquetas,
+  descrição, destaques, preço opcional (amarelo), validade, rodapé de contato.
+  `textoClienteProduto` = texto no estilo Zap. Ficha: "Enviar/copiar" (Web Share no celular,
+  clipboard no PC), baixar PNG e copiar texto.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

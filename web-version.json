@@ -1,9 +1,10 @@
 {
-    "version":  265,
-    "versao":  "2.58.0",
+    "version":  266,
+    "versao":  "2.59.0",
     "data":  "24/11/2026",
     "itens":  [
-                  "📎 Conferência de pedido: o print/áudio de prova voltou a funcionar — agora fica salvo no banco do Prumo (o Firebase Storage estava sem espaço e recusava o envio)",
-                  "📎 Histórico de vendas: pedido com prova ganha a etiqueta \"📎 prova\" e, ao abrir, o botão \"Ver prova\" mostra o print ou toca o áudio — pra mostrar pro supervisor se cobrarem"
+                  "📝 DESCRIÇÃO DO PRODUTO: abrindo o item no Catálogo aparece \"Sobre o produto\" — o que é, pra que serve, destaques, marca, embalagem, peso e conservação. Vem pronta pra ~700 itens e a equipe pode editar",
+                  "🖼️ FOTOS EXTRAS: cada item pode ter várias fotos além da capa (➕ foto extra). Dá pra transformar uma extra em capa",
+                  "📤 FICHA PRO CLIENTE: marque as fotos e toque em \"🖼️ Gerar ficha\" — sai uma imagem bonita com fotos, descrição, peso e (se quiser) o preço do dia, pronta pra mandar no WhatsApp. \"💬 Copiar texto\" manda a mesma informação em texto"
               ]
 }
