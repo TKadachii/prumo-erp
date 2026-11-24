@@ -1,9 +1,8 @@
 {
-    "version":  263,
-    "versao":  "2.57.0",
+    "version":  264,
+    "versao":  "2.57.1",
     "data":  "24/11/2026",
     "itens":  [
-                  "📱 App mais enxuto: no celular saíram as coisas que só funcionam no computador — \"Importar vendas\" (usa a extensão do Chrome), o cartão da extensão e o de instalar app/baixar programa em Minha conta",
-                  "No PC continua tudo igual"
+                  "🔧 Catálogo: a janela de detalhes do produto e a de recorte de foto agora abrem por cima de tudo — no zoom 100% o menu e a barra de cima cobriam e cortavam o nome do produto"
               ]
 }
