@@ -1044,6 +1044,21 @@ a extensão da Friganso manda o estoque. Antes cada perfil era lista FIXA em `of
   `produtoFotos`) troca esse valor pela imagem; enquanto carrega mostra `FOTO_CARREGANDO`.
   `removerFotoProduto` apaga também o doc de `produto_fotos_img`. Miniatura continua em `produto_fotos_thumbs`.
 
+## 🎨 v2.56.0 (24/11/2026) — Estúdio de artes (PC) + detalhes do produto
+- `EstudioArtes` (antes de `CardapioScreen`): editor estilo Canva com Fabric.js 5.3.0 (jsdelivr),
+  carregado SOB DEMANDA por `carregarFabric()` (espera as Google Fonts, máx. 4 s). Só abre se
+  `ESTUDIO_EH_PC()` (= !isCapacitor e largura ≥ 900); senão `EstudioSoPcAviso`. Renderizado por
+  `ReactDOM.createPortal(..., document.body)` — dentro da tela o menu/topo ficavam por cima.
+  Modelos programáticos (Oferta do dia, Vários produtos, Natal, Em branco), produto = cartão branco +
+  foto + nome + preço (Textbox com `papel:'preco'`, `dadosProduto:{code}` → "Atualizar preços").
+  Salvas em `artes_modelos/{id} = {nome, tamanho, json, por, em}` (json ≤ 950k chars).
+  Usuário pediu (24/11) que coisas só-de-PC não pesem no APK — o Estúdio já segue isso.
+- `ProdutoDetalheModal`: tocar no card abre detalhes (preço via `checkDiscountRules`, cartão, prazos,
+  estoque) + Nova foto / Editar capa / Criar arte / Remover / Pedir troca. Pedidos em
+  `fotos_pedidos/{code} = {code, name, motivo, por, em}`; `subirFotoBlob` apaga o pedido ao salvar foto.
+  Botão "🙋 Pedidos de troca (N)" filtra o grid. `CropFotoModal` agora aceita zoom < 1 (foto inteira
+  com fundo branco) e `titulo`.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

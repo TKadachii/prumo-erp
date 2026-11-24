@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 261;
+        const APP_BUILD_VERSION = 262;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9650,6 +9650,13 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.56.0', data: '24/11/2026', areas: ['site'], itens: [
+                '🎨 ESTÚDIO DE ARTES (só no PC): editor estilo Canva no Catálogo. Modelos prontos (Oferta do dia, Vários produtos, Natal), produto com foto + preço de hoje num clique, textos, selos, formas, fundos, desfazer, baixar PNG e copiar pro WhatsApp Web',
+                'As artes salvas no Estúdio ficam na nuvem pra toda a equipe; "🔄 Atualizar preços" troca os preços pela tabela do dia',
+                '🔎 Tocar no produto do Catálogo agora abre os DETALHES: foto grande, preços (à vista, cartão, a prazo), estoque e as ações de foto',
+                '✂️ "Editar capa" reenquadra a foto atual (dá pra encaixar a embalagem inteira com fundo branco) e 🙋 "Pedir troca de foto" avisa a equipe — o pedido some sozinho quando alguém salva foto nova',
+                'No app de celular o Estúdio mostra o aviso "só no PC" e o editor nem é baixado, pra não pesar',
+            ] },
             { versao: '2.55.0', data: '24/11/2026', areas: ['site'], itens: [
                 '📸 FOTOS DO CATÁLOGO: 359 produtos ganharam foto (escolhidas entre as sugestões da internet). Elas ficam no próprio site, sem depender do Firebase',
                 '"📷 Adicionar foto" voltou a funcionar: o Firebase Storage tinha passado a recusar fotos novas (limite do plano grátis). Agora a foto fica salva no banco do Prumo',
@@ -10527,6 +10534,8 @@
             await db.collection('produto_fotos_img').doc(code).set({ data, em: new Date() });
             const url = FOTO_FS_PREFIXO + code + ':' + Date.now();
             await db.collection('system_data').doc('produto_fotos').set({ fotos: { [code]: url } }, { merge: true });
+            // Foto nova resolve o pedido de troca desse produto (v2.56.0).
+            db.collection('fotos_pedidos').doc(code).delete().catch(() => {});
             try {
                 const thumb = await gerarThumbBase64(blob);
                 await db.collection('produto_fotos_thumbs').doc(String(code)).set({ thumb });
@@ -10542,7 +10551,9 @@
 
         // ✂️ Recorte de foto estilo WhatsApp/Instagram: arrasta pra posicionar, controle deslizante pra
         // dar zoom, sempre corta um quadrado. Sai já como Blob JPEG comprimido (640x640), pronto pra subir.
-        const CropFotoModal = ({ file, onCancel, onConfirm }) => {
+        // v2.56.0: dá pra diminuir a foto além do quadrado (embalagem inteira com fundo branco) e o modal
+        // serve também pra "Editar capa" (reenquadrar a foto que já está salva) — `titulo` muda o cabeçalho.
+        const CropFotoModal = ({ file, onCancel, onConfirm, titulo }) => {
             const V = 300; // tamanho do viewport quadrado (px)
             const [zoom, setZoom] = useState(1);
             const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -10568,7 +10579,13 @@
             const displayScale = baseScale * zoom;
             const dispW = imgEl ? imgEl.naturalWidth * displayScale : 0;
             const dispH = imgEl ? imgEl.naturalHeight * displayScale : 0;
-            const clamp = (o, dw, dh) => ({ x: Math.min(0, Math.max(V - dw, o.x)), y: Math.min(0, Math.max(V - dh, o.y)) });
+            // Lado maior que o quadrado: não deixa sobrar buraco. Lado menor: fica centralizado (fundo branco).
+            const clamp = (o, dw, dh) => ({
+                x: dw <= V ? (V - dw) / 2 : Math.min(0, Math.max(V - dw, o.x)),
+                y: dh <= V ? (V - dh) / 2 : Math.min(0, Math.max(V - dh, o.y)),
+            });
+            // Zoom mínimo = a foto inteira cabe no quadrado.
+            const zoomMin = imgEl ? Math.min(1, Math.min(imgEl.naturalWidth, imgEl.naturalHeight) / Math.max(imgEl.naturalWidth, imgEl.naturalHeight)) : 1;
 
             useEffect(() => { if (imgEl) setOffset(o => clamp(o, dispW, dispH)); }, [zoom, imgEl]);
 
@@ -10587,17 +10604,18 @@
                 const canvas = document.createElement('canvas');
                 canvas.width = OUT; canvas.height = OUT;
                 const ctx = canvas.getContext('2d');
-                const cropX = -offset.x / displayScale, cropY = -offset.y / displayScale, cropSize = V / displayScale;
-                ctx.drawImage(imgEl, cropX, cropY, cropSize, cropSize, 0, 0, OUT, OUT);
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, OUT, OUT);
+                const k = OUT / V; // desenha exatamente o que aparece no quadrado da tela
+                ctx.drawImage(imgEl, offset.x * k, offset.y * k, dispW * k, dispH * k);
                 canvas.toBlob(blob => { if (blob) onConfirm(blob); else setEnviando(false); }, 'image/jpeg', 0.82);
             };
 
             return (
                 <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-[999]">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 flex flex-col items-center">
-                        <h3 className="font-bold text-slate-800 mb-3">Ajustar foto</h3>
+                        <h3 className="font-bold text-slate-800 mb-3">{titulo || 'Ajustar foto'}</h3>
                         <div
-                            className="relative rounded-2xl overflow-hidden bg-slate-200 touch-none select-none"
+                            className="relative rounded-2xl overflow-hidden bg-white border border-slate-200 touch-none select-none"
                             style={{ width: V, height: V, cursor: 'grab' }}
                             onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
                             onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
@@ -10609,7 +10627,11 @@
                         </div>
                         <div className="w-full flex items-center gap-2 mt-4">
                             <span className="text-xs text-slate-400">🔍</span>
-                            <input type="range" min="1" max="3" step="0.01" value={zoom} onChange={e => setZoom(parseFloat(e.target.value))} className="flex-1" />
+                            <input type="range" min={zoomMin.toFixed(2)} max="3" step="0.01" value={zoom} onChange={e => setZoom(parseFloat(e.target.value))} className="flex-1" />
+                        </div>
+                        <div className="w-full flex gap-2 mt-2">
+                            <button onClick={() => setZoom(zoomMin)} disabled={!imgEl} className="flex-1 text-[11px] font-bold py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">🖼️ Foto inteira</button>
+                            <button onClick={() => setZoom(1)} disabled={!imgEl} className="flex-1 text-[11px] font-bold py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">⬛ Preencher</button>
                         </div>
                         <p className="text-[11px] text-slate-400 mt-1">Arraste a foto pra posicionar, use o controle pra dar zoom.</p>
                         <div className="flex gap-3 w-full mt-4">
@@ -10969,7 +10991,589 @@
         };
 
         // 🍽️ Cardápio: cada produto pode ter uma foto, compartilhada com todo mundo que usa o sistema.
-        const CardapioScreen = ({ products, produtoFotos, showMessage, catalogoContatos, salvarCatalogoContatos }) => {
+        // 🔎 DETALHES DO PRODUTO (v2.56.0 — pedido 24/11/2026): tocar no card do Catálogo abre isto em vez
+        // de ir direto pro "trocar foto". Mostra foto grande, preços, estoque e dá as ações de foto:
+        // nova foto, editar capa (reenquadrar a atual), pedir troca (fica registrado em fotos_pedidos/{code}
+        // pra equipe ver; some sozinho quando alguém salva foto nova), criar arte e remover foto.
+        const ProdutoDetalheModal = ({ produto, foto, pedido, subindo, onFechar, onNovaFoto, onEditarCapa, onPedirTroca, onResolverPedido, onCriarArte, onRemoverFoto }) => {
+            const [motivo, setMotivo] = useState('');
+            const [pedindo, setPedindo] = useState(false);
+            const p = produto;
+            const r = checkDiscountRules(p.code, p.name, p.originalPrice);
+            const es = p.estoqueSpamov;
+            const reais = (v) => (v == null || isNaN(Number(v)) || Number(v) <= 0) ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const prazos = p.precosPrazo ? Object.entries(p.precosPrazo).sort((a, b) => Number(a[0]) - Number(b[0])) : [];
+            const linha = (rotulo, valor) => valor ? <div className="flex justify-between gap-3 py-1.5 border-b border-slate-800/60 text-sm"><span className="text-slate-400">{rotulo}</span><span className="font-bold text-slate-100 text-right">{valor}</span></div> : null;
+            return (
+                <div className="fixed inset-0 z-[998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3" onClick={onFechar}>
+                    <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[94vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-start justify-between gap-3">
+                            <div><span className="font-mono text-xs font-black text-violet-300">{p.code}</span><h3 className="text-lg font-black text-white leading-tight">{p.name}</h3></div>
+                            <button onClick={onFechar} className="h-9 w-9 flex-shrink-0 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xl">×</button>
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-5 p-4 sm:p-5">
+                            <div>
+                                <div className="aspect-square rounded-2xl overflow-hidden bg-white flex items-center justify-center">
+                                    {foto ? <img src={foto} alt={p.name} className="w-full h-full object-contain" /> : <span className="text-6xl">🍖</span>}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 mt-3">
+                                    <button onClick={onNovaFoto} disabled={subindo} className="py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-black">📷 {foto ? 'Nova foto' : 'Adicionar foto'}</button>
+                                    <button onClick={onEditarCapa} disabled={subindo || !foto} className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-100 text-xs font-black">✂️ Editar capa</button>
+                                    <button onClick={onCriarArte} className="py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-xs font-black">✨ Criar arte</button>
+                                    <button onClick={onRemoverFoto} disabled={subindo || !foto} className="py-2.5 rounded-xl bg-slate-900 hover:bg-rose-950 border border-slate-800 disabled:opacity-40 text-rose-300 text-xs font-black">🗑️ Remover foto</button>
+                                </div>
+                                {subindo && <p className="text-xs text-violet-300 font-bold mt-2 text-center">Enviando foto...</p>}
+                            </div>
+                            <div>
+                                <div className="rounded-2xl bg-[#10131f] border border-slate-800 p-4 mb-3">
+                                    <div className="flex items-center justify-between gap-2 mb-2"><span className="text-xs font-black uppercase tracking-wider text-slate-500">Preço de hoje</span>{produtoForaTabelaHoje(p) && <ProdutoForaTabelaBadge compacto />}</div>
+                                    {r.hasDiscount
+                                        ? <><div className="text-slate-500 line-through text-sm">{reais(r.origPrice)}</div><div className="text-2xl font-black text-emerald-300">{reais(r.unitFinalPrice)} <span className="text-xs font-bold text-emerald-400/80">à vista (−3%)</span></div></>
+                                        : <div className="text-2xl font-black text-slate-100">{reais(r.unitFinalPrice)} <span className="text-xs font-bold text-amber-300/80">sem desconto</span></div>}
+                                    <div className="text-xs text-slate-400 mt-1">por {String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase()}</div>
+                                </div>
+                                {linha('Cartão', reais(p.precoCartao))}
+                                {prazos.length > 0 && <div className="py-1.5 border-b border-slate-800/60 text-sm"><span className="text-slate-400">A prazo</span>
+                                    <div className="grid grid-cols-4 gap-1 mt-1">{prazos.map(([d, v]) => <div key={d} className="rounded-lg bg-slate-900 px-1.5 py-1 text-center"><div className="text-[10px] text-slate-500">{d} dias</div><div className="text-[11px] font-bold text-slate-100">{reais(v)}</div></div>)}</div></div>}
+                                {linha('Tipo / peso', [p.tipo, p.pesoItem].filter(Boolean).join(' · '))}
+                                {linha('Peças', p.pcsItem)}
+                                <div className="flex justify-between gap-3 py-1.5 border-b border-slate-800/60 text-sm"><span className="text-slate-400">Estoque</span><EstoqueBadge produto={p} /></div>
+                                {es && linha('Físico / comercial', `${es.fisico ?? '—'} / ${es.comercial ?? '—'} ${String(es.un || '').toLowerCase()}`)}
+                                {es && es.em && linha('Estoque lido em', new Date(es.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}
+                                {linha('Última vez na tabela', p.ultimaVez ? p.ultimaVez.split('-').reverse().join('/') : '')}
+
+                                <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-950/20 p-3">
+                                    <p className="text-xs font-black text-amber-200 mb-1">🙋 Pedido de troca de foto</p>
+                                    {pedido ? (
+                                        <>
+                                            <p className="text-sm text-amber-100">“{pedido.motivo || 'sem motivo'}”</p>
+                                            <p className="text-[11px] text-amber-300/70 mt-1">{pedido.por || 'Alguém'}{pedido.em && pedido.em.toDate ? ' · ' + pedido.em.toDate().toLocaleDateString('pt-BR') : ''} — some sozinho quando alguém salvar uma foto nova.</p>
+                                            <button onClick={onResolverPedido} className="mt-2 text-xs font-bold text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/20 px-3 py-1.5 rounded-lg">✅ Marcar como resolvido</button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows="2" placeholder="Ex.: foto é de outra marca, embalagem antiga..." className="w-full resize-none rounded-xl border border-amber-400/20 bg-[#080a12] px-3 py-2 text-sm text-slate-200 outline-none focus:border-amber-300" />
+                                            <button onClick={async () => { setPedindo(true); await onPedirTroca(motivo.trim()); setPedindo(false); setMotivo(''); }} disabled={pedindo} className="mt-2 w-full text-xs font-black text-slate-950 bg-amber-300 hover:bg-amber-200 disabled:opacity-50 py-2 rounded-lg">{pedindo ? 'Enviando...' : 'Pedir troca de foto'}</button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 🎨 ESTÚDIO DE ARTES — editor estilo Canva (v2.56.0, pedido 24/11/2026). SÓ PRO PC: no app
+        // Android (isCapacitor) e em tela estreita aparece um aviso no lugar, e a biblioteca (Fabric.js,
+        // ~300 KB) nem é baixada — ela só carrega na primeira vez que alguém abre o Estúdio no PC.
+        // Ideias de camadas/formas vieram do PhotoCraft, mas o código é próprio (o PhotoCraft é app desktop).
+        // Modelos salvos ficam em `artes_modelos/{id}` = { nome, tamanho, json, por, em } (um doc por arte;
+        // imagem enviada do computador é reduzida pra caber no limite de 1 MB do Firestore).
+        const ESTUDIO_TAMANHOS = [
+            { id: 'post', nome: 'Post (quadrado)', w: 1080, h: 1080 },
+            { id: 'story', nome: 'Story / Status', w: 1080, h: 1920 },
+            { id: 'banner', nome: 'Banner (deitado)', w: 1200, h: 628 },
+            { id: 'a4', nome: 'Folheto A4', w: 1240, h: 1754 },
+        ];
+        const ESTUDIO_FONTES = ['Montserrat', 'Anton', 'Bebas Neue', 'Poppins', 'Oswald', 'Pacifico', 'Arial'];
+        const ESTUDIO_CORES = ['#ffffff', '#0f172a', '#b91c1c', '#dc2626', '#f97316', '#facc15', '#16a34a', '#0ea5e9', '#7c3aed', '#db2777', '#78350f', '#64748b'];
+        const ESTUDIO_FUNDOS = [
+            { nome: 'Vermelho', cores: ['#7f1d1d', '#dc2626'] }, { nome: 'Noite', cores: ['#0b0d17', '#312e81'] },
+            { nome: 'Laranja', cores: ['#c2410c', '#facc15'] }, { nome: 'Verde', cores: ['#14532d', '#22c55e'] },
+            { nome: 'Natal', cores: ['#7f1d1d', '#14532d'] }, { nome: 'Branco', cores: ['#ffffff', '#f1f5f9'] },
+        ];
+        const ESTUDIO_EH_PC = () => !isCapacitor && (typeof window === 'undefined' || window.innerWidth >= 900);
+        let __fabricPromise = null;
+        const carregarFabric = () => {
+            if (window.fabric) return Promise.resolve(window.fabric);
+            if (__fabricPromise) return __fabricPromise;
+            __fabricPromise = new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js';
+                s.onload = () => window.fabric ? resolve(window.fabric) : reject(new Error('fabric'));
+                s.onerror = () => { __fabricPromise = null; reject(new Error('Não consegui carregar o editor (sem internet?)')); };
+                document.head.appendChild(s);
+                if (!document.getElementById('estudio-fontes')) {
+                    const l = document.createElement('link'); l.id = 'estudio-fontes'; l.rel = 'stylesheet';
+                    l.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Montserrat:wght@400;700;900&family=Oswald:wght@500;700&family=Pacifico&family=Poppins:wght@400;700;900&display=swap';
+                    document.head.appendChild(l);
+                }
+            }).then(async fabric => {
+                // Espera as fontes (senão o 1º desenho sai em Times e o texto quebra errado). Máx. 4 s.
+                try {
+                    await Promise.race([
+                        Promise.all(['400 40px Anton', '900 40px Montserrat', '400 40px Montserrat', '700 40px Montserrat', '400 40px Poppins', '400 40px Pacifico', '400 40px "Bebas Neue"', '700 40px Oswald'].map(f => document.fonts.load(f))),
+                        new Promise(r => setTimeout(r, 4000)),
+                    ]);
+                } catch (e) {}
+                return fabric;
+            });
+            return __fabricPromise;
+        };
+        const estudioReais = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const estudioPrecoProduto = (p) => checkDiscountRules(p.code, p.name, p.originalPrice);
+        const estudioUnidade = (p) => '/' + String((p && p.unidade) || 'kg').replace(/\s*\[.*\]/, '').toLowerCase();
+
+        const EstudioArtes = ({ products, produtoFotos, catalogoContatos, usuario, produtoInicial, onFechar, showMessage }) => {
+            const [pronto, setPronto] = useState(false);
+            const [erro, setErro] = useState('');
+            const [tamanho, setTamanho] = useState(ESTUDIO_TAMANHOS[0]);
+            const [aba, setAba] = useState('modelos');
+            const [sel, setSel] = useState(null);      // objeto selecionado (pra painel de propriedades)
+            const [, forcar] = useState(0);            // re-render do painel quando a seleção muda de valor
+            const [busca, setBusca] = useState('');
+            const [modelos, setModelos] = useState([]);
+            const [nomeModelo, setNomeModelo] = useState('');
+            const [modeloAtualId, setModeloAtualId] = useState(null);
+            const areaRef = useRef(null), canvasElRef = useRef(null), cRef = useRef(null);
+            const histRef = useRef({ pilha: [], pos: -1, travado: false });
+            const tamanhoRef = useRef(tamanho);
+            tamanhoRef.current = tamanho;
+
+            const contatoTexto = (catalogoContatos || []).map(c => `${c.icone || ''} ${c.texto || ''}`.trim()).filter(Boolean).join('   ');
+
+            // ---------- histórico (desfazer/refazer) ----------
+            const gravar = () => {
+                const c = cRef.current, h = histRef.current;
+                if (!c || h.travado) return;
+                const json = JSON.stringify(c.toJSON(['dadosProduto', 'papel']));
+                if (h.pilha[h.pos] === json) return;
+                h.pilha = h.pilha.slice(0, h.pos + 1); h.pilha.push(json);
+                if (h.pilha.length > 50) h.pilha.shift();
+                h.pos = h.pilha.length - 1;
+            };
+            const restaurar = (json) => new Promise(res => {
+                const c = cRef.current; histRef.current.travado = true;
+                c.loadFromJSON(json, () => { c.renderAll(); histRef.current.travado = false; setSel(null); res(); });
+            });
+            const desfazer = async () => { const h = histRef.current; if (h.pos > 0) { h.pos--; await restaurar(h.pilha[h.pos]); } };
+            const refazer = async () => { const h = histRef.current; if (h.pos < h.pilha.length - 1) { h.pos++; await restaurar(h.pilha[h.pos]); } };
+
+            // ---------- encaixe do canvas na tela ----------
+            const ajustarZoom = () => {
+                const c = cRef.current, area = areaRef.current; if (!c || !area) return;
+                const t = tamanhoRef.current;
+                const z = Math.min((area.clientWidth - 40) / t.w, (area.clientHeight - 40) / t.h, 1);
+                c.setZoom(z); c.setWidth(t.w * z); c.setHeight(t.h * z); c.renderAll();
+            };
+
+            // ---------- montar o editor ----------
+            useEffect(() => {
+                let vivo = true;
+                carregarFabric().then(fabric => {
+                    if (!vivo) return;
+                    const c = new fabric.Canvas(canvasElRef.current, { backgroundColor: '#ffffff', preserveObjectStacking: true });
+                    cRef.current = c;
+                    fabric.Object.prototype.set({ transparentCorners: false, cornerColor: '#7c3aed', cornerStyle: 'circle', borderColor: '#7c3aed', cornerSize: 12 });
+                    const atualizarSel = () => setSel(c.getActiveObject() || null);
+                    c.on('selection:created', atualizarSel); c.on('selection:updated', atualizarSel); c.on('selection:cleared', () => setSel(null));
+                    c.on('object:modified', () => { gravar(); forcar(n => n + 1); });
+                    c.on('object:added', gravar); c.on('object:removed', gravar);
+                    ajustarZoom(); setPronto(true);
+                    if (produtoInicial) modeloOferta(produtoInicial); else modeloOferta(null);
+                    gravar();
+                }).catch(e => setErro(e.message || 'Erro ao abrir o editor'));
+                const onResize = () => ajustarZoom();
+                window.addEventListener('resize', onResize);
+                return () => { vivo = false; window.removeEventListener('resize', onResize); if (cRef.current) { cRef.current.dispose(); cRef.current = null; } };
+            }, []);
+            useEffect(() => { ajustarZoom(); }, [tamanho]);
+
+            // modelos salvos da equipe
+            useEffect(() => {
+                const unsub = db.collection('artes_modelos').orderBy('em', 'desc').limit(60).onSnapshot(s => setModelos(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
+                return () => unsub();
+            }, []);
+
+            // ---------- atalhos de teclado ----------
+            useEffect(() => {
+                const onKey = (e) => {
+                    const c = cRef.current; if (!c) return;
+                    const ativo = c.getActiveObject();
+                    const digitando = ativo && ativo.isEditing || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '');
+                    if (digitando) return;
+                    if ((e.key === 'Delete' || e.key === 'Backspace') && ativo) { e.preventDefault(); apagar(); }
+                    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? refazer() : desfazer(); }
+                    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); refazer(); }
+                    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && ativo) { e.preventDefault(); duplicar(); }
+                    else if (ativo && e.key.startsWith('Arrow')) {
+                        e.preventDefault(); const d = e.shiftKey ? 10 : 2;
+                        if (e.key === 'ArrowLeft') ativo.left -= d; if (e.key === 'ArrowRight') ativo.left += d;
+                        if (e.key === 'ArrowUp') ativo.top -= d; if (e.key === 'ArrowDown') ativo.top += d;
+                        ativo.setCoords(); c.renderAll(); gravar();
+                    }
+                };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, []);
+
+            // ---------- helpers de criação ----------
+            const F = () => window.fabric;
+            const add = (obj, selecionar = true) => { const c = cRef.current; c.add(obj); if (selecionar) c.setActiveObject(obj); c.renderAll(); return obj; };
+            const centro = () => ({ x: tamanhoRef.current.w / 2, y: tamanhoRef.current.h / 2 });
+            const texto = (t, o = {}) => new (F().Textbox)(t, { fontFamily: 'Montserrat', fontWeight: 900, fontSize: 80, fill: '#ffffff', textAlign: 'center', width: tamanhoRef.current.w * 0.8, originX: 'center', originY: 'center', left: centro().x, top: centro().y, paintFirst: 'stroke', ...o });
+            const imagem = (src, o = {}) => new Promise((res) => {
+                F().Image.fromURL(src, img => {
+                    if (!img || !img.width) { showMessage('Não consegui abrir essa imagem.', 'error'); return res(null); }
+                    const alvo = o.caber || 500; delete o.caber;
+                    const s = alvo / Math.max(img.width, img.height);
+                    img.set({ scaleX: s, scaleY: s, originX: 'center', originY: 'center', left: centro().x, top: centro().y, ...o });
+                    res(img);
+                }, { crossOrigin: 'anonymous' });
+            });
+            const fundoGradiente = (cores) => {
+                const c = cRef.current, t = tamanhoRef.current;
+                c.setBackgroundColor(new (F().Gradient)({ type: 'linear', coords: { x1: 0, y1: 0, x2: t.w, y2: t.h }, colorStops: [{ offset: 0, color: cores[0] }, { offset: 1, color: cores[1] }] }), () => { c.renderAll(); gravar(); });
+            };
+            const limpar = () => { const c = cRef.current; histRef.current.travado = true; c.getObjects().slice().forEach(o => c.remove(o)); histRef.current.travado = false; };
+
+            // Produto vira 3 peças soltas (foto, nome, preço) — cada uma editável. O preço guarda o código
+            // em `dadosProduto` pra o botão "Atualizar preços" trocar o valor quando a tabela mudar.
+            const precoTexto = (p) => { const r = estudioPrecoProduto(p); return estudioReais(r.unitFinalPrice) + estudioUnidade(p); };
+            const addProduto = async (p, pos = {}) => {
+                const t = tamanhoRef.current;
+                const x = pos.x != null ? pos.x : t.w / 2, y = pos.y != null ? pos.y : t.h / 2, tam = pos.tam || Math.min(t.w, t.h) * 0.5;
+                const src = produtoFotos && produtoFotos[String(p.code)];
+                if (src && src !== FOTO_CARREGANDO) {
+                    // Cartão branco arredondado atrás da foto (as fotos têm fundo branco e ficavam "quadradonas").
+                    add(new (F().Rect)({ left: x, top: y - tam * 0.12, originX: 'center', originY: 'center', width: tam * 1.04, height: tam * 1.04, rx: tam * 0.08, ry: tam * 0.08, fill: '#ffffff', shadow: new (F().Shadow)({ color: 'rgba(0,0,0,0.35)', blur: tam * 0.06, offsetY: tam * 0.02 }) }), false);
+                    const img = await imagem(src, { caber: tam * 0.96, left: x, top: y - tam * 0.12 });
+                    if (img) add(img, false);
+                }
+                // Nome e preço empilhados DEBAIXO do cartão pela altura real do texto (nome pode ter 1 ou 2 linhas).
+                const nome = add(texto(String(p.name || '').toUpperCase(), { fontSize: Math.round(tam * 0.085), width: tam * 1.25, left: x, originY: 'top', top: y + tam * 0.44, fill: pos.corTexto || '#ffffff' }), false);
+                const fimNome = nome.top + nome.height * (nome.scaleY || 1);
+                const preco = texto(precoTexto(p), { fontSize: Math.round(tam * 0.16), fontFamily: 'Anton', fontWeight: 400, width: tam * 1.3, left: x, originY: 'top', top: fimNome + tam * 0.02, fill: pos.corPreco || '#facc15', stroke: '#0f172a', strokeWidth: 0, dadosProduto: { code: String(p.code) }, papel: 'preco' });
+                add(preco, false);
+                cRef.current.renderAll(); gravar();
+            };
+            const atualizarPrecos = () => {
+                const c = cRef.current; let n = 0;
+                c.getObjects().forEach(o => {
+                    if (o.papel === 'preco' && o.dadosProduto) {
+                        const p = (products || []).find(pp => String(pp.code) === o.dadosProduto.code);
+                        if (p) { o.set('text', precoTexto(p)); n++; }
+                    }
+                });
+                c.renderAll(); gravar();
+                showMessage(n ? `${n} preço(s) atualizado(s) com a tabela de hoje.` : 'Nenhum preço de produto nesta arte.', n ? 'success' : 'error');
+            };
+
+            // ---------- modelos prontos ----------
+            const rodape = (cor = '#ffffff') => {
+                const t = tamanhoRef.current;
+                if (contatoTexto) add(texto(contatoTexto, { fontSize: Math.round(t.w * 0.024), fontWeight: 700, top: t.h - t.w * 0.05, width: t.w * 0.92, fill: cor }), false);
+            };
+            const logo = async (y) => {
+                const t = tamanhoRef.current;
+                // Ancorado pelo TOPO (o logo é mais alto que largo e cortava em cima).
+                const img = await imagem(FRIGANSO_LOGO_PNG, { caber: Math.min(t.w, t.h) * 0.13, originY: 'top', top: y != null ? y : Math.min(t.w, t.h) * 0.04 });
+                if (img) {
+                    // Selo branco atrás do logo: o logo é azul-marinho e sumia nos fundos escuros.
+                    const lw = img.width * img.scaleX, lh = img.height * img.scaleY, pad = lh * 0.12;
+                    add(new (F().Rect)({ left: img.left, top: img.top - pad, originX: 'center', originY: 'top', width: lw + pad * 2, height: lh + pad * 2, rx: pad * 1.6, ry: pad * 1.6, fill: '#ffffff' }), false);
+                    add(img, false);
+                }
+            };
+            const validade = () => { const d = new Date(); d.setDate(d.getDate() + 1); return 'Válido até ' + d.toLocaleDateString('pt-BR') + ' ou enquanto durar o estoque'; };
+            const modeloOferta = async (p) => {
+                const t = tamanhoRef.current; limpar(); fundoGradiente(['#7f1d1d', '#dc2626']);
+                await logo();
+                add(texto('OFERTA DO DIA', { fontFamily: 'Anton', fontWeight: 400, fontSize: Math.round(t.w * 0.1), top: t.w * 0.26 + (t.h - t.w) * 0.12, fill: '#facc15', width: t.w * 0.92 }), false);
+                if (p) await addProduto(p, { y: t.h * 0.55, tam: Math.min(t.w, t.h) * 0.34 });
+                else add(texto('Adicione um produto pela aba 🥩 Produtos', { fontSize: Math.round(t.w * 0.035), fontWeight: 700, top: t.h * 0.5 }), false);
+                add(texto(validade(), { fontSize: Math.round(t.w * 0.022), fontWeight: 400, top: t.h - t.w * 0.1 }), false);
+                rodape(); cRef.current.discardActiveObject(); cRef.current.renderAll(); gravar();
+            };
+            const modeloVarios = async () => {
+                const t = tamanhoRef.current; limpar(); fundoGradiente(['#0b0d17', '#312e81']);
+                await logo();
+                add(texto('OFERTAS DA SEMANA', { fontFamily: 'Anton', fontWeight: 400, fontSize: Math.round(t.w * 0.08), top: t.w * 0.25 + (t.h - t.w) * 0.1, fill: '#facc15' }), false);
+                const comFoto = (products || []).filter(p => p.ativo !== false && produtoFotos && produtoFotos[String(p.code)] && produtoFotos[String(p.code)] !== FOTO_CARREGANDO && p.estoqueSpamov && Number(p.estoqueSpamov.disponivel) >= 6).slice(0, 4);
+                // Deitado (banner): 4 numa fileira. Em pé/quadrado: 2×2, com a sobra de altura (story/A4)
+                // distribuída entre as fileiras. Medidas conferidas no teste pra preço não bater no rodapé.
+                const deitado = t.w > t.h;
+                const tam = deitado ? t.h * 0.3 : t.w * 0.17 * (t.h / t.w > 1.4 ? 1.4 : 1);
+                const extra = t.h - t.w;
+                const pos = deitado
+                    ? [[0.14, 0.6], [0.38, 0.6], [0.62, 0.6], [0.86, 0.6]].map(([a, b]) => [t.w * a, t.h * b])
+                    : [[0.28, 0.417, 0.3], [0.72, 0.417, 0.3], [0.28, 0.704, 0.55], [0.72, 0.704, 0.55]].map(([a, b, k]) => [t.w * a, t.w * b + extra * k]);
+                for (let i = 0; i < comFoto.length; i++) await addProduto(comFoto[i], { x: pos[i][0], y: pos[i][1], tam });
+                rodape(); cRef.current.discardActiveObject(); cRef.current.renderAll(); gravar();
+                showMessage('Troque os produtos clicando neles e apagando (Delete), depois adicione outros na aba 🥩 Produtos.', 'success');
+            };
+            const modeloNatal = async () => {
+                const t = tamanhoRef.current; limpar(); fundoGradiente(['#7f1d1d', '#14532d']);
+                await logo();
+                add(texto('Ceia de Natal', { fontFamily: 'Pacifico', fontWeight: 400, fontSize: Math.round(t.w * 0.09), top: t.w * 0.28 + (t.h - t.w) * 0.1, fill: '#ffffff' }), false);
+                add(texto('Tender, lombo, pernil, chester e bacalhau', { fontSize: Math.round(t.w * 0.032), fontWeight: 700, top: t.w * 0.37 + (t.h - t.w) * 0.1, fill: '#fde68a' }), false);
+                add(new (F().Rect)({ left: t.w / 2, top: t.h * 0.62, originX: 'center', originY: 'center', width: t.w * 0.8, height: t.h * 0.42, rx: 36, ry: 36, fill: 'rgba(255,255,255,0.12)', stroke: '#facc15', strokeWidth: 4 }), false);
+                add(texto('Faça sua encomenda!', { fontFamily: 'Montserrat', fontSize: Math.round(t.w * 0.05), top: t.h * 0.88, fill: '#facc15' }), false);
+                rodape(); cRef.current.discardActiveObject(); cRef.current.renderAll(); gravar();
+            };
+            const modeloBranco = () => { limpar(); const c = cRef.current; c.setBackgroundColor('#ffffff', () => { c.renderAll(); gravar(); }); };
+
+            // ---------- elementos ----------
+            const addTitulo = () => add(texto('TÍTULO', { fontFamily: 'Anton', fontWeight: 400, fontSize: 120, fill: '#facc15' }));
+            const addSub = () => add(texto('Subtítulo aqui', { fontSize: 56, fontWeight: 700 }));
+            const addCorpo = () => add(texto('Texto do corpo. Clique duas vezes para editar.', { fontSize: 36, fontWeight: 400, fontFamily: 'Poppins' }));
+            const addRet = () => add(new (F().Rect)({ left: centro().x, top: centro().y, originX: 'center', originY: 'center', width: 400, height: 240, rx: 24, ry: 24, fill: '#dc2626' }));
+            const addCirculo = () => add(new (F().Circle)({ left: centro().x, top: centro().y, originX: 'center', originY: 'center', radius: 150, fill: '#facc15' }));
+            const addLinha = () => add(new (F().Rect)({ left: centro().x, top: centro().y, originX: 'center', originY: 'center', width: 600, height: 10, fill: '#ffffff' }));
+            const addSelo = () => {
+                const pts = []; const R = 190, r = 150, n = 16;
+                for (let i = 0; i < n * 2; i++) { const a = (Math.PI / n) * i; const rr = i % 2 ? r : R; pts.push({ x: rr * Math.cos(a), y: rr * Math.sin(a) }); }
+                const estrela = new (F().Polygon)(pts, { fill: '#facc15', originX: 'center', originY: 'center' });
+                const txt = new (F().Textbox)('OFERTA', { fontFamily: 'Anton', fontSize: 72, fill: '#b91c1c', textAlign: 'center', width: 280, originX: 'center', originY: 'center' });
+                add(new (F().Group)([estrela, txt], { left: centro().x, top: centro().y, originX: 'center', originY: 'center', angle: -12 }));
+            };
+            const addEtiquetaPreco = () => {
+                const ret = new (F().Rect)({ width: 420, height: 150, rx: 26, ry: 26, fill: '#facc15', originX: 'center', originY: 'center' });
+                const txt = new (F().Textbox)('R$ 0,00/kg', { fontFamily: 'Anton', fontSize: 84, fill: '#b91c1c', textAlign: 'center', width: 400, originX: 'center', originY: 'center' });
+                add(new (F().Group)([ret, txt], { left: centro().x, top: centro().y, originX: 'center', originY: 'center' }));
+            };
+            const addLogo = async (src) => { const img = await imagem(src, { caber: 320 }); if (img) { add(img); gravar(); } };
+            const enviarImagem = (file) => {
+                if (!file || !file.type.startsWith('image/')) return;
+                // Reduz pra no máx. 1200px (JPEG) — senão o modelo salvo estoura o limite do Firestore.
+                const url = URL.createObjectURL(file); const im = new Image();
+                im.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const s = Math.min(1, 1200 / Math.max(im.width, im.height));
+                    const cv = document.createElement('canvas'); cv.width = Math.round(im.width * s); cv.height = Math.round(im.height * s);
+                    cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+                    const png = /png|webp/.test(file.type);
+                    imagem(cv.toDataURL(png ? 'image/png' : 'image/jpeg', 0.85), { caber: 600 }).then(img => { if (img) { add(img); gravar(); } });
+                };
+                im.src = url;
+            };
+
+            // ---------- ações da seleção ----------
+            const apagar = () => { const c = cRef.current; const a = c.getActiveObjects(); a.forEach(o => c.remove(o)); c.discardActiveObject(); c.renderAll(); };
+            const duplicar = () => {
+                const c = cRef.current; const a = c.getActiveObject(); if (!a) return;
+                a.clone(cl => { cl.set({ left: a.left + 30, top: a.top + 30 }); if (cl.type === 'activeSelection') { cl.canvas = c; cl.forEachObject(o => c.add(o)); cl.setCoords(); } else c.add(cl); c.setActiveObject(cl); c.renderAll(); gravar(); }, ['dadosProduto', 'papel']);
+            };
+            const camada = (acao) => {
+                const c = cRef.current; const a = c.getActiveObject(); if (!a) return;
+                if (acao === 'frente') c.bringToFront(a); if (acao === 'tras') c.sendToBack(a);
+                if (acao === 'subir') c.bringForward(a); if (acao === 'descer') c.sendBackwards(a);
+                c.renderAll(); gravar();
+            };
+            const centralizar = (eixo) => {
+                const c = cRef.current; const a = c.getActiveObject(); if (!a) return;
+                const t = tamanhoRef.current; const ce = a.getCenterPoint();
+                // 'h' = centro na horizontal (mantém a altura), 'v' = meio na vertical (mantém o lado)
+                a.setPositionByOrigin(eixo === 'h' ? new (F().Point)(t.w / 2, ce.y) : new (F().Point)(ce.x, t.h / 2), 'center', 'center');
+                a.setCoords(); c.renderAll(); gravar();
+            };
+            const prop = (k, v) => {
+                const c = cRef.current; const a = c.getActiveObject(); if (!a) return;
+                const aplicar = (o) => { if (k === 'fill' && o.type === 'group') o.getObjects().forEach(x => x.set('fill', v)); else o.set(k, v); };
+                if (a.type === 'activeSelection') a.getObjects().forEach(aplicar); else aplicar(a);
+                c.renderAll(); gravar(); forcar(n => n + 1);
+            };
+            const trocarTamanho = (t) => {
+                // Mantém os objetos na mesma posição relativa ao trocar o formato.
+                const c = cRef.current, antes = tamanhoRef.current;
+                const fx = t.w / antes.w, fy = t.h / antes.h, f = Math.min(fx, fy);
+                c.getObjects().forEach(o => { o.set({ left: o.left * fx, top: o.top * fy, scaleX: o.scaleX * f, scaleY: o.scaleY * f }); o.setCoords(); });
+                tamanhoRef.current = t; setTamanho(t);
+                const bg = c.backgroundColor;
+                if (bg && bg.colorStops) fundoGradiente(bg.colorStops.map(s => s.color)); else { ajustarZoom(); gravar(); }
+            };
+
+            // ---------- salvar / baixar ----------
+            const exportar = () => {
+                // O canvas na tela está com zoom; o multiplier devolve o tamanho real (ex.: 1080×1080).
+                const c = cRef.current; c.discardActiveObject(); c.renderAll();
+                return c.toDataURL({ format: 'png', multiplier: 1 / c.getZoom() });
+            };
+            const baixar = () => {
+                try {
+                    const a = document.createElement('a'); a.href = exportar(); a.download = 'arte-' + (nomeModelo.trim() || 'friganso').replace(/[^\w-]+/g, '-').toLowerCase() + '.png'; a.click();
+                } catch (e) { showMessage('Não consegui gerar a imagem (alguma foto de fora bloqueou). Tente trocar a foto.', 'error'); }
+            };
+            const copiar = async () => {
+                try {
+                    const blob = await (await fetch(exportar())).blob();
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    showMessage('Arte copiada! É só colar (Ctrl+V) no WhatsApp Web. 📋', 'success');
+                } catch (e) { showMessage('Não deu pra copiar — use "Baixar PNG".', 'error'); }
+            };
+            const salvarModelo = async (comoNovo) => {
+                const nome = nomeModelo.trim(); if (!nome) { showMessage('Dê um nome pra arte antes de salvar.', 'error'); return; }
+                const json = JSON.stringify(cRef.current.toJSON(['dadosProduto', 'papel']));
+                if (json.length > 950000) { showMessage('Essa arte ficou pesada demais pra salvar (muitas imagens do computador). Baixe o PNG.', 'error'); return; }
+                const dados = { nome, tamanho: tamanhoRef.current.id, json, por: (usuario && usuario.name) || '', em: new Date() };
+                try {
+                    if (modeloAtualId && !comoNovo) await db.collection('artes_modelos').doc(modeloAtualId).set(dados);
+                    else { const r = await db.collection('artes_modelos').add(dados); setModeloAtualId(r.id); }
+                    showMessage('Arte salva pra toda a equipe! 💾', 'success');
+                } catch (e) { showMessage('Erro ao salvar a arte.', 'error'); }
+            };
+            const abrirModelo = async (m) => {
+                const t = ESTUDIO_TAMANHOS.find(x => x.id === m.tamanho) || ESTUDIO_TAMANHOS[0];
+                tamanhoRef.current = t; setTamanho(t);
+                await restaurar(m.json); ajustarZoom(); gravar();
+                setNomeModelo(m.nome || ''); setModeloAtualId(m.id);
+            };
+            const apagarModelo = async (m) => {
+                if (!window.confirm(`Apagar a arte "${m.nome}" pra todo mundo?`)) return;
+                try { await db.collection('artes_modelos').doc(m.id).delete(); if (modeloAtualId === m.id) setModeloAtualId(null); } catch (e) { showMessage('Erro ao apagar.', 'error'); }
+            };
+
+            const achados = useMemo(() => {
+                const q = busca.trim(); const ativos = (products || []).filter(p => p.ativo !== false);
+                return (q ? filtrarProdutos(ativos, q) : ativos.filter(p => produtoFotos && produtoFotos[String(p.code)])).slice(0, 40);
+            }, [busca, products, produtoFotos]);
+
+            const ehTexto = sel && (sel.type === 'textbox' || sel.type === 'i-text' || sel.type === 'text');
+            const botao = 'px-3 py-2 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-100 disabled:opacity-40';
+            const abaBtn = (id, rotulo) => <button key={id} onClick={() => setAba(id)} className={`flex-1 py-2 text-[11px] font-black rounded-lg ${aba === id ? 'bg-violet-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>{rotulo}</button>;
+
+            return (
+                <div className="fixed inset-0 z-[1000] bg-[#06070d] text-slate-100 flex flex-col">
+                    {/* barra de cima */}
+                    <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-800 bg-[#0b0d17]">
+                        <span className="font-black text-violet-300 mr-2">🎨 Estúdio de artes</span>
+                        <select value={tamanho.id} onChange={e => trocarTamanho(ESTUDIO_TAMANHOS.find(t => t.id === e.target.value))} className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs font-bold">
+                            {ESTUDIO_TAMANHOS.map(t => <option key={t.id} value={t.id}>{t.nome} · {t.w}×{t.h}</option>)}
+                        </select>
+                        <button onClick={desfazer} className={botao} title="Ctrl+Z">↶ Desfazer</button>
+                        <button onClick={refazer} className={botao} title="Ctrl+Y">↷ Refazer</button>
+                        <button onClick={atualizarPrecos} className={botao} title="Troca os preços dos produtos pela tabela de hoje">🔄 Atualizar preços</button>
+                        <div className="flex-1" />
+                        <input value={nomeModelo} onChange={e => setNomeModelo(e.target.value)} placeholder="Nome da arte" className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs w-44" />
+                        <button onClick={() => salvarModelo(false)} className={botao}>💾 Salvar</button>
+                        {modeloAtualId && <button onClick={() => salvarModelo(true)} className={botao}>Salvar cópia</button>}
+                        <button onClick={copiar} className={botao}>📋 Copiar</button>
+                        <button onClick={baixar} className="px-4 py-2 rounded-lg text-xs font-black bg-violet-600 hover:bg-violet-500 text-white">⬇️ Baixar PNG</button>
+                        <button onClick={onFechar} className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 text-xl">×</button>
+                    </div>
+                    <div className="flex-1 flex min-h-0">
+                        {/* painel esquerdo */}
+                        <div className="w-72 flex-shrink-0 border-r border-slate-800 bg-[#0b0d17] flex flex-col min-h-0">
+                            <div className="flex gap-1 p-2">{[abaBtn('modelos', '🧩 Modelos'), abaBtn('produtos', '🥩 Produtos'), abaBtn('texto', '🔤 Texto')]}</div>
+                            <div className="flex gap-1 px-2 pb-2">{[abaBtn('elementos', '⭐ Elementos'), abaBtn('fundo', '🎨 Fundo'), abaBtn('salvas', '💾 Salvas')]}</div>
+                            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                                {aba === 'modelos' && <>
+                                    <p className="text-[11px] text-slate-400">Começa uma arte nova (apaga a atual — dá pra desfazer).</p>
+                                    <button onClick={() => modeloOferta(produtoInicial || null)} className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-red-900 to-red-600 font-black">🔥 Oferta do dia</button>
+                                    <button onClick={modeloVarios} className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-900 font-black">🛒 Vários produtos</button>
+                                    <button onClick={modeloNatal} className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-red-900 to-green-900 font-black">🎄 Natal</button>
+                                    <button onClick={modeloBranco} className="w-full text-left p-3 rounded-xl bg-white text-slate-900 font-black">⬜ Em branco</button>
+                                </>}
+                                {aba === 'produtos' && <>
+                                    <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar código ou nome..." className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs" />
+                                    <p className="text-[11px] text-slate-400">Clique pra pôr na arte: foto + nome + preço de hoje.</p>
+                                    {achados.map(p => {
+                                        const f = produtoFotos && produtoFotos[String(p.code)];
+                                        return <button key={p.code} onClick={() => addProduto(p)} className="w-full flex items-center gap-2 p-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-left">
+                                            <div className="h-11 w-11 rounded-md bg-white flex-shrink-0 overflow-hidden flex items-center justify-center">{f ? <img src={f} className="w-full h-full object-contain" /> : '🍖'}</div>
+                                            <div className="min-w-0"><div className="text-[10px] font-mono text-violet-300">{p.code}</div><div className="text-[11px] font-bold leading-tight truncate">{p.name}</div><div className="text-[10px] text-emerald-300">{precoTexto(p)}</div></div>
+                                        </button>;
+                                    })}
+                                </>}
+                                {aba === 'texto' && <>
+                                    <button onClick={addTitulo} className="w-full p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-2xl" style={{ fontFamily: 'Anton' }}>Título</button>
+                                    <button onClick={addSub} className="w-full p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-lg font-bold">Subtítulo</button>
+                                    <button onClick={addCorpo} className="w-full p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-sm">Texto do corpo</button>
+                                    <button onClick={() => add(texto(validade(), { fontSize: 30, fontWeight: 400 }))} className="w-full p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs">📅 Validade (amanhã)</button>
+                                    {contatoTexto && <button onClick={() => rodape()} className="w-full p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs">📞 Rodapé de contato</button>}
+                                </>}
+                                {aba === 'elementos' && <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={addSelo} className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold">⭐ Selo OFERTA</button>
+                                    <button onClick={addEtiquetaPreco} className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold">🏷️ Etiqueta preço</button>
+                                    <button onClick={addRet} className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold">▭ Retângulo</button>
+                                    <button onClick={addCirculo} className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold">● Círculo</button>
+                                    <button onClick={addLinha} className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold">— Linha</button>
+                                    <button onClick={() => addLogo(FRIGANSO_LOGO_PNG)} className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold">🏷️ Logo Friganso</button>
+                                    <button onClick={() => addLogo(PRUMO_LOGO_DATA_URI)} className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold">🟣 Logo Prumo</button>
+                                    <label className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-center cursor-pointer">🖼️ Imagem do PC<input type="file" accept="image/*" className="hidden" onChange={e => { enviarImagem(e.target.files && e.target.files[0]); e.target.value = ''; }} /></label>
+                                </div>}
+                                {aba === 'fundo' && <>
+                                    <div className="grid grid-cols-3 gap-2">{ESTUDIO_FUNDOS.map(f => <button key={f.nome} onClick={() => fundoGradiente(f.cores)} className="h-14 rounded-lg text-[10px] font-black text-white" style={{ background: `linear-gradient(135deg, ${f.cores[0]}, ${f.cores[1]})`, textShadow: '0 1px 2px #000' }}>{f.nome}</button>)}</div>
+                                    <p className="text-[11px] text-slate-400 pt-2">Cor lisa:</p>
+                                    <div className="grid grid-cols-6 gap-1">{ESTUDIO_CORES.map(cor => <button key={cor} onClick={() => { const c = cRef.current; c.setBackgroundColor(cor, () => { c.renderAll(); gravar(); }); }} className="h-8 rounded border border-slate-700" style={{ background: cor }} />)}</div>
+                                    <label className="flex items-center gap-2 text-xs pt-2">Outra cor <input type="color" onChange={e => { const c = cRef.current; c.setBackgroundColor(e.target.value, () => { c.renderAll(); gravar(); }); }} /></label>
+                                </>}
+                                {aba === 'salvas' && <>
+                                    {!modelos.length && <p className="text-[11px] text-slate-400">Nenhuma arte salva ainda. Dê um nome lá em cima e clique em 💾 Salvar.</p>}
+                                    {modelos.map(m => <div key={m.id} className={`p-2 rounded-lg border ${modeloAtualId === m.id ? 'border-violet-500 bg-violet-950/40' : 'border-slate-800 bg-slate-900'}`}>
+                                        <button onClick={() => abrirModelo(m)} className="w-full text-left"><div className="text-xs font-black">{m.nome}</div><div className="text-[10px] text-slate-400">{(ESTUDIO_TAMANHOS.find(t => t.id === m.tamanho) || {}).nome} · {m.por}{m.em && m.em.toDate ? ' · ' + m.em.toDate().toLocaleDateString('pt-BR') : ''}</div></button>
+                                        <button onClick={() => apagarModelo(m)} className="text-[10px] text-rose-400 font-bold mt-1">🗑️ apagar</button>
+                                    </div>)}
+                                </>}
+                            </div>
+                        </div>
+                        {/* área do canvas */}
+                        <div ref={areaRef} className="flex-1 min-w-0 flex items-center justify-center overflow-hidden" style={{ background: 'repeating-conic-gradient(#11131c 0% 25%, #0d0f17 0% 50%) 50% / 24px 24px' }}>
+                            {erro ? <p className="text-rose-300 font-bold">{erro}</p> : !pronto && <p className="text-slate-400 font-bold">Abrindo o estúdio...</p>}
+                            <div className="shadow-2xl" style={{ display: pronto ? 'block' : 'none' }}><canvas ref={canvasElRef} /></div>
+                        </div>
+                        {/* painel direito: propriedades */}
+                        <div className="w-64 flex-shrink-0 border-l border-slate-800 bg-[#0b0d17] p-3 overflow-y-auto space-y-3">
+                            {!sel ? <p className="text-[11px] text-slate-400">Clique num item da arte pra editar. Duplo clique num texto pra escrever.<br /><br />Atalhos: Delete apaga · Ctrl+Z desfaz · Ctrl+D duplica · setas movem.</p> : <>
+                                <div className="grid grid-cols-2 gap-1">
+                                    <button onClick={duplicar} className={botao}>⧉ Duplicar</button>
+                                    <button onClick={apagar} className={botao + ' !text-rose-300'}>🗑️ Apagar</button>
+                                    <button onClick={() => camada('frente')} className={botao}>⤒ Frente</button>
+                                    <button onClick={() => camada('tras')} className={botao}>⤓ Trás</button>
+                                    <button onClick={() => camada('subir')} className={botao}>↑ Subir</button>
+                                    <button onClick={() => camada('descer')} className={botao}>↓ Descer</button>
+                                    <button onClick={() => centralizar('h')} className={botao}>↔ Centro</button>
+                                    <button onClick={() => centralizar('v')} className={botao}>↕ Meio</button>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-bold text-slate-400 mb-1">Cor</p>
+                                    <div className="grid grid-cols-6 gap-1">{ESTUDIO_CORES.map(cor => <button key={cor} onClick={() => prop('fill', cor)} className="h-7 rounded border border-slate-700" style={{ background: cor }} />)}</div>
+                                    <input type="color" onChange={e => prop('fill', e.target.value)} className="mt-1 w-full h-8" />
+                                </div>
+                                {ehTexto && <>
+                                    <div><p className="text-[11px] font-bold text-slate-400 mb-1">Fonte</p>
+                                        <select value={sel.fontFamily} onChange={e => prop('fontFamily', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs">{ESTUDIO_FONTES.map(f => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}</select></div>
+                                    <div><p className="text-[11px] font-bold text-slate-400 mb-1">Tamanho: {Math.round(sel.fontSize)}</p><input type="range" min="12" max="300" value={sel.fontSize} onChange={e => prop('fontSize', Number(e.target.value))} className="w-full" /></div>
+                                    <div className="grid grid-cols-4 gap-1">
+                                        <button onClick={() => prop('fontWeight', sel.fontWeight >= 700 || sel.fontWeight === 'bold' ? 400 : 900)} className={botao + ' font-black'}>B</button>
+                                        <button onClick={() => prop('fontStyle', sel.fontStyle === 'italic' ? 'normal' : 'italic')} className={botao + ' italic'}>I</button>
+                                        <button onClick={() => prop('underline', !sel.underline)} className={botao + ' underline'}>U</button>
+                                        <button onClick={() => prop('linethrough', !sel.linethrough)} className={botao + ' line-through'}>S</button>
+                                        <button onClick={() => prop('textAlign', 'left')} className={botao}>⇤</button>
+                                        <button onClick={() => prop('textAlign', 'center')} className={botao}>≡</button>
+                                        <button onClick={() => prop('textAlign', 'right')} className={botao}>⇥</button>
+                                        <button onClick={() => prop('text', String(sel.text || '').toUpperCase())} className={botao}>AA</button>
+                                    </div>
+                                    <div><p className="text-[11px] font-bold text-slate-400 mb-1">Contorno: {sel.strokeWidth || 0}</p><input type="range" min="0" max="20" value={sel.strokeWidth || 0} onChange={e => { prop('stroke', sel.stroke || '#0f172a'); prop('strokeWidth', Number(e.target.value)); }} className="w-full" />
+                                        <input type="color" value={sel.stroke || '#0f172a'} onChange={e => prop('stroke', e.target.value)} className="w-full h-7" /></div>
+                                    <button onClick={() => prop('shadow', sel.shadow ? null : new (F().Shadow)({ color: 'rgba(0,0,0,0.55)', blur: 18, offsetX: 4, offsetY: 6 }))} className={botao + ' w-full'}>{sel.shadow ? 'Tirar sombra' : '🌑 Sombra'}</button>
+                                </>}
+                                {sel.type === 'rect' && <div><p className="text-[11px] font-bold text-slate-400 mb-1">Cantos: {sel.rx || 0}</p><input type="range" min="0" max="200" value={sel.rx || 0} onChange={e => { prop('rx', Number(e.target.value)); prop('ry', Number(e.target.value)); }} className="w-full" /></div>}
+                                <div><p className="text-[11px] font-bold text-slate-400 mb-1">Transparência: {Math.round((sel.opacity ?? 1) * 100)}%</p><input type="range" min="0.05" max="1" step="0.05" value={sel.opacity ?? 1} onChange={e => prop('opacity', Number(e.target.value))} className="w-full" /></div>
+                                <div><p className="text-[11px] font-bold text-slate-400 mb-1">Girar: {Math.round(sel.angle || 0)}°</p><input type="range" min="-180" max="180" value={sel.angle || 0} onChange={e => prop('angle', Number(e.target.value))} className="w-full" /></div>
+                                {sel.dadosProduto && <p className="text-[10px] text-emerald-300">Preço do produto {sel.dadosProduto.code} — atualiza com 🔄 Atualizar preços.</p>}
+                            </>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Aviso no lugar do Estúdio quando não é PC (app Android ou tela pequena).
+        const EstudioSoPcAviso = ({ onFechar }) => (
+            <div className="fixed inset-0 z-[1000] bg-slate-950/85 flex items-center justify-center p-4" onClick={onFechar}>
+                <div className="bg-[#0b0d17] border border-violet-400/30 rounded-3xl p-6 max-w-sm text-center" onClick={e => e.stopPropagation()}>
+                    <div className="text-5xl mb-2">🖥️</div>
+                    <h3 className="text-lg font-black text-white">Estúdio de artes só no PC</h3>
+                    <p className="text-sm text-slate-300 mt-2">O editor estilo Canva precisa de tela grande e mouse. Abra o Prumo no computador (tkadachii.github.io/prumo-erp) pra criar e editar artes.</p>
+                    <p className="text-xs text-slate-500 mt-2">No celular continua dando pra usar o ✨ Criar arte simples.</p>
+                    <button onClick={onFechar} className="mt-4 w-full py-3 rounded-xl bg-violet-600 text-white font-black">Entendi</button>
+                </div>
+            </div>
+        );
+
+        const CardapioScreen = ({ products, produtoFotos, showMessage, catalogoContatos, salvarCatalogoContatos, usuario }) => {
             const [editandoRodape, setEditandoRodape] = useState(false);
             const [rodapeRascunho, setRodapeRascunho] = useState(catalogoContatos || []);
             useEffect(() => { if (!editandoRodape) setRodapeRascunho(catalogoContatos || []); }, [catalogoContatos, editandoRodape]);
@@ -11120,6 +11724,47 @@
                 } catch (e) { showMessage('Erro ao enviar a foto.', 'error'); }
                 finally { setEnviando(prev => { const n = { ...prev }; delete n[code]; return n; }); }
             };
+            // 🔎 Detalhes do produto + pedidos de troca de foto (v2.56.0)
+            const [detalheCode, setDetalheCode] = useState(null);
+            const [pedidosFoto, setPedidosFoto] = useState({});
+            const [soPedidos, setSoPedidos] = useState(false);
+            useEffect(() => {
+                const unsub = db.collection('fotos_pedidos').onSnapshot(snap => {
+                    const m = {}; snap.docs.forEach(d => { m[d.id] = d.data(); }); setPedidosFoto(m);
+                }, () => {});
+                return () => unsub();
+            }, []);
+            const detalheProduto = detalheCode ? (products || []).find(p => String(p.code) === detalheCode) : null;
+            const qtdPedidos = Object.keys(pedidosFoto).length;
+            // 🎨 Estúdio (PC). `estudio` = { produto } aberto; `avisoSoPc` no app/tela pequena.
+            const [estudio, setEstudio] = useState(null);
+            const [avisoSoPc, setAvisoSoPc] = useState(false);
+            const abrirEstudio = (produto) => { if (ESTUDIO_EH_PC()) setEstudio({ produto: produto || null }); else setAvisoSoPc(true); };
+            // "Criar arte" do produto: no PC vai pro Estúdio; no celular continua o gerador simples.
+            const criarArteDe = (produto) => { if (ESTUDIO_EH_PC()) setEstudio({ produto }); else abrirArteProduto(produto); };
+            const listaGrid = soPedidos ? (products || []).filter(p => pedidosFoto[String(p.code)]) : resultados;
+            // "Editar capa": abre a foto que já está salva no mesmo recorte da foto nova.
+            const editarCapa = async (code) => {
+                const src = produtoFotos && produtoFotos[String(code)];
+                if (!src || src === FOTO_CARREGANDO) { showMessage('A foto ainda está carregando, tente de novo.', 'error'); return; }
+                try {
+                    const blob = await (await fetch(src)).blob();
+                    setCrop({ code: String(code), file: new File([blob], 'capa.jpg', { type: blob.type || 'image/jpeg' }), titulo: 'Editar capa' });
+                } catch (e) { showMessage('Não consegui abrir a foto atual.', 'error'); }
+            };
+            const pedirTrocaFoto = async (produto, motivo) => {
+                try {
+                    await db.collection('fotos_pedidos').doc(String(produto.code)).set({
+                        code: String(produto.code), name: produto.name || '', motivo: motivo || '',
+                        por: (usuario && usuario.name) || '', em: new Date(),
+                    });
+                    showMessage('Pedido de troca registrado pra equipe. 🙋', 'success');
+                } catch (e) { showMessage('Erro ao registrar o pedido.', 'error'); }
+            };
+            const resolverPedidoFoto = async (code) => {
+                try { await db.collection('fotos_pedidos').doc(String(code)).delete(); showMessage('Pedido marcado como resolvido.', 'success'); }
+                catch (e) { showMessage('Erro ao resolver o pedido.', 'error'); }
+            };
             // Baixa a foto sugerida (a grande; se o site dela bloquear, a miniatura do Bing) e centraliza
             // num quadrado branco 800x800 — sem cortar a embalagem — antes de subir igual a uma foto normal.
             const fotoQuadrada = (blob) => new Promise((resolve, reject) => {
@@ -11174,7 +11819,23 @@
 
             return (
                 <div className="animate-in fade-in space-y-6">
-                    {crop && <CropFotoModal file={crop.file} onCancel={() => setCrop(null)} onConfirm={confirmarCrop} />}
+                    {crop && <CropFotoModal file={crop.file} titulo={crop.titulo} onCancel={() => setCrop(null)} onConfirm={confirmarCrop} />}
+                    {/* Portal no <body>: dentro da tela, o menu lateral e a barra de cima ficavam por cima. */}
+                    {estudio && ReactDOM.createPortal(<EstudioArtes products={products} produtoFotos={produtoFotos} catalogoContatos={catalogoContatos} usuario={usuario} produtoInicial={estudio.produto} onFechar={() => setEstudio(null)} showMessage={showMessage} />, document.body)}
+                    {avisoSoPc && ReactDOM.createPortal(<EstudioSoPcAviso onFechar={() => setAvisoSoPc(false)} />, document.body)}
+                    {detalheProduto && !crop && <ProdutoDetalheModal
+                        produto={detalheProduto}
+                        foto={produtoFotos && produtoFotos[detalheCode]}
+                        pedido={pedidosFoto[detalheCode]}
+                        subindo={!!enviando[detalheCode]}
+                        onFechar={() => setDetalheCode(null)}
+                        onNovaFoto={() => escolherFoto(detalheCode)}
+                        onEditarCapa={() => editarCapa(detalheCode)}
+                        onPedirTroca={(motivo) => pedirTrocaFoto(detalheProduto, motivo)}
+                        onResolverPedido={() => resolverPedidoFoto(detalheCode)}
+                        onCriarArte={() => { setDetalheCode(null); criarArteDe(detalheProduto); }}
+                        onRemoverFoto={() => apagarFoto(detalheCode)}
+                    />}
                     {arteProduto && arteForm && (
                         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 z-[999]" onClick={fecharArteProduto}>
                             <div className="w-full max-w-5xl max-h-[96vh] overflow-y-auto rounded-3xl border border-violet-400/20 bg-[#090b16] text-white shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -11282,7 +11943,9 @@
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                             <h1 className="text-2xl font-bold text-rose-800 flex items-center gap-2"><span>🍽️</span> Cardápio</h1>
                             <div className="flex flex-wrap gap-2">
+                                {qtdPedidos > 0 && <button onClick={() => { setSoPedidos(v => !v); setModoSugestoes(false); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${soPedidos ? 'bg-slate-900 text-white' : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm'}`}>{soPedidos ? '✕ Ver todos' : '🙋 Pedidos de troca (' + qtdPedidos + ')'}</button>}
                                 {pendentesFoto.length > 0 && <button onClick={() => { setModoSugestoes(v => !v); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoSugestoes ? 'bg-slate-900 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'}`}>{modoSugestoes ? '✕ Fechar sugestões' : '📸 Escolher fotos (' + pendentesFoto.length + ')'}</button>}
+                                <button onClick={() => abrirEstudio(null)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-fuchsia-600 to-violet-600 text-white shadow-sm">🎨 Estúdio de artes <span className="ml-1 text-[10px] font-black bg-white/20 rounded px-1.5 py-0.5">PC</span></button>
                                 <button onClick={() => abrirArteProduto({ code: 'avulso', name: '' })} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-sm">✨ Nova arte avulsa</button>
                                 <button onClick={() => { setModoCatalogo(v => !v); setModoSugestoes(false); setSelecionados(new Set()); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoCatalogo ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
                                     {modoCatalogo ? '✕ Cancelar seleção' : '🖼️ Montar Catálogo'}
@@ -11342,19 +12005,21 @@
                         <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-400">Carregue a Tabela do Dia primeiro pra ver os produtos aqui.</div>
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                            {resultados.map(p => {
+                            {listaGrid.map(p => {
                                 const foto = produtoFotos && produtoFotos[String(p.code)];
                                 const subindo = !!enviando[String(p.code)];
                                 const marcado = selecionados.has(String(p.code));
+                                const temPedido = !!pedidosFoto[String(p.code)];
                                 return (
                                     <div key={p.code} className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col ${marcado ? 'border-rose-500 ring-2 ring-rose-200' : 'border-slate-200'}`}>
-                                        <button onClick={() => modoCatalogo ? toggleSelecionado(String(p.code)) : escolherFoto(p.code)} disabled={subindo} className="relative aspect-square bg-slate-100 flex items-center justify-center overflow-hidden group">
+                                        <button onClick={() => modoCatalogo ? toggleSelecionado(String(p.code)) : setDetalheCode(String(p.code))} disabled={subindo} className="relative aspect-square bg-slate-100 flex items-center justify-center overflow-hidden group">
                                             {foto ? <img src={foto} alt={p.name} className="w-full h-full object-cover" /> : <span className="text-3xl text-slate-300">🍖</span>}
+                                            {temPedido && !modoCatalogo && <span className="absolute top-2 left-2 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 shadow">🙋 trocar foto</span>}
                                             {modoCatalogo ? (
                                                 <div className={`absolute top-2 right-2 h-6 w-6 rounded-full border-2 flex items-center justify-center text-xs font-bold ${marcado ? 'bg-rose-600 border-rose-600 text-white' : 'bg-white/80 border-slate-300 text-transparent'}`}>✓</div>
                                             ) : (
                                                 <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors flex items-center justify-center">
-                                                    <span className="opacity-0 group-hover:opacity-100 text-white text-xs font-bold transition-opacity">{subindo ? 'Enviando...' : (foto ? '📷 Trocar foto' : '📷 Adicionar foto')}</span>
+                                                    <span className="opacity-0 group-hover:opacity-100 text-white text-xs font-bold transition-opacity">{subindo ? 'Enviando...' : '🔎 Ver detalhes'}</span>
                                                 </div>
                                             )}
                                         </button>
@@ -11364,7 +12029,7 @@
                                                 <EstoqueBadge produto={p} compacto />
                                             </div>
                                             <p className="text-xs font-bold text-slate-700 leading-tight flex-1">{p.name}</p>
-                                            {!modoCatalogo && <button onClick={() => abrirArteProduto(p)} className="mt-2 w-full rounded-lg bg-slate-950 hover:bg-violet-950 px-2 py-2 text-[11px] font-black text-white transition-colors">✨ Criar arte</button>}
+                                            {!modoCatalogo && <button onClick={() => criarArteDe(p)} className="mt-2 w-full rounded-lg bg-slate-950 hover:bg-violet-950 px-2 py-2 text-[11px] font-black text-white transition-colors">✨ Criar arte</button>}
                                             {!modoCatalogo && foto && <button onClick={() => apagarFoto(p.code)} disabled={subindo} className="text-[10px] text-red-500 hover:text-red-700 font-bold mt-1 text-left">🗑️ remover foto</button>}
                                         </div>
                                     </div>
@@ -15067,7 +15732,7 @@
                     case 'changelog': return <AtualizacoesScreen />;
                     case 'profile': return <ProfileAdminScreen user={user} showMessage={showMessage} setActiveRoute={setActiveRoute} />;
                     case 'pdf': return <PdfScreen key={tabelaNonce} user={user} products={products} setProducts={setProducts} showMessage={showMessage} listaNegra={listaNegra} toggleListaNegra={toggleListaNegra} valorMaximo={valorMaximo} setValorMaximoProduto={setValorMaximoProduto} />;
-                    case 'cardapio': return <CardapioScreen products={products} produtoFotos={produtoFotos} showMessage={showMessage} catalogoContatos={catalogoContatos} salvarCatalogoContatos={salvarCatalogoContatos} />;
+                    case 'cardapio': return <CardapioScreen products={products} produtoFotos={produtoFotos} showMessage={showMessage} catalogoContatos={catalogoContatos} salvarCatalogoContatos={salvarCatalogoContatos} usuario={user} />;
                     case 'resumo': return <ResumoScreen key={resumoNonce} products={products} showMessage={showMessage} clients={clients} user={user} setActiveRoute={setActiveRoute} />;
                     case 'fila': return <FilaScreen showMessage={showMessage} setActiveRoute={setActiveRoute} products={products} clients={clients} user={user} />;
                     case 'historico': return <HistoricoScreen user={user} showMessage={showMessage} />;

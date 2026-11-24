@@ -1,10 +1,12 @@
 {
-    "version":  261,
-    "versao":  "2.55.0",
+    "version":  262,
+    "versao":  "2.56.0",
     "data":  "24/11/2026",
     "itens":  [
-                  "📸 FOTOS DO CATÁLOGO: 359 produtos ganharam foto (escolhidas entre as sugestões da internet). Elas ficam no próprio site, sem depender do Firebase",
-                  "\"📷 Adicionar foto\" voltou a funcionar: o Firebase Storage tinha passado a recusar fotos novas (limite do plano grátis). Agora a foto fica salva no banco do Prumo",
-                  "A lista \"📸 Escolher fotos\" zerou — todos os itens já foram resolvidos"
+                  "🎨 ESTÚDIO DE ARTES (só no PC): editor estilo Canva no Catálogo. Modelos prontos (Oferta do dia, Vários produtos, Natal), produto com foto + preço de hoje num clique, textos, selos, formas, fundos, desfazer, baixar PNG e copiar pro WhatsApp Web",
+                  "As artes salvas no Estúdio ficam na nuvem pra toda a equipe; \"🔄 Atualizar preços\" troca os preços pela tabela do dia",
+                  "🔎 Tocar no produto do Catálogo agora abre os DETALHES: foto grande, preços (à vista, cartão, a prazo), estoque e as ações de foto",
+                  "✂️ \"Editar capa\" reenquadra a foto atual (dá pra encaixar a embalagem inteira com fundo branco) e 🙋 \"Pedir troca de foto\" avisa a equipe — o pedido some sozinho quando alguém salva foto nova",
+                  "No app de celular o Estúdio mostra o aviso \"só no PC\" e o editor nem é baixado, pra não pesar"
               ]
 }
