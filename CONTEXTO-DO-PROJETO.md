@@ -1016,6 +1016,23 @@ Queixa: vendedor carregava a tabela e ninguém recebia — o "Distribuir Tabela"
 - `CardapioScreen`: botão "📸 Escolher fotos (N)" (N = ativos sem foto com sugestão). Tocar numa foto: baixa `img` (ou `thumb` do Bing se o site bloquear CORS), centraliza em quadrado branco 800x800 (`fotoQuadrada`), `subirFotoBlob` e apaga a sugestão. "Nenhuma serve" só apaga a sugestão.
 - Pra recarregar sugestões: gerar a lista de novo e gravar em `fotos_sugestoes` (ver Downloads\fotos-catalogo\subir-sugestoes.html).
 
+## 🔄 v2.54.0 (24/11/2026) — Oferta por tipo de comércio AUTOMÁTICA pelo estoque
+Pedido: os perfis de "Criar ofertas" (Padaria, Açougue, Mercado, Restaurante, Pizzaria, Lanchonete)
+indicarem sozinhos os itens de cada comércio e se atualizarem todo dia com o estoque, logo depois que
+a extensão da Friganso manda o estoque. Antes cada perfil era lista FIXA em `ofertas_perfis.codigos`
+(no dia, metade da Padaria/Restaurante estava sem saldo ou fora da tabela).
+- Helpers globais logo depois de `OFERTA_PERFIS_COMERCIO`: `ofertaAutomaticaDoPerfil`,
+  `candidatosDoPerfil`, `produtoServeParaOferta`, `ehPaleteOuIndustria`, `OFERTA_MIN_DISPONIVEL = 6`.
+- candidatos = palavras do perfil ∪ `ajustes[id].extras` − `ajustes[id].fora`. Entra hoje = na tabela,
+  fora da lista negra, sem PLT/IND/INDUSTRIA e `estoqueSpamov.disponivel >= 6`. Top 36 por vendas
+  (desempate: kg em estoque). Recalcula sozinho porque `products` chega por onSnapshot; se o perfil está
+  aberto e a seleção não foi mexida, ela acompanha.
+- "Ajustar itens" agora salva só a diferença em `system_data/ofertas_perfis.ajustes.{id} = {extras, fora, em}`.
+  O campo antigo `codigos` não é mais escrito; se um perfil não tem `ajustes`, o `codigos` antigo vira
+  "extras" (nada escolhido a dedo se perde).
+- Mercearia perdeu as palavras 'caixa' e 'cx ' (pegavam a tabela inteira) e ganhou cortes/embutidos.
+- Campanhas (vitrine do dia) usa a mesma lista automática; se sobrar < 5, cai no comportamento antigo.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

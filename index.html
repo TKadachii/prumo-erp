@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 259;
+        const APP_BUILD_VERSION = 260;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -6020,7 +6020,8 @@
                 palavras: ['banda', 'dianteiro', 'traseiro', 'costela', 'ponta de agulha', 'boi', 'bovino', 'bovina', 'suino', 'suina', 'pernil', 'paleta', 'lombo', 'barriga', 'carne seca'] },
             { id: 'mercearia', emoji: '🛒', label: 'Mercado / Mercearia', cor: 'emerald',
                 intro: 'Separei caixarias e cortes embalados que funcionam bem para mercado e mercearia. Veja as condições de hoje:',
-                palavras: ['caixa', 'cx ', 'coxao mole', 'coxao duro', 'alcatra', 'contrafile', 'patinho', 'acem', 'picanha', 'fraldinha', 'maminha', 'file de peito'] },
+                // (tirados 'caixa' e 'cx ' na v2.54.0: com a lista automática eles pegavam a tabela inteira)
+                palavras: ['coxao mole', 'coxao duro', 'alcatra', 'contrafile', 'contra file', 'patinho', 'acem', 'picanha', 'fraldinha', 'maminha', 'file de peito', 'frango carc', 'coxa', 'salsicha', 'linguica', 'mortadela', 'hamburguer', 'batata', 'carne moida'] },
             { id: 'restaurante', emoji: '🍽️', label: 'Restaurante', cor: 'sky',
                 intro: 'Montei uma seleção pensando em rendimento, padronização e giro de cozinha. Confira estas ofertas para restaurante:',
                 palavras: ['file', 'peito', 'coxa', 'sobrecoxa', 'patinho', 'acem', 'contra file', 'contrafile', 'bacon', 'calabresa', 'hamburguer', 'batata', 'tilapia', 'merluza'] },
@@ -6032,6 +6033,60 @@
                 palavras: ['hamburguer', 'bacon', 'salsicha', 'linguica', 'queijo', 'cheddar', 'batata', 'nugget', 'empanado', 'frango'] },
         ];
 
+        // 🔄 PERFIS AUTOMÁTICOS PELO ESTOQUE (v2.54.0 — pedido 24/11/2026)
+        // Antes cada perfil era uma lista FIXA salva na nuvem: o item acabava no estoque e continuava
+        // lá (no dia do pedido, metade da Padaria/Restaurante estava sem saldo ou fora da tabela).
+        // Agora a lista é calculada na hora a partir do estoque que a extensão da Friganso mandou:
+        //   candidatos = itens que batem com as palavras do perfil + os que você ADICIONOU à mão
+        //                − os que você TIROU à mão (ajustes salvos em system_data/ofertas_perfis.ajustes)
+        //   entra hoje  = candidato na tabela de hoje, fora da lista negra, sem palete/indústria
+        //                 e com pelo menos OFERTA_MIN_DISPONIVEL disponíveis (mesma regra das cotações)
+        // Como os produtos chegam por onSnapshot, a lista muda sozinha assim que o estoque é atualizado.
+        const OFERTA_MIN_DISPONIVEL = 6;
+        const OFERTA_MAX_ITENS = 36;
+        const ehPaleteOuIndustria = (p) => {
+            const n = normalizeForSearch(p && p.name).toUpperCase();
+            const un = String((p && p.estoqueSpamov && p.estoqueSpamov.un) || '').toUpperCase();
+            // (normalizeForSearch troca "/" e "." por espaço: "P/INDUSTRIA" e "P/ IND." viram "P INDUSTRIA"/"P IND")
+            // "IND." e "INDUSTRIA" soltos também saem (ex: "COXA S/COXA C/DORSO IND.", "PALETA ... INDUSTRIA"):
+            // é produto de indústria, não de oferta pra comércio.
+            return /\bPLT\b/.test(n) || /\bIND\b/.test(n) || /\bINDUSTRIA/.test(n) || un === 'PLT';
+        };
+        const disponivelParaOferta = (p) => {
+            const es = p && p.estoqueSpamov;
+            if (es) return Math.max(0, Number(es.disponivel) || 0);
+            const e = lerEstoque(p && p.kgUn);
+            return e.tem ? e.un : 0;
+        };
+        const produtoServeParaOferta = (p) => !!p && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p) && disponivelParaOferta(p) >= OFERTA_MIN_DISPONIVEL;
+        const codigosPorPalavraDoPerfil = (perfil, products) => {
+            const palavras = perfil.palavras.map(normalizeForSearch);
+            return products.filter(p => p.ativo !== false && palavras.some(k => normalizeForSearch(p.name).includes(k))).map(p => String(p.code));
+        };
+        // Ajustes de um perfil. Perfil salvo no formato antigo (`codigos` = lista fixa) vira "adicionados",
+        // pra nada do que já foi escolhido a dedo se perder.
+        const ajustesDoPerfil = (docPerfis, id) => {
+            const a = docPerfis && docPerfis.ajustes && docPerfis.ajustes[id];
+            if (a) return { extras: (a.extras || []).map(String), fora: (a.fora || []).map(String) };
+            const antigos = docPerfis && docPerfis.codigos && docPerfis.codigos[id];
+            return { extras: (antigos || []).map(String), fora: [] };
+        };
+        const candidatosDoPerfil = (perfil, products, docPerfis) => {
+            const { extras, fora } = ajustesDoPerfil(docPerfis, perfil.id);
+            const tirar = new Set(fora);
+            const set = new Set(codigosPorPalavraDoPerfil(perfil, products).concat(extras));
+            return Array.from(set).filter(c => !tirar.has(c));
+        };
+        // A oferta do dia: candidatos com estoque, mais vendidos primeiro (desempate: mais quilo em estoque).
+        const ofertaAutomaticaDoPerfil = (perfil, products, docPerfis, vendas, lnSet, max) => {
+            const porCodigo = new Map(products.map(p => [String(p.code), p]));
+            return candidatosDoPerfil(perfil, products, docPerfis)
+                .map(c => porCodigo.get(c))
+                .filter(p => produtoServeParaOferta(p) && !(lnSet && lnSet.has(String(p.code))))
+                .sort((a, b) => ((vendas || {})[String(b.code)] || 0) - ((vendas || {})[String(a.code)] || 0) || estoqueKg(b) - estoqueKg(a) || String(a.name).localeCompare(String(b.name), 'pt-BR'))
+                .slice(0, max || OFERTA_MAX_ITENS);
+        };
+
         const OrcamentosScreen = ({ products, showMessage, activeRoute, listaNegra }) => {
             const lnSet = new Set((listaNegra || []).map(String));
             const [search, setSearch] = useState('');
@@ -6040,7 +6095,7 @@
             const [perfilAtivo, setPerfilAtivo] = useState(null);
             const [introMensagem, setIntroMensagem] = useState('');
             const [purchases, setPurchases] = useState([]);
-            const [perfisCodigos, setPerfisCodigos] = useState({});
+            const [docPerfis, setDocPerfis] = useState({});
             const [configPerfil, setConfigPerfil] = useState(null);
             const [configBusca, setConfigBusca] = useState('');
             const [configCodes, setConfigCodes] = useState(new Set());
@@ -6056,7 +6111,7 @@
             }, []);
             useEffect(() => {
                 const unsub = db.collection('system_data').doc('ofertas_perfis').onSnapshot(d => {
-                    setPerfisCodigos((d && d.exists && d.data() && d.data().codigos) || {});
+                    setDocPerfis((d && d.exists && d.data()) || {});
                 }, () => {});
                 return () => unsub();
             }, []);
@@ -6074,22 +6129,33 @@
                 return m;
             }, [purchases]);
 
-            const sugestoesPorPerfil = useMemo(() => {
+            // 🔄 Lista automática de cada perfil (ver ofertaAutomaticaDoPerfil): recalcula sozinha quando
+            // a extensão manda o estoque novo, porque `products` chega por onSnapshot.
+            const autoPorPerfil = useMemo(() => {
                 const saida = {};
                 OFERTA_PERFIS_COMERCIO.forEach(perfil => {
-                    const palavras = perfil.palavras.map(normalizeForSearch);
-                    saida[perfil.id] = products
-                        .filter(p => !produtoForaTabelaHoje(p) && !lnSet.has(String(p.code)) && palavras.some(k => normalizeForSearch(p.name).includes(k)))
-                        .sort((a, b) => (vendasPorProduto[String(b.code)] || 0) - (vendasPorProduto[String(a.code)] || 0) || String(a.name).localeCompare(String(b.name), 'pt-BR'))
-                        .slice(0, 36).map(p => String(p.code));
+                    saida[perfil.id] = ofertaAutomaticaDoPerfil(perfil, products, docPerfis, vendasPorProduto, lnSet).map(p => String(p.code));
                 });
                 return saida;
-            }, [products, vendasPorProduto, listaNegra]);
+            }, [products, docPerfis, vendasPorProduto, listaNegra]);
+            // Quando o estoque foi lido pela última vez (o mais novo entre os produtos).
+            const estoqueAtualizadoEm = useMemo(() => products.reduce((m, p) => Math.max(m, Number(p.estoqueSpamov && p.estoqueSpamov.em) || 0), 0), [products]);
 
             const perfilInfo = OFERTA_PERFIS_COMERCIO.find(p => p.id === perfilAtivo) || null;
-            const codigosDoPerfil = (id) => Object.prototype.hasOwnProperty.call(perfisCodigos, id)
-                ? (perfisCodigos[id] || []).map(String)
-                : (sugestoesPorPerfil[id] || []);
+            const codigosDoPerfil = (id) => autoPorPerfil[id] || [];
+
+            // Se o estoque mudar com um perfil aberto e você ainda não mexeu na seleção, ela acompanha.
+            const ultimaAutoAplicada = useRef('');
+            useEffect(() => {
+                if (!perfilAtivo) return;
+                const nova = codigosDoPerfil(perfilAtivo);
+                const chaveNova = nova.join(',');
+                if (chaveNova === ultimaAutoAplicada.current) return;
+                const atual = Array.from(selectedCodes).sort().join(',');
+                const anterior = ultimaAutoAplicada.current.split(',').filter(Boolean).sort().join(',');
+                if (atual === anterior) setSelectedCodes(new Set(nova));
+                ultimaAutoAplicada.current = chaveNova;
+            }, [autoPorPerfil, perfilAtivo]);
 
             useEffect(() => {
                 const offerCodes = window.localStorage.getItem('friganso_offer_codes');
@@ -6112,27 +6178,39 @@
             const limparPerfil = () => { setPerfilAtivo(null); setIntroMensagem(''); setSelectedCodes(new Set()); setSearch(''); };
 
             const abrirConfigPerfil = (perfil) => {
-                setConfigPerfil(perfil); setConfigBusca(''); setConfigCodes(new Set(codigosDoPerfil(perfil.id)));
+                // No ajuste aparecem TODOS os candidatos do perfil (com ou sem estoque hoje): o que você
+                // marca é "esse item é da padaria", e o estoque decide sozinho se ele entra em cada dia.
+                setConfigPerfil(perfil); setConfigBusca(''); setConfigCodes(new Set(candidatosDoPerfil(perfil, products, docPerfis)));
             };
             const toggleConfigCode = (code) => setConfigCodes(prev => { const n = new Set(prev); const c = String(code); n.has(c) ? n.delete(c) : n.add(c); return n; });
+            const palavrasConfig = useMemo(() => new Set(configPerfil ? codigosPorPalavraDoPerfil(configPerfil, products) : []), [configPerfil, products]);
             const configResultados = useMemo(() => {
                 if (!configPerfil) return [];
                 const q = configBusca.trim();
                 const base = q
                     ? filtrarProdutos(products, q)
-                    : products.filter(p => configCodes.has(String(p.code)) || (sugestoesPorPerfil[configPerfil.id] || []).includes(String(p.code)));
+                    : products.filter(p => configCodes.has(String(p.code)) || palavrasConfig.has(String(p.code)));
+                // Marcados primeiro; entre eles, os que entram HOJE (têm estoque) na frente.
                 return base.filter(p => !lnSet.has(String(p.code)))
-                    .sort((a, b) => Number(configCodes.has(String(b.code))) - Number(configCodes.has(String(a.code))) || (vendasPorProduto[String(b.code)] || 0) - (vendasPorProduto[String(a.code)] || 0))
-                    .slice(0, 100);
-            }, [configPerfil, configBusca, configCodes, products, sugestoesPorPerfil, vendasPorProduto, listaNegra]);
+                    .sort((a, b) => Number(configCodes.has(String(b.code))) - Number(configCodes.has(String(a.code)))
+                        || Number(produtoServeParaOferta(b)) - Number(produtoServeParaOferta(a))
+                        || (vendasPorProduto[String(b.code)] || 0) - (vendasPorProduto[String(a.code)] || 0))
+                    .slice(0, 150);
+            }, [configPerfil, configBusca, configCodes, products, palavrasConfig, vendasPorProduto, listaNegra]);
             const salvarConfigPerfil = async () => {
                 if (!configPerfil) return;
                 setSalvandoPerfil(true);
-                const novo = { ...perfisCodigos, [configPerfil.id]: Array.from(configCodes) };
+                // Guarda só a DIFERENÇA em relação às palavras do perfil: assim produto novo que chegar
+                // no estoque e bater com as palavras entra sozinho, e o que você tirou continua fora.
+                const marcados = new Set(Array.from(configCodes).map(String));
+                const extras = Array.from(marcados).filter(c => !palavrasConfig.has(c));
+                const fora = Array.from(palavrasConfig).filter(c => !marcados.has(c));
+                const ajuste = { extras, fora, em: new Date() };
                 try {
-                    await db.collection('system_data').doc('ofertas_perfis').set({ codigos: novo }, { merge: true });
-                    setPerfisCodigos(novo);
-                    if (perfilAtivo === configPerfil.id) setSelectedCodes(new Set(novo[configPerfil.id]));
+                    await db.collection('system_data').doc('ofertas_perfis').set({ ajustes: { [configPerfil.id]: ajuste } }, { merge: true });
+                    const novoDoc = { ...docPerfis, ajustes: { ...(docPerfis.ajustes || {}), [configPerfil.id]: ajuste } };
+                    setDocPerfis(novoDoc);
+                    if (perfilAtivo === configPerfil.id) setSelectedCodes(new Set(ofertaAutomaticaDoPerfil(configPerfil, products, novoDoc, vendasPorProduto, lnSet).map(p => String(p.code))));
                     showMessage(`Itens de ${configPerfil.label} salvos para toda a equipe.`, 'success'); setConfigPerfil(null);
                 } catch (e) { showMessage('Erro ao salvar os itens deste perfil.', 'error'); }
                 finally { setSalvandoPerfil(false); }
@@ -6184,12 +6262,12 @@
                         <div className="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => setConfigPerfil(null)}>
                             <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
                                 <div className="p-5 border-b border-slate-800 flex items-start justify-between gap-3">
-                                    <div><h3 className="text-lg font-black text-white">{configPerfil.emoji} Itens para {configPerfil.label}</h3><p className="text-xs text-slate-400 mt-1">As sugestões são um começo. Marque os itens que sua experiência mostra que funcionam para este comércio.</p></div>
+                                    <div><h3 className="text-lg font-black text-white">{configPerfil.emoji} Itens para {configPerfil.label}</h3><p className="text-xs text-slate-400 mt-1">Marque os itens que servem para este comércio. Todo dia entram na oferta só os marcados que têm {OFERTA_MIN_DISPONIVEL}+ disponíveis no estoque.</p></div>
                                     <button onClick={() => setConfigPerfil(null)} className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xl">×</button>
                                 </div>
                                 <div className="p-4 border-b border-slate-800 bg-[#10131f] space-y-3">
                                     <input autoFocus value={configBusca} onChange={e => setConfigBusca(e.target.value)} placeholder="Buscar qualquer produto da tabela..." className="w-full p-3 rounded-xl border border-violet-500/50 bg-[#070912] text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-400 font-semibold" />
-                                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-bold text-slate-300">{configCodes.size} itens escolhidos</span><button onClick={() => setConfigCodes(new Set(sugestoesPorPerfil[configPerfil.id] || []))} className="text-xs font-bold text-violet-200 bg-violet-500/15 hover:bg-violet-500/25 border border-violet-400/20 px-3 py-2 rounded-lg">↻ Voltar às sugestões</button></div>
+                                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-bold text-slate-300">{configCodes.size} itens marcados · {products.filter(p => configCodes.has(String(p.code)) && produtoServeParaOferta(p) && !lnSet.has(String(p.code))).length} com estoque hoje</span><button onClick={() => setConfigCodes(new Set(palavrasConfig))} className="text-xs font-bold text-violet-200 bg-violet-500/15 hover:bg-violet-500/25 border border-violet-400/20 px-3 py-2 rounded-lg">↻ Voltar às sugestões</button></div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#080a12]">
                                     {configResultados.map(p => {
@@ -6198,6 +6276,7 @@
                                             <input type="checkbox" checked={marcado} onChange={() => toggleConfigCode(code)} className="h-5 w-5 accent-violet-600" />
                                             <span className="font-mono text-xs font-black text-violet-300">{code}</span><span className="flex-1 text-sm font-bold text-slate-200">{p.name}</span>
                                             {produtoForaTabelaHoje(p) && <ProdutoForaTabelaBadge compacto />}
+                                            {marcado && !produtoForaTabelaHoje(p) && !produtoServeParaOferta(p) && <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-400/20" title={ehPaleteOuIndustria(p) ? 'Palete/indústria nunca entra na oferta' : `Entra sozinho quando tiver ${OFERTA_MIN_DISPONIVEL}+ disponíveis`}>{ehPaleteOuIndustria(p) ? 'palete — não entra' : 'não entra hoje'}</span>}
                                             <EstoqueBadge produto={p} />
                                             <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${vendas ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/15' : 'bg-slate-800 text-slate-500'}`}>{vendas ? `${vendas}× vendido` : 'sem venda'}</span>
                                         </label>;
@@ -6220,10 +6299,11 @@
                                 {OFERTA_PERFIS_COMERCIO.map(perfil => {
                                     const qtd = codigosDoPerfil(perfil.id).length, ativo = perfilAtivo === perfil.id;
                                     return <button key={perfil.id} onClick={() => aplicarPerfil(perfil)} className={`relative rounded-2xl border p-3 text-left transition-all ${ativo ? 'bg-violet-950/60 border-violet-400 text-white shadow-lg' : 'bg-[#111420] border-slate-800 text-slate-200 hover:border-violet-500/60 hover:bg-[#171b2d]'}`}>
-                                        <span className="text-2xl block">{perfil.emoji}</span><span className="block text-xs font-black leading-tight mt-1">{perfil.label}</span><span className={`block text-[10px] mt-1 ${ativo ? 'text-slate-300' : 'text-slate-400'}`}>{qtd} itens</span>
+                                        <span className="text-2xl block">{perfil.emoji}</span><span className="block text-xs font-black leading-tight mt-1">{perfil.label}</span><span className={`block text-[10px] mt-1 ${ativo ? 'text-slate-300' : 'text-slate-400'}`}>{qtd} em estoque</span>
                                     </button>;
                                 })}
                             </div>
+                            <p className="text-[11px] text-slate-500 mt-2">🔄 Automático: cada perfil mostra só os itens com {OFERTA_MIN_DISPONIVEL}+ disponíveis (sem palete/indústria){estoqueAtualizadoEm ? ` · estoque de ${new Date(estoqueAtualizadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}. Atualiza sozinho quando a extensão manda o estoque novo.</p>
                         </div>
 
                         {perfilInfo && (
@@ -6231,7 +6311,7 @@
                                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2"><span className="font-black text-violet-200">{perfilInfo.emoji} Oferta para {perfilInfo.label}</span><button onClick={() => abrirConfigPerfil(perfilInfo)} className="text-xs font-bold bg-violet-500/15 hover:bg-violet-500/25 border border-violet-400/20 text-violet-200 px-3 py-2 rounded-lg">⚙️ Ajustar itens deste perfil</button></div>
                                 <label className="text-[11px] font-bold text-violet-300">Introdução da mensagem</label>
                                 <textarea value={introMensagem} onChange={e => setIntroMensagem(e.target.value)} rows="2" className="mt-1 w-full resize-none rounded-xl border border-violet-500/30 bg-[#080a12] px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-400" />
-                                <p className="text-[10px] text-violet-300/70 mt-1">Você pode editar este texto antes de copiar. A lista de itens fica salva para toda a equipe.</p>
+                                <p className="text-[10px] text-violet-300/70 mt-1">Você pode editar este texto antes de copiar. Os itens do perfil valem para toda a equipe e seguem o estoque do dia.</p>
                             </div>
                         )}
 
@@ -9570,6 +9650,13 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.54.0', data: '24/11/2026', areas: ['site'], itens: [
+                '🔄 OFERTA POR TIPO DE COMÉRCIO AUTOMÁTICA: Padaria, Açougue, Mercado, Restaurante, Pizzaria e Lanchonete agora mostram sozinhos só os itens com 6 ou mais disponíveis no estoque de hoje',
+                'A lista se atualiza assim que a extensão da Friganso manda o estoque novo — item que acabou sai, item que chegou entra',
+                'Palete (PLT) e produto de indústria nunca entram na oferta',
+                '"⚙️ Ajustar itens deste perfil" continua valendo: o que você tirar fica fora e o que adicionar entra sempre que tiver estoque',
+                'As sugestões das Campanhas do WhatsApp usam a mesma lista automática',
+            ] },
             { versao: '2.53.0', data: '17/11/2026', areas: ['site'], itens: [
                 '📸 ESCOLHER FOTOS NO CATÁLOGO: botão "📸 Escolher fotos" mostra, pra cada produto sem foto, até 6 fotos achadas na internet. Toque na certa e ela já vai pro Catálogo de todo mundo — quem ver primeiro salva',
                 'Se nenhuma servir, toque em "🚫 Nenhuma serve" e o produto sai da lista (dá pra pôr foto pelo jeito normal)',
@@ -12966,11 +13053,11 @@
             // Os itens saem dos perfis de "Criar ofertas" (system_data/ofertas_perfis) — ou seja,
             // do que VOCÊ já escolheu a dedo pra cada tipo de loja, nunca aleatório da tabela.
             const SUGESTOES_QTD = 5;
-            const [perfisCodigos, setPerfisCodigos] = useState({});
+            const [docPerfis, setDocPerfis] = useState({});
             useEffect(() => {
                 try {
                     const unsub = db.collection('system_data').doc('ofertas_perfis').onSnapshot(
-                        d => { const dd = d && d.exists ? d.data() : null; setPerfisCodigos((dd && dd.codigos) || {}); }, () => {});
+                        d => { setDocPerfis((d && d.exists && d.data()) || {}); }, () => {});
                     return () => unsub();
                 } catch (e) {}
             }, []);
@@ -13003,9 +13090,18 @@
             // e sem o que saiu da tabela de hoje (preço velho não vai pra campanha).
             // 📦 ...e sem o que está zerado: não adianta ofertar o que o cliente vai pedir e não tem.
             // `comEstoque` devolve o perfil inteiro de volta se sobrar pouca coisa com saldo.
-            const produtosDoPerfilOferta = (id) => comEstoque(((perfisCodigos[id] || []).map(String))
-                .map(code => products.find(p => String(p.code) === code))
-                .filter(p => p && !produtoForaTabelaHoje(p) && !lnSet.has(String(p.code))), SUGESTOES_QTD);
+            // 🔄 v2.54.0: usa a MESMA lista automática do Criar ofertas (só 6+ disponíveis, sem palete).
+            // Se sobrar menos que SUGESTOES_QTD (dia sem estoque lido), cai no comportamento antigo.
+            const produtosDoPerfilOferta = (id) => {
+                const perfil = OFERTA_PERFIS_COMERCIO.find(p => p.id === id);
+                if (!perfil) return [];
+                const auto = ofertaAutomaticaDoPerfil(perfil, products, docPerfis, null, lnSet, 999);
+                if (auto.length >= SUGESTOES_QTD) return auto;
+                const porCodigo = new Map(products.map(p => [String(p.code), p]));
+                return comEstoque(candidatosDoPerfil(perfil, products, docPerfis)
+                    .map(code => porCodigo.get(code))
+                    .filter(p => p && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p) && !lnSet.has(String(p.code))), SUGESTOES_QTD);
+            };
             // Intercala os perfis em vez de embaralhar tudo junto: assim os 5 saem MISTURADOS mesmo
             // (um de cada ramo), e não 5 do mesmo perfil por azar do sorteio.
             const sorteioMisturado = (ids, n, semente, fora) => {
