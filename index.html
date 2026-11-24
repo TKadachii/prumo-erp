@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 266;
+        const APP_BUILD_VERSION = 267;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9705,6 +9705,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.60.0', data: '24/11/2026', areas: ['site'], itens: [
+                '⚖️ COMPARAR MARCAS: no Catálogo (botão amarelo) ou nos detalhes do produto, escolha de 2 a 4 opções — já sugere as outras marcas do mesmo tipo com estoque, da mais barata pra mais cara — e gere uma imagem lado a lado com foto, marca, embalagem e preço, ou copie o texto pro Zap',
+                '✨ Ficha do produto com visual novo: logo da Friganso nítido, nome fácil de ler, cartões de Marca/Embalagem/Conservação, destaques em selos verdes e preço em destaque',
+            ] },
             { versao: '2.59.0', data: '24/11/2026', areas: ['site'], itens: [
                 '📝 DESCRIÇÃO DO PRODUTO: abrindo o item no Catálogo aparece "Sobre o produto" — o que é, pra que serve, destaques, marca, embalagem, peso e conservação. Vem pronta pra ~700 itens e a equipe pode editar',
                 '🖼️ FOTOS EXTRAS: cada item pode ter várias fotos além da capa (➕ foto extra). Dá pra transformar uma extra em capa',
@@ -11178,73 +11182,300 @@
             if (mostrarPreco && Number(p.originalPrice) > 0) t += r.hasDiscount ? `\n💰 Valor: ~${reais(r.origPrice)}~ por *${reais(r.unitFinalPrice)}/${un}* 🔥 (Com 3% de Desconto)\n` : `\n💰 Valor: *${reais(r.unitFinalPrice)}/${un}*\n`;
             return t.trim();
         };
-        // 🖼️ Ficha em PNG 1080×1350 (formato 4:5, aparece grande no WhatsApp). Canvas puro (sem Fabric),
-        // então funciona também no app de celular.
+        // 🦢 Logo Friganso BRANCO em alta (441×399, fundo transparente) — recortado da arte "PEÇA JÁ!!"
+        // do vendedor (v2.60.0). O FRIGANSO_LOGO_PNG antigo tem 112×98 e ficava borrado ampliado.
+        const FRIGANSO_LOGO_BRANCO_PNG = 'data:image/png;base64,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';
+        // Nome legível: tira a embalagem/peso do fim ("CX/14 X 1.05KG", "PC +- 3KG"...) e põe em Título.
+        // Ex.: "BATATA BEM BRASIL 9MM TRADICIONAL CX/14 X 1.05KG" → "Batata Bem Brasil 9mm Tradicional".
+        const nomeAmigavel = (p) => {
+            const toks = String((p && p.name) || '').trim().split(/\s+/);
+            const corte = toks.findIndex((t, i) => i > 0 && /^(CX|PCT|PC|PÇ|SC|FD|BD|BALDE|BDJ|PT|C\/|CX\/|PCT\/|PC\/|\+|\+-|\+\/-|±|\(|\d+X|\d+[.,]?\d*(KG|K|G|GR|GRS|UN)\b|\d+[.,]?\d*KG)/i.test(t));
+            const base = (corte > 0 ? toks.slice(0, corte) : toks).join(' ').replace(/[(.,-]+$/, '');
+            const minus = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'com', 'c/', 's/', 'p/', 'em']);
+            return base.toLowerCase().split(' ').map((w, i) => (i > 0 && minus.has(w)) ? w : /^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        };
+        // 🖼️ Ficha em PNG 1080×1350 (4:5, aparece grande no WhatsApp). Canvas puro → funciona no app também.
+        // v2.60.0: visual novo (pedido 24/11 "mais bonito, moderno e fácil de entender"): cabeçalho com logo
+        // branco nítido, fotos num painel claro, nome legível, "cartões" de informação com rótulo, destaques
+        // em chips verdes e preço num cartão escuro com número grande.
         const gerarFichaProduto = async ({ produto: p, fotos, info, mostrarPreco, contatos }) => {
-            const W = 1080, H = 1350, M = 60;
+            const W = 1080, H = 1350, M = 56;
             const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
             const ctx = cv.getContext('2d');
             const fonte = (peso, tam) => `${peso} ${tam}px Montserrat, "Segoe UI", system-ui, sans-serif`;
             const f = fatosDoProduto(p); const r = checkDiscountRules(p.code, p.name, p.originalPrice);
             const reais = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const ret = (x, y, w, h, rr, cor) => { roundRectPath(ctx, x, y, w, h, rr); ctx.fillStyle = cor; ctx.fill(); };
-            // fundo + faixa
-            ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, W, H);
-            const g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, '#7f1d1d'); g.addColorStop(1, '#dc2626');
-            ctx.fillStyle = g; ctx.fillRect(0, 0, W, 150);
-            try { const logo = await carregarImagemCanvas(FRIGANSO_LOGO_PNG); const lh = 110, lw = logo.width * (lh / logo.height); ret(M - 10, 20, lw + 20, lh + 10, 18, '#ffffff'); ctx.drawImage(logo, M, 25, lw, lh); } catch (e) {}
-            ctx.fillStyle = '#ffffff'; ctx.textAlign = 'right'; ctx.font = fonte(900, 40); ctx.fillText('FICHA DO PRODUTO', W - M, 88);
-            ctx.font = fonte(600, 24); ctx.fillText('Cód. ' + p.code, W - M, 122); ctx.textAlign = 'left';
-            // fotos
+            const comPreco = mostrarPreco && Number(p.originalPrice) > 0;
+            const vermelho = ctx.createLinearGradient(0, 0, W, 220); vermelho.addColorStop(0, '#7f1d1d'); vermelho.addColorStop(1, '#dc2626');
+            // fundo e cabeçalho
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = vermelho; ctx.fillRect(0, 0, W, 200);
+            ctx.globalAlpha = 0.08; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(W - 90, -40, 260, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+            try { const logo = await carregarImagemCanvas(FRIGANSO_LOGO_BRANCO_PNG); const lh = 150, lw = logo.width * (lh / logo.height); ctx.drawImage(logo, M, 25, lw, lh); } catch (e) {}
+            ctx.textAlign = 'right';
+            ctx.font = fonte(800, 22); const tag = 'FICHA DO PRODUTO'; const tw = ctx.measureText(tag).width + 44;
+            ret(W - M - tw, 62, tw, 48, 24, 'rgba(255,255,255,0.18)'); ctx.fillStyle = '#ffffff'; ctx.fillText(tag, W - M - 22, 94);
+            ctx.font = fonte(600, 22); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillText('Código ' + p.code, W - M - 22, 146);
+            ctx.textAlign = 'left';
+            // fotos num painel claro
             const imgs = [];
             for (const s of (fotos || []).slice(0, 4)) { try { imgs.push(await carregarImagemCanvas(s, !/^data:/.test(s))); } catch (e) {} }
-            const desenhaFoto = (img, x, y, w, h) => {
-                ret(x, y, w, h, 28, '#ffffff'); ctx.save(); roundRectPath(ctx, x, y, w, h, 28); ctx.clip();
-                const s = Math.min(w / img.width, h / img.height) * 0.94; const iw = img.width * s, ih = img.height * s;
-                ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); ctx.restore();
-                ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 2; roundRectPath(ctx, x, y, w, h, 28); ctx.stroke();
-            };
-            // 470 de altura nas fotos deixa espaço pra ~4 linhas de descrição + destaques + preço.
-            const topo = 175, alt = 470;
-            if (imgs.length === 1) desenhaFoto(imgs[0], (W - alt) / 2, topo, alt, alt);
-            else if (imgs.length === 2) { const w = (W - M * 2 - 24) / 2; desenhaFoto(imgs[0], M, topo, w, alt); desenhaFoto(imgs[1], M + w + 24, topo, w, alt); }
-            else if (imgs.length >= 3) {
-                const big = alt, small = (alt - 24 * (imgs.length - 2)) / (imgs.length - 1);
-                desenhaFoto(imgs[0], M, topo, big, big);
-                imgs.slice(1).forEach((im, i) => desenhaFoto(im, M + big + 24, topo + i * (small + 24), W - M * 2 - big - 24, small));
+            const pTop = 226, pH = imgs.length ? (comPreco ? 370 : 410) : 0;
+            if (imgs.length) {
+                ret(M, pTop, W - M * 2, pH, 36, '#f1f5f9');
+                const cabe = (img, x, y, w, h) => { const s = Math.min(w / img.width, h / img.height); const iw = img.width * s, ih = img.height * s; ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); };
+                const cartao = (img, x, y, w, h) => {
+                    ctx.save(); ctx.shadowColor = 'rgba(15,23,42,0.12)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8; ret(x, y, w, h, 26, '#ffffff'); ctx.restore();
+                    ctx.save(); roundRectPath(ctx, x, y, w, h, 26); ctx.clip(); cabe(img, x + 14, y + 14, w - 28, h - 28); ctx.restore();
+                };
+                const ix = M + 24, iy = pTop + 24, iw = W - M * 2 - 48, ih = pH - 48;
+                if (imgs.length === 1) cartao(imgs[0], (W - ih) / 2, iy, ih, ih);
+                else if (imgs.length === 2) { const w = (iw - 20) / 2; cartao(imgs[0], ix, iy, w, ih); cartao(imgs[1], ix + w + 20, iy, w, ih); }
+                else { const big = ih, sw = iw - big - 20, sh = (ih - 20 * (imgs.length - 2)) / (imgs.length - 1); cartao(imgs[0], ix, iy, big, big); imgs.slice(1).forEach((im, i) => cartao(im, ix + big + 20, iy + i * (sh + 20), sw, sh)); }
             }
-            let y = imgs.length ? topo + alt + 55 : topo + 40;
-            // nome
-            ctx.fillStyle = '#0f172a'; ctx.font = fonte(900, 42);
-            y = quebrarTexto(ctx, String(p.name || '').toUpperCase(), M, y, W - M * 2, 50, 2) + 6;
-            // etiquetas
-            const tags = [f.marca && ('🏷️ ' + f.marca), (f.embalagem || f.peso) && ('📦 ' + [f.embalagem, f.peso].filter(Boolean).join(' · ')), f.conservacao && ('❄️ ' + f.conservacao)].filter(Boolean);
-            let x = M; ctx.font = fonte(700, 24);
-            tags.forEach(t => { const w = ctx.measureText(t).width + 32; if (x + w > W - M) return; ret(x, y - 30, w, 44, 22, '#fee2e2'); ctx.fillStyle = '#991b1b'; ctx.fillText(t, x + 16, y); x += w + 12; });
-            y += 54;
-            // descrição + destaques
-            ctx.fillStyle = '#334155'; ctx.font = fonte(500, 27);
-            const reservaRodape = mostrarPreco ? 265 : 130;
-            const linhasMax = Math.max(3, Math.floor((H - reservaRodape - y - Math.min(4, (info.destaques || []).length) * 40) / 36));
-            y = quebrarTexto(ctx, info.descricao || '', M, y, W - M * 2, 36, linhasMax) + 8;
-            ctx.font = fonte(700, 26); ctx.fillStyle = '#15803d';
-            (info.destaques || []).slice(0, 4).forEach(d => { if (y < H - reservaRodape) { ctx.fillText('✔ ' + d, M, y); y += 40; } });
-            // preço
-            if (mostrarPreco && Number(p.originalPrice) > 0) {
-                const by = H - 250, un = '/' + String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase();
-                ret(M, by, W - M * 2, 120, 26, '#facc15');
-                ctx.fillStyle = '#7f1d1d'; ctx.font = fonte(700, 26); ctx.fillText(r.hasDiscount ? 'À VISTA (com 3% de desconto)' : 'VALOR', M + 30, by + 44);
-                if (r.hasDiscount) { ctx.font = fonte(600, 26); ctx.fillStyle = '#92400e'; const de = 'de ' + reais(r.origPrice); ctx.fillText(de, M + 30, by + 88); const wde = ctx.measureText(de).width; ctx.fillRect(M + 30 + ctx.measureText('de ').width, by + 79, wde - ctx.measureText('de ').width, 3); }
-                ctx.textAlign = 'right'; ctx.fillStyle = '#7f1d1d'; ctx.font = fonte(900, 64); ctx.fillText(reais(r.unitFinalPrice) + un, W - M - 30, by + 86); ctx.textAlign = 'left';
+            let y = (imgs.length ? pTop + pH : 230) + 72;
+            // nome legível
+            ctx.fillStyle = '#0f172a'; ctx.font = fonte(800, 50);
+            y = quebrarTexto(ctx, nomeAmigavel(p), M, y, W - M * 2, 58, 2) - 6;
+            ctx.font = fonte(500, 22); ctx.fillStyle = '#94a3b8';
+            ctx.fillText(String(p.name || '').toUpperCase().slice(0, 70), M, y); y += 26;
+            // cartões de informação (rótulo + valor)
+            const infos = [['🏷️', 'MARCA', f.marca], ['📦', 'EMBALAGEM', [f.embalagem, f.peso].filter(Boolean).join(' · ')], ['❄️', 'CONSERVAÇÃO', f.conservacao]].filter(i => i[2]);
+            if (infos.length) {
+                const gap = 16, th = 92, tw2 = (W - M * 2 - gap * (infos.length - 1)) / infos.length;
+                infos.forEach(([ic, rot, val], i) => {
+                    const tx = M + i * (tw2 + gap);
+                    ret(tx, y, tw2, th, 22, '#f8fafc'); ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 2; roundRectPath(ctx, tx, y, tw2, th, 22); ctx.stroke();
+                    ctx.font = fonte(400, 34); ctx.fillText(ic, tx + 18, y + 60);
+                    ctx.font = fonte(700, 16); ctx.fillStyle = '#94a3b8'; ctx.fillText(rot, tx + 70, y + 36);
+                    ctx.font = fonte(800, infos.length >= 3 ? 22 : 25); ctx.fillStyle = '#0f172a';
+                    let v = String(val); while (ctx.measureText(v).width > tw2 - 88 && v.length > 4) v = v.slice(0, -2) + '…';
+                    ctx.fillText(v, tx + 70, y + 68);
+                });
+                y += th + 40;
+            } else y += 20;
+            // descrição + destaques (o espaço que sobrar até o preço/rodapé)
+            const fundo = H - 70 - (comPreco ? 196 : 24);
+            const chipsAlt = (info.destaques || []).length ? 64 : 0;
+            ctx.fillStyle = '#475569'; ctx.font = fonte(500, 27);
+            const linhasMax = Math.max(2, Math.floor((fundo - chipsAlt - y) / 37));
+            y = quebrarTexto(ctx, info.descricao || '', M, y, W - M * 2, 37, linhasMax) + 4;
+            if (chipsAlt) {
+                let x = M; ctx.font = fonte(700, 21);
+                (info.destaques || []).slice(0, 4).forEach(d => {
+                    const t = '✓  ' + d, w = ctx.measureText(t).width + 36;
+                    if (x + w > W - M) return;
+                    ret(x, y - 4, w, 46, 23, '#dcfce7'); ctx.fillStyle = '#166534'; ctx.fillText(t, x + 18, y + 27); x += w + 10;
+                });
+            }
+            // preço num cartão escuro
+            if (comPreco) {
+                const by = H - 70 - 176, bh = 128, un = '/' + String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase();
+                ret(M, by, W - M * 2, bh, 30, '#0f172a');
+                ctx.fillStyle = '#facc15'; ctx.font = fonte(800, 20); ctx.fillText(r.hasDiscount ? 'PREÇO À VISTA' : 'PREÇO', M + 34, by + 42);
+                ctx.fillStyle = '#cbd5e1'; ctx.font = fonte(500, 20);
+                if (r.hasDiscount) { const de = 'de ' + reais(r.origPrice); ctx.fillText(de, M + 34, by + 76); const w0 = ctx.measureText('de ').width, w1 = ctx.measureText(de).width; ctx.fillRect(M + 34 + w0, by + 69, w1 - w0, 2); ctx.fillStyle = '#86efac'; ctx.fillText('3% de desconto já aplicado', M + 34, by + 106); }
+                else { const d = new Date(); d.setDate(d.getDate() + 1); ctx.fillText('válido até ' + d.toLocaleDateString('pt-BR'), M + 34, by + 80); }
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#facc15'; ctx.font = fonte(800, 34); const wu = ctx.measureText(un).width; ctx.fillText(un, W - M - 34, by + 88);
+                ctx.fillStyle = '#ffffff'; ctx.font = fonte(900, 72); ctx.fillText(reais(r.unitFinalPrice), W - M - 40 - wu, by + 90);
+                ctx.textAlign = 'left';
                 const d = new Date(); d.setDate(d.getDate() + 1);
-                ctx.font = fonte(500, 20); ctx.fillStyle = '#64748b'; ctx.fillText('Preço válido até ' + d.toLocaleDateString('pt-BR') + ' ou enquanto durar o estoque.', M, by + 150);
+                ctx.font = fonte(500, 18); ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
+                ctx.fillText('Preço válido até ' + d.toLocaleDateString('pt-BR') + ' ou enquanto durar o estoque', W / 2, by + bh + 26); ctx.textAlign = 'left';
             }
             // rodapé
+            ctx.fillStyle = vermelho; ctx.fillRect(0, H - 70, W, 70);
+            ctx.fillStyle = '#ffffff'; ctx.font = fonte(700, 26); ctx.textAlign = 'center';
+            ctx.fillText((contatos || []).map(c => `${c.icone || ''} ${c.texto || ''}`.trim()).filter(Boolean).join('     ') || 'Friganso', W / 2, H - 26); ctx.textAlign = 'left';
+            return cv;
+        };
+        // ═══ ⚖️ COMPARAR MARCAS (v2.60.0 — pedido 24/11/2026) ════════════════════════════════════════
+        // "Qual mussarela vocês têm?" → uma imagem com 2 a 4 opções lado a lado (foto, marca, embalagem,
+        // conservação e preço) + texto pro Zap. As sugestões são do MESMO TIPO (mesma regra de
+        // DESCRICOES_TIPO), com estoque, na tabela de hoje e sem palete/indústria.
+        const tipoDoProduto = (p) => {
+            const nome = String((p && p.name) || '').toUpperCase();
+            const sem = nome.normalize('NFD').replace(/[̀-ͯ]/g, '');
+            return DESCRICOES_TIPO.findIndex(([re]) => re.test(sem) || re.test(nome));
+        };
+        const tituloComparativo = (p) => {
+            const w = String((p && p.name) || '').trim().split(/\s+/)[0] || 'Produto';
+            const limpo = w.replace(/[^A-Za-zÀ-ÿ]/g, '');
+            return 'Opções de ' + (limpo ? limpo.charAt(0).toUpperCase() + limpo.slice(1).toLowerCase() : 'produto');
+        };
+        const textoComparativo = (titulo, produtos, mostrarPreco) => {
+            const reais = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            let t = `⚖️ *${titulo.toUpperCase()}*\n`;
+            produtos.forEach((p, i) => {
+                const f = fatosDoProduto(p); const r = checkDiscountRules(p.code, p.name, p.originalPrice);
+                const un = String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase();
+                t += `\n*${i + 1}. ${String(p.name || '').trim()}*\n`;
+                const info = [f.marca && '🏷️ ' + f.marca, (f.embalagem || f.peso) && '📦 ' + [f.embalagem, f.peso].filter(Boolean).join(' · '), f.conservacao && '❄️ ' + f.conservacao].filter(Boolean);
+                if (info.length) t += info.join('\n') + '\n';
+                t += '🔢 Cód: ' + p.code + '\n';
+                if (mostrarPreco && Number(p.originalPrice) > 0) t += r.hasDiscount ? `💰 ~${reais(r.origPrice)}~ por *${reais(r.unitFinalPrice)}/${un}* 🔥 (Com 3% de Desconto)\n` : `💰 *${reais(r.unitFinalPrice)}/${un}*\n`;
+            });
+            return (t + '\nQual delas fica melhor pra você? 😊').trim();
+        };
+        // Imagem 1080×1350: 2 ou 3 opções em colunas, 4 em grade 2×2. Canvas puro (funciona no app).
+        const gerarComparativo = async ({ titulo, produtos, fotos, mostrarPreco, contatos }) => {
+            const W = 1080, H = 1350, M = 44;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d');
+            const fonte = (peso, tam) => `${peso} ${tam}px Montserrat, "Segoe UI", system-ui, sans-serif`;
+            const reais = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const ret = (x, y, w, h, rr, cor) => { roundRectPath(ctx, x, y, w, h, rr); ctx.fillStyle = cor; ctx.fill(); };
+            ctx.fillStyle = '#f1f5f9'; ctx.fillRect(0, 0, W, H);
+            const g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, '#7f1d1d'); g.addColorStop(1, '#dc2626');
+            ctx.fillStyle = g; ctx.fillRect(0, 0, W, 170);
+            try { const logo = await carregarImagemCanvas(FRIGANSO_LOGO_BRANCO_PNG); const lh = 130, lw = logo.width * (lh / logo.height); ctx.drawImage(logo, M, 20, lw, lh); } catch (e) {}
+            ctx.fillStyle = '#ffffff'; ctx.textAlign = 'right';
+            ctx.font = fonte(700, 26); ctx.fillText('COMPARE AS OPÇÕES', W - M, 72);
+            ctx.font = fonte(900, 46); ctx.fillText(titulo.toUpperCase().slice(0, 28), W - M, 128); ctx.textAlign = 'left';
+            const n = Math.min(4, produtos.length);
+            const grade = n === 4 ? { cols: 2, rows: 2 } : { cols: n, rows: 1 };
+            const top = 200, gap = 22, base = H - 90 - 20;
+            const cw = (W - M * 2 - gap * (grade.cols - 1)) / grade.cols;
+            const ch = (base - top - gap * (grade.rows - 1)) / grade.rows;
+            for (let i = 0; i < n; i++) {
+                const p = produtos[i], f = fatosDoProduto(p), r = checkDiscountRules(p.code, p.name, p.originalPrice);
+                const cx = M + (i % grade.cols) * (cw + gap), cy = top + Math.floor(i / grade.cols) * (ch + gap);
+                ret(cx, cy, cw, ch, 26, '#ffffff');
+                ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 2; roundRectPath(ctx, cx, cy, cw, ch, 26); ctx.stroke();
+                const precoAlt = mostrarPreco ? 96 : 0;
+                const fotoH = Math.min(cw - 40, ch * (grade.rows === 2 ? 0.42 : 0.52));
+                const src = fotos[String(p.code)];
+                if (src) { try { const img = await carregarImagemCanvas(src, !/^data:/.test(src)); const s = Math.min((cw - 40) / img.width, fotoH / img.height); const iw = img.width * s, ih = img.height * s; ctx.drawImage(img, cx + (cw - iw) / 2, cy + 24 + (fotoH - ih) / 2, iw, ih); } catch (e) {} }
+                else { ctx.font = fonte(400, 90); ctx.textAlign = 'center'; ctx.fillText('🍖', cx + cw / 2, cy + 24 + fotoH / 2 + 30); ctx.textAlign = 'left'; }
+                // número da opção POR CIMA da foto (antes a foto cobria)
+                ret(cx + 14, cy + 14, 46, 46, 23, '#dc2626'); ctx.fillStyle = '#fff'; ctx.font = fonte(900, 26); ctx.textAlign = 'center'; ctx.fillText(String(i + 1), cx + 37, cy + 47); ctx.textAlign = 'left';
+                let y = cy + 24 + fotoH + 46;
+                const tx = cx + 22, tw = cw - 44, fs = grade.cols >= 3 ? 0.85 : 1;
+                ctx.fillStyle = '#b91c1c'; ctx.font = fonte(900, Math.round(34 * fs));
+                ctx.fillText((f.marca || 'Friganso').toUpperCase().slice(0, 16), tx, y); y += Math.round(38 * fs);
+                ctx.fillStyle = '#0f172a'; ctx.font = fonte(700, Math.round(25 * fs));
+                y = quebrarTexto(ctx, nomeAmigavel(p), tx, y, tw, Math.round(31 * fs), 3) + 4;
+                ctx.font = fonte(600, Math.round(21 * fs)); ctx.fillStyle = '#475569';
+                const linhas = [(f.embalagem || f.peso) && ('📦 ' + [f.embalagem, f.peso].filter(Boolean).join(' · ')), f.conservacao && ('❄️ ' + f.conservacao), '🔢 Cód. ' + p.code].filter(Boolean);
+                linhas.forEach(l => { if (y < cy + ch - precoAlt - 10) y = quebrarTexto(ctx, l, tx, y, tw, Math.round(27 * fs), 2); });
+                if (mostrarPreco && Number(p.originalPrice) > 0) {
+                    const py = cy + ch - precoAlt - 14, un = '/' + String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase();
+                    ret(cx + 14, py, cw - 28, precoAlt, 18, '#facc15');
+                    ctx.fillStyle = '#7f1d1d'; ctx.textAlign = 'center';
+                    if (r.hasDiscount) { ctx.font = fonte(600, Math.round(19 * fs)); ctx.fillText('de ' + reais(r.origPrice) + ' por', cx + cw / 2, py + 30); }
+                    ctx.font = fonte(900, Math.round((grade.cols >= 3 ? 34 : 42))); ctx.fillText(reais(r.unitFinalPrice) + un, cx + cw / 2, py + (r.hasDiscount ? 74 : 62)); ctx.textAlign = 'left';
+                }
+            }
+            if (mostrarPreco) { const d = new Date(); d.setDate(d.getDate() + 1); ctx.font = fonte(500, 19); ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; ctx.fillText('À vista com 3% de desconto · válido até ' + d.toLocaleDateString('pt-BR') + ' ou enquanto durar o estoque', W / 2, H - 100); ctx.textAlign = 'left'; }
             ctx.fillStyle = g; ctx.fillRect(0, H - 80, W, 80);
             ctx.fillStyle = '#ffffff'; ctx.font = fonte(700, 26); ctx.textAlign = 'center';
-            const contato = (contatos || []).map(c => `${c.icone || ''} ${c.texto || ''}`.trim()).filter(Boolean).join('    ') || 'Friganso';
-            ctx.fillText(contato, W / 2, H - 30); ctx.textAlign = 'left';
+            ctx.fillText((contatos || []).map(c => `${c.icone || ''} ${c.texto || ''}`.trim()).filter(Boolean).join('    ') || 'Friganso', W / 2, H - 30); ctx.textAlign = 'left';
             return cv;
+        };
+
+        const CompararMarcasModal = ({ products, produtoFotos, inicial, catalogoContatos, onFechar, showMessage }) => {
+            const [codigos, setCodigos] = useState(inicial ? [String(inicial.code)] : []);
+            const [busca, setBusca] = useState('');
+            const [titulo, setTitulo] = useState(inicial ? tituloComparativo(inicial) : 'Opções');
+            const [comPreco, setComPreco] = useState(true);
+            const [imagem, setImagem] = useState(null);
+            const [gerando, setGerando] = useState(false);
+            const porCodigo = useMemo(() => new Map((products || []).map(p => [String(p.code), p])), [products]);
+            const escolhidos = codigos.map(c => porCodigo.get(c)).filter(Boolean);
+            const vendavel = (p) => p && p.ativo !== false && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p) && disponivelParaOferta(p) > 0;
+            // Sugestões: mesmo tipo do 1º escolhido; com busca digitada, o resultado da busca.
+            const lista = useMemo(() => {
+                const q = busca.trim();
+                if (q) return filtrarProdutos((products || []).filter(vendavel), q).slice(0, 40);
+                const ref = escolhidos[0]; if (!ref) return [];
+                const t = tipoDoProduto(ref); if (t < 0) return [];
+                return (products || []).filter(p => vendavel(p) && tipoDoProduto(p) === t)
+                    .sort((a, b) => (Number(a.originalPrice) || 0) - (Number(b.originalPrice) || 0)).slice(0, 40);
+            }, [busca, products, codigos]);
+            const alternar = (p) => {
+                const c = String(p.code);
+                setImagem(null);
+                if (codigos.includes(c)) { setCodigos(codigos.filter(x => x !== c)); return; }
+                if (codigos.length >= 4) { showMessage('No máximo 4 opções por imagem.', 'error'); return; }
+                if (!codigos.length) setTitulo(tituloComparativo(p));
+                setCodigos([...codigos, c]);
+            };
+            const gerar = async () => {
+                if (escolhidos.length < 2) { showMessage('Escolha pelo menos 2 opções.', 'error'); return; }
+                setGerando(true);
+                try {
+                    const fotos = {}; escolhidos.forEach(p => { const s = produtoFotos && produtoFotos[String(p.code)]; if (s && s !== FOTO_CARREGANDO) fotos[String(p.code)] = s; });
+                    const cv = await gerarComparativo({ titulo: titulo.trim() || 'Opções', produtos: escolhidos, fotos, mostrarPreco: comPreco, contatos: catalogoContatos });
+                    setImagem(cv.toDataURL('image/png'));
+                } catch (e) { showMessage('Não consegui montar a imagem.', 'error'); }
+                setGerando(false);
+            };
+            const baixar = () => { const a = document.createElement('a'); a.href = imagem; a.download = 'comparar-' + (titulo.trim().toLowerCase().replace(/[^\w]+/g, '-') || 'opcoes') + '.png'; a.click(); };
+            const enviar = async () => {
+                try {
+                    const blob = await (await fetch(imagem)).blob(); const file = new File([blob], 'comparar.png', { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: textoComparativo(titulo, escolhidos, comPreco) }); return; }
+                    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showMessage('Imagem copiada! Cole (Ctrl+V) no WhatsApp. 📋', 'success'); return; }
+                    baixar();
+                } catch (e) { if (e && e.name !== 'AbortError') baixar(); }
+            };
+            const copiarTexto = () => navigator.clipboard.writeText(textoComparativo(titulo, escolhidos, comPreco)).then(() => showMessage('Texto copiado! 💬', 'success'), () => showMessage('Não consegui copiar.', 'error'));
+            const reais = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const miniFoto = (p) => <div className="h-10 w-10 rounded bg-white flex-shrink-0 overflow-hidden flex items-center justify-center">{produtoFotos && produtoFotos[String(p.code)] ? <img src={produtoFotos[String(p.code)]} className="w-full h-full object-contain" /> : '🍖'}</div>;
+            return (
+                <div className="fixed inset-0 z-[999] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3" onClick={onFechar}>
+                    <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[94vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-start justify-between gap-3">
+                            <div><h3 className="text-lg font-black text-white">⚖️ Comparar marcas</h3><p className="text-xs text-slate-400">Escolha de 2 a 4 opções pra mandar lado a lado pro cliente.</p></div>
+                            <button onClick={onFechar} className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xl">×</button>
+                        </div>
+                        <div className="grid md:grid-cols-2 gap-4 p-4 sm:p-5">
+                            <div>
+                                <p className="text-xs font-black text-violet-300 mb-2">Escolhidas ({escolhidos.length}/4)</p>
+                                <div className="space-y-2">
+                                    {escolhidos.map((p, i) => <div key={p.code} className="flex items-center gap-2 p-2 rounded-xl bg-violet-950/40 border border-violet-500/40">
+                                        <span className="h-6 w-6 rounded-full bg-rose-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                                        {miniFoto(p)}
+                                        <div className="min-w-0 flex-1"><div className="text-[11px] font-bold leading-tight truncate">{p.name}</div><div className="text-[10px] text-emerald-300">{reais(checkDiscountRules(p.code, p.name, p.originalPrice).unitFinalPrice)}</div></div>
+                                        <button onClick={() => alternar(p)} className="text-rose-300 text-lg px-1">×</button>
+                                    </div>)}
+                                    {!escolhidos.length && <p className="text-xs text-slate-500">Busque um produto ao lado.</p>}
+                                </div>
+                                <label className="text-[11px] font-bold text-slate-400 mt-4 block">Título da imagem</label>
+                                <input value={titulo} onChange={e => { setTitulo(e.target.value); setImagem(null); }} className="w-full mt-1 rounded-xl border border-slate-700 bg-[#080a12] px-3 py-2 text-sm" />
+                                <label className="flex items-center gap-2 text-xs text-slate-200 mt-3"><input type="checkbox" checked={comPreco} onChange={e => { setComPreco(e.target.checked); setImagem(null); }} className="accent-emerald-500" /> Mostrar o preço de hoje</label>
+                                <div className="grid grid-cols-2 gap-2 mt-3">
+                                    <button onClick={gerar} disabled={gerando || escolhidos.length < 2} className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-black">{gerando ? 'Montando...' : '🖼️ Gerar imagem'}</button>
+                                    <button onClick={copiarTexto} disabled={escolhidos.length < 2} className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs font-black">💬 Copiar texto</button>
+                                </div>
+                                {imagem && <div className="mt-3">
+                                    <img src={imagem} alt="Comparativo" className="w-full rounded-xl border border-slate-700" />
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <button onClick={enviar} className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black">📤 Enviar / copiar</button>
+                                        <button onClick={baixar} className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-black">⬇️ Baixar PNG</button>
+                                    </div>
+                                </div>}
+                            </div>
+                            <div>
+                                <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar outro produto (código ou nome)..." className="w-full rounded-xl border border-violet-500/40 bg-[#080a12] px-3 py-2.5 text-sm outline-none focus:border-cyan-400" />
+                                <p className="text-[11px] text-slate-500 mt-2 mb-1">{busca.trim() ? 'Resultado da busca (só com estoque)' : escolhidos.length ? 'Do mesmo tipo, com estoque (mais barato primeiro)' : 'Busque o primeiro produto'}</p>
+                                <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+                                    {lista.map(p => {
+                                        const marcado = codigos.includes(String(p.code)); const f = fatosDoProduto(p);
+                                        return <button key={p.code} onClick={() => alternar(p)} className={`w-full flex items-center gap-2 p-2 rounded-xl border text-left ${marcado ? 'border-violet-500 bg-violet-950/40' : 'border-slate-800 bg-[#111420] hover:bg-[#171b2b]'}`}>
+                                            {miniFoto(p)}
+                                            <div className="min-w-0 flex-1"><div className="text-[11px] font-bold leading-tight">{p.name}</div><div className="text-[10px] text-slate-400">{[f.marca, f.peso].filter(Boolean).join(' · ')}{(f.marca || f.peso) ? ' · ' : ''}<span className="text-emerald-300">{reais(checkDiscountRules(p.code, p.name, p.originalPrice).unitFinalPrice)}</span></div></div>
+                                            <span className={`h-5 w-5 rounded-full border text-[11px] font-black flex items-center justify-center ${marcado ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-600 text-transparent'}`}>✓</span>
+                                        </button>;
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
         };
 
         // 🍽️ Cardápio: cada produto pode ter uma foto, compartilhada com todo mundo que usa o sistema.
@@ -11252,7 +11483,7 @@
         // de ir direto pro "trocar foto". Mostra foto grande, preços, estoque e dá as ações de foto:
         // nova foto, editar capa (reenquadrar a atual), pedir troca (fica registrado em fotos_pedidos/{code}
         // pra equipe ver; some sozinho quando alguém salva foto nova), criar arte e remover foto.
-        const ProdutoDetalheModal = ({ produto, foto, pedido, subindo, onFechar, onNovaFoto, onEditarCapa, onPedirTroca, onResolverPedido, onCriarArte, onRemoverFoto, onFotoExtra, usuario, catalogoContatos, showMessage }) => {
+        const ProdutoDetalheModal = ({ produto, foto, pedido, subindo, onFechar, onNovaFoto, onEditarCapa, onPedirTroca, onResolverPedido, onCriarArte, onRemoverFoto, onFotoExtra, onComparar, usuario, catalogoContatos, showMessage }) => {
             const [motivo, setMotivo] = useState('');
             const [pedindo, setPedindo] = useState(false);
             const p = produto;
@@ -11373,6 +11604,7 @@
                                         <button onClick={gerarFicha} disabled={gerando} className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-black">{gerando ? 'Montando...' : '🖼️ Gerar ficha'}</button>
                                         <button onClick={copiarTextoCliente} className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-black">💬 Copiar texto</button>
                                     </div>
+                                    {onComparar && <button onClick={onComparar} className="w-full mt-2 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black">⚖️ Comparar com outras marcas</button>}
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 mt-3">
                                     <button onClick={onNovaFoto} disabled={subindo} className="py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-black">📷 {foto ? 'Nova foto' : 'Adicionar foto'}</button>
@@ -12131,6 +12363,7 @@
             }, []);
             const detalheProduto = detalheCode ? (products || []).find(p => String(p.code) === detalheCode) : null;
             const qtdPedidos = Object.keys(pedidosFoto).length;
+            const [comparar, setComparar] = useState(null); // ⚖️ { produto } — v2.60.0
             // 🎨 Estúdio (PC). `estudio` = { produto } aberto; `avisoSoPc` no app/tela pequena.
             const [estudio, setEstudio] = useState(null);
             const [avisoSoPc, setAvisoSoPc] = useState(false);
@@ -12220,6 +12453,7 @@
                     {/* Portal no <body>: dentro da tela, o menu lateral e a barra de cima ficavam por cima. */}
                     {estudio && ReactDOM.createPortal(<EstudioArtes products={products} produtoFotos={produtoFotos} catalogoContatos={catalogoContatos} usuario={usuario} produtoInicial={estudio.produto} onFechar={() => setEstudio(null)} showMessage={showMessage} />, document.body)}
                     {avisoSoPc && ReactDOM.createPortal(<EstudioSoPcAviso onFechar={() => setAvisoSoPc(false)} />, document.body)}
+                    {comparar && ReactDOM.createPortal(<CompararMarcasModal products={products} produtoFotos={produtoFotos} inicial={comparar.produto} catalogoContatos={catalogoContatos} onFechar={() => setComparar(null)} showMessage={showMessage} />, document.body)}
                     {detalheProduto && !crop && ReactDOM.createPortal(<ProdutoDetalheModal
                         produto={detalheProduto}
                         foto={produtoFotos && produtoFotos[detalheCode]}
@@ -12233,6 +12467,7 @@
                         onCriarArte={() => { setDetalheCode(null); criarArteDe(detalheProduto); }}
                         onRemoverFoto={() => apagarFoto(detalheCode)}
                         onFotoExtra={() => escolherFoto(detalheCode, 'extra')}
+                        onComparar={() => { const pr = detalheProduto; setDetalheCode(null); setComparar({ produto: pr }); }}
                         usuario={usuario}
                         catalogoContatos={catalogoContatos}
                         showMessage={showMessage}
@@ -12346,6 +12581,7 @@
                             <div className="flex flex-wrap gap-2">
                                 {qtdPedidos > 0 && <button onClick={() => { setSoPedidos(v => !v); setModoSugestoes(false); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${soPedidos ? 'bg-slate-900 text-white' : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm'}`}>{soPedidos ? '✕ Ver todos' : '🙋 Pedidos de troca (' + qtdPedidos + ')'}</button>}
                                 {pendentesFoto.length > 0 && <button onClick={() => { setModoSugestoes(v => !v); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoSugestoes ? 'bg-slate-900 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'}`}>{modoSugestoes ? '✕ Fechar sugestões' : '📸 Escolher fotos (' + pendentesFoto.length + ')'}</button>}
+                                <button onClick={() => setComparar({ produto: null })} className="px-4 py-2 rounded-xl font-bold text-sm bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm">⚖️ Comparar marcas</button>
                                 <button onClick={() => abrirEstudio(null)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-fuchsia-600 to-violet-600 text-white shadow-sm">🎨 Estúdio de artes <span className="ml-1 text-[10px] font-black bg-white/20 rounded px-1.5 py-0.5">PC</span></button>
                                 <button onClick={() => abrirArteProduto({ code: 'avulso', name: '' })} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-sm">✨ Nova arte avulsa</button>
                                 <button onClick={() => { setModoCatalogo(v => !v); setModoSugestoes(false); setSelecionados(new Set()); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoCatalogo ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>

@@ -1084,6 +1084,11 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
   `textoClienteProduto` = texto no estilo Zap. Ficha: "Enviar/copiar" (Web Share no celular,
   clipboard no PC), baixar PNG e copiar texto.
 
+## ⚖️ v2.60.0 (24/11/2026) — Comparar marcas + ficha nova
+- `CompararMarcasModal` (Catálogo e detalhes): 2–4 produtos; sugestões = mesmo `tipoDoProduto` (índice em DESCRICOES_TIPO), com estoque, fora de PLT/IND, mais barato primeiro. `gerarComparativo` (canvas 1080×1350) + `textoComparativo`.
+- Ficha redesenhada (`gerarFichaProduto`) e `nomeAmigavel(p)` (tira embalagem/peso do nome e põe em Título).
+- `FRIGANSO_LOGO_BRANCO_PNG`: logo branco 441×399 embutido (recortado de Downloads\friganso.png; arquivo também em logo-friganso-branco.png). O FRIGANSO_LOGO_PNG antigo (112×98) segue nos outros geradores.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
