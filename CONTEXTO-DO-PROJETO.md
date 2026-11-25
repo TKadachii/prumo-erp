@@ -1108,6 +1108,9 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 - `DestaqueSemanaModal`: validade padrão hoje→amanhã (pedido do Bruno); datas em horário LOCAL (toISOString virava o dia após 21h).
 - `fotos/1602.jpg` trocada (a antiga tinha logo da Dinâmica); mapa com ?v=4.
 
+## 🏆 v2.64.2 (25/11/2026) — Panfleto sem 'enquanto durarem os estoques'
+- `gerarDestaqueSemana`: cartão do contato mostra só 'Ofertas válidas ...' (pedido do Bruno). Ficha/comparativo/texto continuam com 'ou enquanto durar o estoque'.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

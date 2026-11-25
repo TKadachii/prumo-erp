@@ -1,9 +1,8 @@
 {
-    "version":  272,
-    "versao":  "2.64.1",
+    "version":  273,
+    "versao":  "2.64.2",
     "data":  "25/11/2026",
     "itens":  [
-                  "📅 Destaque da Semana: validade já vem com 1 dia (hoje até amanhã). Também corrigido o dia que virava sozinho à noite (depois das 21h)",
-                  "📸 Foto nova do Dianteiro Bovino (1602), sem logo de outra marca"
+                  "🏆 Destaque da Semana: o panfleto agora mostra só \"Ofertas válidas de X até Y\" (saiu o \"ou enquanto durarem os estoques\")"
               ]
 }
