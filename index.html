@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 274;
+        const APP_BUILD_VERSION = 275;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9705,6 +9705,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.64.4', data: '25/11/2026', areas: ['site', 'app'], itens: [
+                '✂️ Saiu o "ou enquanto durar o estoque" também da ficha do produto, do Comparar marcas e das artes do Catálogo — fica só "válido até DD/MM"',
+            ] },
             { versao: '2.64.3', data: '25/11/2026', areas: ['site'], itens: [
                 '🏆 Destaque da Semana: validade em duas linhas no cartão do representante, sem passar da borda',
             ] },
@@ -11348,7 +11351,7 @@
                 ctx.textAlign = 'left';
                 const d = new Date(); d.setDate(d.getDate() + 1);
                 ctx.font = fonte(500, 18); ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
-                ctx.fillText('Preço válido até ' + d.toLocaleDateString('pt-BR') + ' ou enquanto durar o estoque', W / 2, by + bh + 26); ctx.textAlign = 'left';
+                ctx.fillText('Preço válido até ' + d.toLocaleDateString('pt-BR'), W / 2, by + bh + 26); ctx.textAlign = 'left';
             }
             // rodapé
             ctx.fillStyle = vermelho; ctx.fillRect(0, H - 70, W, 70);
@@ -11433,7 +11436,7 @@
                     ctx.font = fonte(900, Math.round((grade.cols >= 3 ? 34 : 42))); ctx.fillText(reais(r.unitFinalPrice) + un, cx + cw / 2, py + (r.hasDiscount ? 74 : 62)); ctx.textAlign = 'left';
                 }
             }
-            if (mostrarPreco) { const d = new Date(); d.setDate(d.getDate() + 1); ctx.font = fonte(500, 19); ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; ctx.fillText('À vista com 3% de desconto · válido até ' + d.toLocaleDateString('pt-BR') + ' ou enquanto durar o estoque', W / 2, H - 100); ctx.textAlign = 'left'; }
+            if (mostrarPreco) { const d = new Date(); d.setDate(d.getDate() + 1); ctx.font = fonte(500, 19); ctx.fillStyle = '#64748b'; ctx.textAlign = 'center'; ctx.fillText('À vista com 3% de desconto · válido até ' + d.toLocaleDateString('pt-BR'), W / 2, H - 100); ctx.textAlign = 'left'; }
             ctx.fillStyle = g; ctx.fillRect(0, H - 80, W, 80);
             ctx.fillStyle = '#ffffff'; ctx.font = fonte(700, 26); ctx.textAlign = 'center';
             ctx.fillText((contatos || []).map(c => `${c.icone || ''} ${c.texto || ''}`.trim()).filter(Boolean).join('    ') || 'Friganso', W / 2, H - 30); ctx.textAlign = 'left';
@@ -12170,7 +12173,7 @@
                     add(img, false);
                 }
             };
-            const validade = () => { const d = new Date(); d.setDate(d.getDate() + 1); return 'Válido até ' + d.toLocaleDateString('pt-BR') + ' ou enquanto durar o estoque'; };
+            const validade = () => { const d = new Date(); d.setDate(d.getDate() + 1); return 'Válido até ' + d.toLocaleDateString('pt-BR'); };
             const modeloOferta = async (p) => {
                 const t = tamanhoRef.current; limpar(); fundoGradiente(['#7f1d1d', '#dc2626']);
                 await logo();

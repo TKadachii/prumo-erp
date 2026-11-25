@@ -1109,7 +1109,7 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 - `fotos/1602.jpg` trocada (a antiga tinha logo da Dinâmica); mapa com ?v=4.
 
 ## 🏆 v2.64.2 (25/11/2026) — Panfleto sem 'enquanto durarem os estoques'
-- `gerarDestaqueSemana`: cartão do contato mostra só 'Ofertas válidas ...' (pedido do Bruno). Ficha/comparativo/texto continuam com 'ou enquanto durar o estoque'.
+- `gerarDestaqueSemana`: cartão do contato mostra só 'Ofertas válidas ...' (pedido do Bruno). Em v2.64.4 saiu de tudo (ficha, comparativo, artes): o Bruno não quer 'enquanto durar o estoque' em nada.
 
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
