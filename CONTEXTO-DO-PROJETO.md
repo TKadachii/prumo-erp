@@ -1099,6 +1099,11 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 ## 🏪 v2.63.0 (25/11/2026) — Tipo de comércio no Destaque
 - `DestaqueSemanaModal`: `perfilId` + `candidatosDoPerfil` (mesmos perfis/ajustes do Criar ofertas, lidos de system_data/ofertas_perfis) filtram a base antes dos filtros de preço/estoque. Contador 'baixou' mostra '…' enquanto `pdf_versions` carrega (docs grandes, ~8 s).
 
+## 🏷️ v2.64.0 (25/11/2026) — Selo Friganso e Boi no osso / Suíno banda
+- `fatosDoProduto` devolve `propria` e `corte`. Friganso = nome tem FRIGANSO/FRIG, OU sem marca conhecida + grupo próprio (02, 11, 12, 14, 15, 16, 27, 80) + sem marca de terceiro (La Prima, Brumatti, Frigominas, Frigomar, Frired, Ecofrigo, Alibem, Naturafrig, Frivatti...). Regra do Bruno: sem marca no nome = Friganso.
+- `corte`: grupo 16 = 'Boi no osso', 27 = 'Suíno banda'.
+- `SeloFotoProduto` (logo branca em pílula vermelha + etiqueta âmbar) no card do Catálogo e no ProdutoDetalheModal; `gerarFichaProduto` desenha o mesmo selo na foto principal (escala pelo tamanho do cartão) e ganhou o cartão TIPO; `textoClienteProduto` ganhou a linha do corte.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

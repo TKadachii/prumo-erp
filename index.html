@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 270;
+        const APP_BUILD_VERSION = 271;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9705,6 +9705,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.64.0', data: '25/11/2026', areas: ['site', 'app'], itens: [
+                '🏷️ Produto sem marca no nome agora é Friganso: a foto ganha o selo com a logo da Friganso (catálogo, detalhe e ficha) e a marca aparece como Friganso no texto e no Comparar marcas. Vale pros cortes próprios (bovino, suíno, miúdos, salgados, carne seca, resfriados); marcas de terceiro ficam de fora',
+                '🐂 Itens do grupo 16 ganham a etiqueta "Boi no osso" e os do grupo 27 "Suíno banda", na foto, na ficha (campo TIPO) e no texto pro cliente',
+            ] },
             { versao: '2.63.0', data: '25/11/2026', areas: ['site'], itens: [
                 '🏪 Destaque da Semana: filtro por tipo de comércio (Padaria, Açougue, Mercado, Restaurante, Pizzaria, Lanchonete), com os mesmos itens do Criar ofertas. Combina com "Baixou de preço" e "Mais estoque" — ex.: Padaria + Baixou na semana',
             ] },
@@ -11083,7 +11087,18 @@
         // pronto pro WhatsApp com as fotos marcadas.
         //   produto_info/{code}         = { descricao, destaques: [], por, em }   (só quando alguém edita)
         //   produto_fotos_extra/{auto}  = { code, data (dataURL ≤ 800px), por, em }
-        const MARCAS_CONHECIDAS = ['IMPERIO', 'IMPÉRIO', 'SEARA', 'SADIA', 'PERDIGAO', 'PERDIGÃO', 'FRIGANSO', 'ITALATE', 'LATVIDA', 'LITORAL', 'SUPREMA', 'LATSUL', 'BEM BRASIL', 'MC CAIN', 'MCCAIN', 'RIVELLI', 'LAR', 'AURORA', 'COOPAVEL', 'FRIBOI', 'QUALY', 'CLAYBOM', 'CATUPIRY', 'DANUBIO', 'POLENGHI', 'TIROLEZ', 'VIGOR', 'BATAVO', 'ITAMBE', 'PRIMOR', 'DORIANA', 'ALLIZ', 'FRANGOSUL', 'GUIBOM', 'BELLO', 'JAGUA', 'A GOSTO', 'BELLA CARNE', 'ASTRA', 'FRIGOURIAS', 'MAFRINORTE', 'FRIALTO', 'PIF PAF', 'MASTER', 'NAVICO', 'DALSUR', 'NOVA PESCA', 'KINGSUN', 'CAPTAIN FOODS', 'MENCUCIMI', 'MAIS BATATA', 'QUINTAL', 'NORDIC WILDFISH', 'SCAN MAR', 'BACALANOR', 'SOFFICE', 'VALE DO PARDO', 'CRIOULO', 'TEIXEIRA', 'OLE', 'OLÉ'];
+        // 🏷️ Selo na foto: logo da Friganso nos produtos dela + etiqueta "Boi no osso" (grupo 16) / "Suíno banda" (grupo 27).
+        const SeloFotoProduto = ({ produto, grande }) => {
+            const f = fatosDoProduto(produto);
+            if (!f.propria && !f.corte) return null;
+            return (
+                <div className={`absolute flex flex-col items-start pointer-events-none ${grande ? 'bottom-3 left-3 gap-1.5' : 'bottom-1.5 left-1.5 gap-1'}`}>
+                    {f.propria && <span className={`rounded-xl bg-gradient-to-br from-red-800 to-red-600 shadow-md ring-1 ring-white/40 ${grande ? 'p-1.5' : 'p-1'}`}><img src={FRIGANSO_LOGO_BRANCO_PNG} alt="Friganso" className={grande ? 'h-12 w-auto' : 'h-8 w-auto'} /></span>}
+                    {f.corte && <span className={`rounded-full bg-amber-400 text-slate-950 font-black shadow-md ${grande ? 'text-xs px-3 py-1' : 'text-[10px] px-2 py-0.5'}`}>{f.corte === 'Boi no osso' ? '🐂' : '🐖'} {f.corte}</span>}
+                </div>
+            );
+        };
+        const MARCAS_CONHECIDAS = ['IMPERIO', 'IMPÉRIO', 'SEARA', 'SADIA', 'PERDIGAO', 'PERDIGÃO', 'FRIGANSO', 'ITALATE', 'LATVIDA', 'LITORAL', 'SUPREMA', 'LATSUL', 'BEM BRASIL', 'MC CAIN', 'MCCAIN', 'RIVELLI', 'LAR', 'AURORA', 'COOPAVEL', 'FRIBOI', 'QUALY', 'CLAYBOM', 'CATUPIRY', 'DANUBIO', 'POLENGHI', 'TIROLEZ', 'VIGOR', 'BATAVO', 'ITAMBE', 'PRIMOR', 'DORIANA', 'ALLIZ', 'FRANGOSUL', 'GUIBOM', 'BELLO', 'JAGUA', 'A GOSTO', 'BELLA CARNE', 'ASTRA', 'FRIGOURIAS', 'MAFRINORTE', 'FRIALTO', 'PIF PAF', 'MASTER', 'NAVICO', 'DALSUR', 'NOVA PESCA', 'KINGSUN', 'CAPTAIN FOODS', 'MENCUCIMI', 'MAIS BATATA', 'QUINTAL', 'NORDIC WILDFISH', 'SCAN MAR', 'BACALANOR', 'SOFFICE', 'VALE DO PARDO', 'CRIOULO', 'TEIXEIRA', 'OLE', 'OLÉ', 'BELA CARNE'];
         const fatosDoProduto = (p) => {
             const nome = String((p && p.name) || '').toUpperCase();
             const semAcento = nome.normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -11095,7 +11110,18 @@
             const embalagem = emb ? ({ CX: 'Caixa', PCT: 'Pacote', PC: 'Peça', SC: 'Saco', FD: 'Fardo', BD: 'Balde', BALDE: 'Balde', BISN: 'Bisnaga' })[emb[1]] : '';
             const peso = (p && p.tipo && /kg/i.test(p.tipo)) ? String(p.tipo) : (pesoNome ? pesoNome[1].replace('.', ',') + ' kg' : '');
             const aproximado = /\+\s*-|\+\/-|\+-|±/.test(nome);
-            return { marca: marca ? marca.toLowerCase().replace(/(^|\s)\S/g, s => s.toUpperCase()) : '', conservacao, temperado, embalagem, peso: peso ? (aproximado ? 'aprox. ' : '') + peso : '' };
+            // 🏠 Sem marca no nome = produto da própria Friganso (regra do Bruno, 25/11/2026). Fica de fora o que
+            // claramente é de terceiro (marca entre parênteses, "diversos", peixe/bacalhau) e o que nem é alimento.
+            // Vale só nos grupos onde a Friganso tem corte próprio (02 carne seca, 11 miúdos, 12 bovino, 14 suíno,
+            // 15 salgados, 16 boi no osso, 27 banda, 80 resfriados). Nos outros (queijo, frango, peixe, importados,
+            // mercearia) só é Friganso se o nome disser. Marcas de terceiro vistas nesses grupos ficam de fora.
+            const grupoCod = String((p && p.code) || '').trim().slice(0, 2);
+            const GRUPOS_PROPRIOS = ['02', '11', '12', '14', '15', '16', '27', '80'];
+            const deTerceiro = /DIVERSOS|MS BOI|FRIGOMAR|FRIGOMINAS|RRX|LA PRIMA|BRUMATTI|BOIFRIG|FRIRED|NATURAFRIG|ECOFRIGO|ALIBEM|RAINHA DA PAZ|FRIVATTI|NOBREDO|\bL\.P\b|\(VILA\)/.test(semAcento);
+            const ehFriganso = /FRIGANSO|\bFRIG\b/.test(semAcento) || (!marca && !deTerceiro && GRUPOS_PROPRIOS.includes(grupoCod));
+            const corte = grupoCod === '16' ? 'Boi no osso' : grupoCod === '27' ? 'Suíno banda' : '';
+            const marcaFinal = ehFriganso ? 'Friganso' : (marca ? marca.toLowerCase().replace(/(^|\s)\S/g, s => s.toUpperCase()) : '');
+            return { marca: marcaFinal, propria: !!ehFriganso, corte, conservacao, temperado, embalagem, peso: peso ? (aproximado ? 'aprox. ' : '') + peso : '' };
         };
         // Descrições por tipo. Ordem importa: a primeira que bater vale (mais específica primeiro).
         const DESCRICOES_TIPO = [
@@ -11186,6 +11212,7 @@
             if (info.destaques && info.destaques.length) t += '\n' + info.destaques.map(d => '✅ ' + d).join('\n') + '\n';
             const linhas = [];
             if (f.marca) linhas.push('🏷️ Marca: ' + f.marca);
+            if (f.corte) linhas.push((f.corte === 'Boi no osso' ? '🐂 ' : '🐖 ') + f.corte);
             if (f.embalagem || f.peso) linhas.push('📦 Embalagem: ' + [f.embalagem, f.peso].filter(Boolean).join(' · '));
             if (f.conservacao) linhas.push('❄️ Conservação: ' + f.conservacao);
             linhas.push('🔢 Código: ' + p.code);
@@ -11236,7 +11263,9 @@
             if (imgs.length) {
                 ret(M, pTop, W - M * 2, pH, 36, '#f1f5f9');
                 const cabe = (img, x, y, w, h) => { const s = Math.min(w / img.width, h / img.height); const iw = img.width * s, ih = img.height * s; ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); };
+                let c0 = null;
                 const cartao = (img, x, y, w, h) => {
+                    if (!c0) c0 = { x, y, w, h };
                     ctx.save(); ctx.shadowColor = 'rgba(15,23,42,0.12)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8; ret(x, y, w, h, 26, '#ffffff'); ctx.restore();
                     ctx.save(); roundRectPath(ctx, x, y, w, h, 26); ctx.clip(); cabe(img, x + 14, y + 14, w - 28, h - 28); ctx.restore();
                 };
@@ -11244,6 +11273,21 @@
                 if (imgs.length === 1) cartao(imgs[0], (W - ih) / 2, iy, ih, ih);
                 else if (imgs.length === 2) { const w = (iw - 20) / 2; cartao(imgs[0], ix, iy, w, ih); cartao(imgs[1], ix + w + 20, iy, w, ih); }
                 else { const big = ih, sw = iw - big - 20, sh = (ih - 20 * (imgs.length - 2)) / (imgs.length - 1); cartao(imgs[0], ix, iy, big, big); imgs.slice(1).forEach((im, i) => cartao(im, ix + big + 20, iy + i * (sh + 20), sw, sh)); }
+                // 🏷️ selo na foto principal: logo Friganso (produto dela) + "Boi no osso"/"Suíno banda"
+                if (c0 && (f.propria || f.corte)) {
+                    const k = Math.min(1, c0.w / 560), mx = Math.round(16 * k + 6); let by = c0.y + c0.h - mx;
+                    if (f.corte) {
+                        const fs = Math.round(22 * k), chH = Math.round(fs * 2); ctx.font = fonte(900, fs); const txt = (f.corte === 'Boi no osso' ? '🐂 ' : '🐖 ') + f.corte.toUpperCase(); const cw = ctx.measureText(txt).width + fs * 1.6;
+                        by -= chH; ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 10; ret(c0.x + mx, by, cw, chH, chH / 2, '#fbbf24'); ctx.restore();
+                        ctx.fillStyle = '#0f172a'; ctx.fillText(txt, c0.x + mx + fs * 0.8, by + chH * 0.68); by -= 8;
+                    }
+                    if (f.propria) { try {
+                        const lg = await carregarImagemCanvas(FRIGANSO_LOGO_BRANCO_PNG); const lh = Math.round(64 * k), lw = lg.width * (lh / lg.height), pad = Math.round(8 * k);
+                        by -= lh + pad * 2; const g = ctx.createLinearGradient(c0.x + mx, by, c0.x + mx + lw + pad * 2, by + lh); g.addColorStop(0, '#991b1b'); g.addColorStop(1, '#dc2626');
+                        ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 10; ret(c0.x + mx, by, lw + pad * 2, lh + pad * 2, 14, g); ctx.restore();
+                        ctx.drawImage(lg, c0.x + mx + pad, by + pad, lw, lh);
+                    } catch (e) {} }
+                }
             }
             let y = (imgs.length ? pTop + pH : 230) + 72;
             // nome legível
@@ -11252,7 +11296,7 @@
             ctx.font = fonte(500, 22); ctx.fillStyle = '#94a3b8';
             ctx.fillText(String(p.name || '').toUpperCase().slice(0, 70), M, y); y += 26;
             // cartões de informação (rótulo + valor)
-            const infos = [['🏷️', 'MARCA', f.marca], ['📦', 'EMBALAGEM', [f.embalagem, f.peso].filter(Boolean).join(' · ')], ['❄️', 'CONSERVAÇÃO', f.conservacao]].filter(i => i[2]);
+            const infos = [['🏷️', 'MARCA', f.marca], ['🥩', 'TIPO', f.corte], ['📦', 'EMBALAGEM', [f.embalagem, f.peso].filter(Boolean).join(' · ')], ['❄️', 'CONSERVAÇÃO', f.conservacao]].filter(i => i[2]);
             if (infos.length) {
                 const gap = 16, th = 92, tw2 = (W - M * 2 - gap * (infos.length - 1)) / infos.length;
                 infos.forEach(([ic, rot, val], i) => {
@@ -11793,8 +11837,9 @@
                         </div>
                         <div className="grid sm:grid-cols-2 gap-5 p-4 sm:p-5">
                             <div>
-                                <div className="aspect-square rounded-2xl overflow-hidden bg-white flex items-center justify-center">
+                                <div className="relative aspect-square rounded-2xl overflow-hidden bg-white flex items-center justify-center">
                                     {fotoAtiva ? <img src={fotoAtiva} alt={p.name} className="w-full h-full object-contain" /> : <span className="text-6xl">🍖</span>}
+                                    <SeloFotoProduto produto={p} grande />
                                 </div>
                                 {/* 🖼️ galeria: capa + fotos extras. ✓ = vai pra ficha. */}
                                 <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
@@ -12872,6 +12917,7 @@
                                     <div key={p.code} className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col ${marcado ? 'border-rose-500 ring-2 ring-rose-200' : 'border-slate-200'}`}>
                                         <button onClick={() => modoCatalogo ? toggleSelecionado(String(p.code)) : setDetalheCode(String(p.code))} disabled={subindo} className="relative aspect-square bg-slate-100 flex items-center justify-center overflow-hidden group">
                                             {foto ? <img src={foto} alt={p.name} className="w-full h-full object-cover" /> : <span className="text-3xl text-slate-300">🍖</span>}
+                                            <SeloFotoProduto produto={p} />
                                             {temPedido && !modoCatalogo && <span className="absolute top-2 left-2 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 shadow">🙋 trocar foto</span>}
                                             {modoCatalogo ? (
                                                 <div className={`absolute top-2 right-2 h-6 w-6 rounded-full border-2 flex items-center justify-center text-xs font-bold ${marcado ? 'bg-rose-600 border-rose-600 text-white' : 'bg-white/80 border-slate-300 text-transparent'}`}>✓</div>

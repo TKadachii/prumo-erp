@@ -1,8 +1,9 @@
 {
-    "version":  270,
-    "versao":  "2.63.0",
+    "version":  271,
+    "versao":  "2.64.0",
     "data":  "25/11/2026",
     "itens":  [
-                  "🏪 Destaque da Semana: filtro por tipo de comércio (Padaria, Açougue, Mercado, Restaurante, Pizzaria, Lanchonete), com os mesmos itens do Criar ofertas. Combina com \"Baixou de preço\" e \"Mais estoque\" — ex.: Padaria + Baixou na semana"
+                  "🏷️ Produto sem marca no nome agora é Friganso: a foto ganha o selo com a logo da Friganso (catálogo, detalhe e ficha) e a marca aparece como Friganso no texto e no Comparar marcas. Vale pros cortes próprios (bovino, suíno, miúdos, salgados, carne seca, resfriados); marcas de terceiro ficam de fora",
+                  "🐂 Itens do grupo 16 ganham a etiqueta \"Boi no osso\" e os do grupo 27 \"Suíno banda\", na foto, na ficha (campo TIPO) e no texto pro cliente"
               ]
 }
