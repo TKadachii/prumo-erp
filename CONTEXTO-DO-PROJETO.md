@@ -1104,6 +1104,10 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 - `corte`: grupo 16 = 'Boi no osso', 27 = 'Suíno banda'.
 - `SeloFotoProduto` (logo branca em pílula vermelha + etiqueta âmbar) no card do Catálogo e no ProdutoDetalheModal; `gerarFichaProduto` desenha o mesmo selo na foto principal (escala pelo tamanho do cartão) e ganhou o cartão TIPO; `textoClienteProduto` ganhou a linha do corte.
 
+## 📅 v2.64.1 (25/11/2026) — Validade padrão 1 dia
+- `DestaqueSemanaModal`: validade padrão hoje→amanhã (pedido do Bruno); datas em horário LOCAL (toISOString virava o dia após 21h).
+- `fotos/1602.jpg` trocada (a antiga tinha logo da Dinâmica); mapa com ?v=4.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

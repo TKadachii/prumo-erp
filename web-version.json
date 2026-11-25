@@ -1,9 +1,9 @@
 {
-    "version":  271,
-    "versao":  "2.64.0",
+    "version":  272,
+    "versao":  "2.64.1",
     "data":  "25/11/2026",
     "itens":  [
-                  "🏷️ Produto sem marca no nome agora é Friganso: a foto ganha o selo com a logo da Friganso (catálogo, detalhe e ficha) e a marca aparece como Friganso no texto e no Comparar marcas. Vale pros cortes próprios (bovino, suíno, miúdos, salgados, carne seca, resfriados); marcas de terceiro ficam de fora",
-                  "🐂 Itens do grupo 16 ganham a etiqueta \"Boi no osso\" e os do grupo 27 \"Suíno banda\", na foto, na ficha (campo TIPO) e no texto pro cliente"
+                  "📅 Destaque da Semana: validade já vem com 1 dia (hoje até amanhã). Também corrigido o dia que virava sozinho à noite (depois das 21h)",
+                  "📸 Foto nova do Dianteiro Bovino (1602), sem logo de outra marca"
               ]
 }
