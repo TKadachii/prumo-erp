@@ -1093,6 +1093,9 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 - `DestaqueSemanaModal` + `gerarDestaqueSemana` (canvas 1080×até 1528, altura segue o nº de fileiras): até 8 produtos + cartão 'Consulte seu representante' (`catalogoContatos`) e validade. Preço = tabela (originalPrice, 'preço final' como o panfleto oficial) ou à vista −3% (opção). Nome editável por item (padrão `nomeAmigavel`). Rodapé da empresa em `DESTAQUE_RODAPE_EMPRESA`.
 - Fotos: 318 itens novos (Downloads\fotos-catalogo\dados2/escolhas2-*) e revisão de todas: 26 trocadas (URL com ?v=3 pra furar cache). Sem foto de propósito: 0345, 0346, 1093, 12332, 1636, 1638, 1637, 2713, 70159.
 
+## 📉 v2.62.0 (25/11/2026) — Filtros 'baixou de preço' no Destaque
+- `DestaqueSemanaModal` busca só 2 docs de `pdf_versions` (última tabela antes de hoje e a de ~7 dias atrás, pulando `ignorada`) e compara `originalPrice`. Filtros: sugeridos / ultima / semana / estoque. Baixou = só com disponível > 0, 6+ primeiro e depois maior % de queda. Item com queda sai no panfleto com selo '▼ BAIXOU!'.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

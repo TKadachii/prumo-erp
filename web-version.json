@@ -1,9 +1,9 @@
 {
-    "version":  268,
-    "versao":  "2.61.0",
+    "version":  269,
+    "versao":  "2.62.0",
     "data":  "25/11/2026",
     "itens":  [
-                  "🏆 DESTAQUE DA SEMANA: novo botão no Catálogo — escolha até 8 produtos e a validade e sai o panfleto pronto (no estilo do Prumo, com foto, nome, embalagem e preço de cada um + seu contato), pra mandar no WhatsApp. Dá pra editar o nome de cada produto e trocar a ordem",
-                  "📸 Fotos revisadas: 26 fotos erradas ou quebradas do Catálogo foram trocadas, e mais 318 produtos ganharam foto"
+                  "📉 Destaque da Semana ganhou filtros: \"Baixou desde a última tabela\", \"Baixou na semana\" e \"Mais estoque\". Mostra quanto cada item caiu (▼ R$ e %) e sempre coloca primeiro o que tem estoque",
+                  "Item que baixou de preço sai no panfleto com o selo verde \"▼ BAIXOU!\""
               ]
 }

@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 268;
+        const APP_BUILD_VERSION = 269;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9705,6 +9705,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.62.0', data: '25/11/2026', areas: ['site'], itens: [
+                '📉 Destaque da Semana ganhou filtros: "Baixou desde a última tabela", "Baixou na semana" e "Mais estoque". Mostra quanto cada item caiu (▼ R$ e %) e sempre coloca primeiro o que tem estoque',
+                'Item que baixou de preço sai no panfleto com o selo verde "▼ BAIXOU!"',
+            ] },
             { versao: '2.61.0', data: '25/11/2026', areas: ['site'], itens: [
                 '🏆 DESTAQUE DA SEMANA: novo botão no Catálogo — escolha até 8 produtos e a validade e sai o panfleto pronto (no estilo do Prumo, com foto, nome, embalagem e preço de cada um + seu contato), pra mandar no WhatsApp. Dá pra editar o nome de cada produto e trocar a ordem',
                 '📸 Fotos revisadas: 26 fotos erradas ou quebradas do Catálogo foram trocadas, e mais 318 produtos ganharam foto',
@@ -11524,7 +11528,8 @@
                 const fh = Math.round(ch * 0.43);
                 x.save(); x.shadowColor = 'rgba(15,23,42,0.12)'; x.shadowBlur = 18; x.shadowOffsetY = 6; rr(X + 12, Y + 12, cw - 24, fh, 20, '#fff'); x.restore();
                 if (it.foto) { try { const im = await carregarImagemCanvas(it.foto, !/^data:/.test(it.foto)); const s = Math.min((cw - 40) / im.width, (fh - 14) / im.height); x.drawImage(im, X + cw / 2 - im.width * s / 2, Y + 12 + fh / 2 - im.height * s / 2, im.width * s, im.height * s); } catch (e) {} }
-                x.font = F(900, 14); const t = 'PREÇO FINAL', tw = x.measureText(t).width + 20; rr(X + 20, Y + 20, tw, 28, 14, '#dc2626'); x.fillStyle = '#fff'; x.fillText(t, X + 30, Y + 39);
+                // Selo: "▼ BAIXOU!" (verde) quando o preço caiu em relação à tabela de referência; senão "PREÇO FINAL".
+                x.font = F(900, 14); const t = it.baixou ? '▼ BAIXOU!' : 'PREÇO FINAL', tw = x.measureText(t).width + 20; rr(X + 20, Y + 20, tw, 28, 14, it.baixou ? '#16a34a' : '#dc2626'); x.fillStyle = '#fff'; x.fillText(t, X + 30, Y + 39);
                 let y = Y + 12 + fh + 30; x.fillStyle = '#0f172a'; x.font = F(800, 20); y = quebrarTexto(x, it.nome, X + 16, y, cw - 32, 24, 2) - 4;
                 x.fillStyle = '#64748b'; x.font = F(600, 15); x.fillText(String(it.emb || '').slice(0, 34), X + 16, y + 2);
                 const bh = 62, by = Y + ch - bh - 10; rr(X + 10, by, cw - 20, bh, 18, '#0f172a');
@@ -11555,11 +11560,39 @@
             const nomeDe = (p) => nomes[String(p.code)] != null ? nomes[String(p.code)] : nomeAmigavel(p);
             const porCodigo = useMemo(() => new Map((products || []).map(p => [String(p.code), p])), [products]);
             const escolhidos = codigos.map(c => porCodigo.get(c)).filter(Boolean);
+            // 📉 Filtros (v2.62.0): preço de referência vem do histórico de tabelas (`pdf_versions`, o mesmo
+            // do gráfico de variação). Busca SÓ 2 docs: a última tabela de antes de hoje e a de ~7 dias atrás.
+            const [filtro, setFiltro] = useState('sugeridos'); // sugeridos | ultima | semana | estoque
+            const [refs, setRefs] = useState({ ultima: null, semana: null, dataUltima: null, dataSemana: null, carregando: true });
+            useEffect(() => {
+                const inicioHoje = new Date(); inicioHoje.setHours(0, 0, 0, 0);
+                const semanaAtras = new Date(inicioHoje.getTime() - 7 * 86400000);
+                const mapa = (d) => { const m = new Map(); ((d && d.products) || []).forEach(p => { const v = Number(p.originalPrice); if (v > 0) m.set(String(p.code), v); }); return m; };
+                const pega = (antes) => db.collection('pdf_versions').where('updatedAt', '<', antes).orderBy('updatedAt', 'desc').limit(3).get()
+                    .then(s => s.docs.map(d => d.data()).find(v => !v.ignorada) || null).catch(() => null);
+                Promise.all([pega(inicioHoje), pega(semanaAtras)]).then(([u, s]) => {
+                    const dt = v => v && v.updatedAt && v.updatedAt.toDate ? v.updatedAt.toDate() : null;
+                    setRefs({ ultima: u ? mapa(u) : null, semana: s ? mapa(s) : null, dataUltima: dt(u), dataSemana: dt(s), carregando: false });
+                });
+            }, []);
+            const refAtiva = filtro === 'semana' ? refs.semana : refs.ultima;
+            const queda = (p, ref) => { const r = ref && ref.get(String(p.code)); const a = Number(p.originalPrice) || 0; return r && a > 0 && a < r - 0.004 ? { de: r, por: a, pct: (r - a) / r * 100 } : null; };
             const lista = useMemo(() => {
                 const ok = (products || []).filter(p => p.ativo !== false && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p));
                 const q = busca.trim();
-                return (q ? filtrarProdutos(ok, q) : ok.filter(p => produtoFotos && produtoFotos[String(p.code)] && disponivelParaOferta(p) >= OFERTA_MIN_DISPONIVEL)).slice(0, 60);
-            }, [busca, products, produtoFotos]);
+                if (q) return filtrarProdutos(ok, q).slice(0, 60);
+                const disp = p => disponivelParaOferta(p);
+                if (filtro === 'ultima' || filtro === 'semana') {
+                    // Só o que BAIXOU e tem estoque; quem tem 6+ disponíveis vem primeiro, depois a maior queda.
+                    return ok.map(p => ({ p, q: queda(p, refAtiva) })).filter(x => x.q && disp(x.p) > 0)
+                        .sort((a, b) => Number(disp(b.p) >= OFERTA_MIN_DISPONIVEL) - Number(disp(a.p) >= OFERTA_MIN_DISPONIVEL) || b.q.pct - a.q.pct)
+                        .map(x => x.p).slice(0, 80);
+                }
+                if (filtro === 'estoque') return ok.filter(p => disp(p) >= OFERTA_MIN_DISPONIVEL).sort((a, b) => estoqueKg(b) - estoqueKg(a) || disp(b) - disp(a)).slice(0, 60);
+                return ok.filter(p => produtoFotos && produtoFotos[String(p.code)] && disp(p) >= OFERTA_MIN_DISPONIVEL).slice(0, 60);
+            }, [busca, products, produtoFotos, filtro, refs]);
+            const qtdBaixou = (ref) => ref ? (products || []).filter(p => p.ativo !== false && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p) && disponivelParaOferta(p) > 0 && queda(p, ref)).length : 0;
+            const dataCurta = d => d ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
             const alternar = (p) => { const c = String(p.code); setImagem(null); if (codigos.includes(c)) setCodigos(codigos.filter(x => x !== c)); else if (codigos.length >= 8) showMessage('No máximo 8 produtos.', 'error'); else setCodigos([...codigos, c]); };
             const mover = (i, d) => { const n = codigos.slice(); const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; setCodigos(n); setImagem(null); };
             const precoDe = (p) => aVista ? checkDiscountRules(p.code, p.name, p.originalPrice).unitFinalPrice : Number(p.originalPrice) || 0;
@@ -11568,7 +11601,7 @@
                 if (!escolhidos.length) { showMessage('Escolha pelo menos 1 produto.', 'error'); return; }
                 setGerando(true);
                 try {
-                    const itens = escolhidos.map(p => { const f = fatosDoProduto(p); const s = produtoFotos && produtoFotos[String(p.code)]; return { nome: nomeDe(p), emb: [f.embalagem, f.peso].filter(Boolean).join(' · ').toUpperCase(), preco: precoDe(p), un: String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase(), foto: s && s !== FOTO_CARREGANDO ? s : null }; });
+                    const itens = escolhidos.map(p => { const f = fatosDoProduto(p); const s = produtoFotos && produtoFotos[String(p.code)]; return { nome: nomeDe(p), baixou: !!(queda(p, refs.ultima) || queda(p, refs.semana)), emb: [f.embalagem, f.peso].filter(Boolean).join(' · ').toUpperCase(), preco: precoDe(p), un: String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase(), foto: s && s !== FOTO_CARREGANDO ? s : null }; });
                     const ano = String(ate || '').slice(2, 4);
                     const cv = await gerarDestaqueSemana({ itens, contatos: catalogoContatos, validade: `de ${fmt(de)} até ${fmt(ate)}${ano ? '/' + ano : ''}` });
                     setImagem(cv.toDataURL('image/png'));
@@ -11622,12 +11655,17 @@
                             </div>
                             <div>
                                 <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto (código ou nome)..." className="w-full rounded-xl border border-violet-500/40 bg-[#080a12] px-3 py-2.5 text-sm outline-none focus:border-cyan-400" />
-                                <p className="text-[11px] text-slate-500 mt-2 mb-1">{busca.trim() ? 'Resultado da busca' : `Sugestões: com foto e ${OFERTA_MIN_DISPONIVEL}+ disponíveis`}</p>
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {[['sugeridos', '✨ Sugeridos'], ['ultima', `📉 Baixou desde ${refs.dataUltima ? dataCurta(refs.dataUltima) : 'a última tabela'} (${qtdBaixou(refs.ultima)})`], ['semana', `📉 Baixou na semana (${qtdBaixou(refs.semana)})`], ['estoque', '📦 Mais estoque']].map(([k, rot]) =>
+                                        <button key={k} onClick={() => { setFiltro(k); setBusca(''); }} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg ${filtro === k && !busca.trim() ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>{rot}</button>)}
+                                </div>
+                                <p className="text-[11px] text-slate-500 mt-2 mb-1">{busca.trim() ? 'Resultado da busca' : filtro === 'sugeridos' ? `Com foto e ${OFERTA_MIN_DISPONIVEL}+ disponíveis` : filtro === 'estoque' ? 'Quem tem mais quilo em estoque primeiro' : refs.carregando ? 'Comparando com as tabelas anteriores...' : !refAtiva ? 'Não achei tabela anterior pra comparar.' : `Comparado com a tabela de ${dataCurta(filtro === 'semana' ? refs.dataSemana : refs.dataUltima)} · com ${OFERTA_MIN_DISPONIVEL}+ disponíveis primeiro, depois a maior queda`}</p>
                                 <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
-                                    {lista.map(p => { const marcado = codigos.includes(String(p.code));
+                                    {!busca.trim() && (filtro === 'ultima' || filtro === 'semana') && !refs.carregando && refAtiva && !lista.length && <p className="text-xs text-slate-500 py-4 text-center">Nenhum produto com estoque baixou de preço nesse período.</p>}
+                                    {lista.map(p => { const marcado = codigos.includes(String(p.code)); const qd = queda(p, filtro === 'semana' ? refs.semana : refs.ultima) || queda(p, refs.semana);
                                         return <button key={p.code} onClick={() => alternar(p)} className={`w-full flex items-center gap-2 p-2 rounded-xl border text-left ${marcado ? 'border-violet-500 bg-violet-950/40' : 'border-slate-800 bg-[#111420] hover:bg-[#171b2b]'}`}>
                                             {mini(p)}
-                                            <div className="min-w-0 flex-1"><div className="text-[11px] font-bold leading-tight">{p.name}</div><div className="text-[10px] text-slate-400"><span className="font-mono">{p.code}</span> · <span className="text-emerald-300">{reais(precoDe(p))}</span> · {estoqueRotulo(p, true)}</div></div>
+                                            <div className="min-w-0 flex-1"><div className="text-[11px] font-bold leading-tight">{p.name}</div><div className="text-[10px] text-slate-400"><span className="font-mono">{p.code}</span> · <span className="text-emerald-300">{reais(precoDe(p))}</span> · {estoqueRotulo(p, true)}</div>{qd && <div className="text-[10px] font-black text-emerald-400">▼ {reais(qd.de - qd.por)} (−{qd.pct.toFixed(1).replace('.', ',')}%) · era {reais(qd.de)}</div>}</div>
                                             <span className={`h-5 w-5 rounded-full border text-[11px] font-black flex items-center justify-center ${marcado ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-600 text-transparent'}`}>✓</span>
                                         </button>; })}
                                 </div>
