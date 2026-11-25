@@ -1,8 +1,8 @@
 {
-    "version":  273,
-    "versao":  "2.64.2",
+    "version":  274,
+    "versao":  "2.64.3",
     "data":  "25/11/2026",
     "itens":  [
-                  "🏆 Destaque da Semana: o panfleto agora mostra só \"Ofertas válidas de X até Y\" (saiu o \"ou enquanto durarem os estoques\")"
+                  "🏆 Destaque da Semana: validade em duas linhas no cartão do representante, sem passar da borda"
               ]
 }
