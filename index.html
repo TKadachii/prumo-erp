@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 267;
+        const APP_BUILD_VERSION = 268;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9705,6 +9705,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.61.0', data: '25/11/2026', areas: ['site'], itens: [
+                '🏆 DESTAQUE DA SEMANA: novo botão no Catálogo — escolha até 8 produtos e a validade e sai o panfleto pronto (no estilo do Prumo, com foto, nome, embalagem e preço de cada um + seu contato), pra mandar no WhatsApp. Dá pra editar o nome de cada produto e trocar a ordem',
+                '📸 Fotos revisadas: 26 fotos erradas ou quebradas do Catálogo foram trocadas, e mais 318 produtos ganharam foto',
+            ] },
             { versao: '2.60.0', data: '24/11/2026', areas: ['site'], itens: [
                 '⚖️ COMPARAR MARCAS: no Catálogo (botão amarelo) ou nos detalhes do produto, escolha de 2 a 4 opções — já sugere as outras marcas do mesmo tipo com estoque, da mais barata pra mais cara — e gere uma imagem lado a lado com foto, marca, embalagem e preço, ou copie o texto pro Zap',
                 '✨ Ficha do produto com visual novo: logo da Friganso nítido, nome fácil de ler, cartões de Marca/Embalagem/Conservação, destaques em selos verdes e preço em destaque',
@@ -11478,6 +11482,162 @@
             );
         };
 
+        // ═══ 🏆 DESTAQUE DA SEMANA (v2.61.0 — pedido 25/11/2026) ════════════════════════════════════
+        // Panfleto "Destaque da Semana" no estilo do Prumo (o vendedor amou o modelo feito à mão a partir
+        // do panfleto oficial da Friganso): até 8 produtos em cartões + cartão "Consulte seu representante"
+        // com o contato do vendedor e a validade. Canvas puro 1080×1528 → funciona no app também.
+        // Preço = preço de TABELA ("preço final", igual ao panfleto oficial); opção de usar o à vista −3%.
+        const DESTAQUE_RODAPE_EMPRESA = ['🌐 www.friganso.com.br    📷 @frigansoalimentos    📘 friganso', '📞 Central de atendimento: (21) 2757-5710'];
+        const gerarDestaqueSemana = async ({ itens, contatos, validade, titulo1, titulo2 }) => {
+            // Altura acompanha o nº de fileiras (com 2 produtos não sobra um painel branco vazio).
+            const fileiras = Math.max(1, Math.ceil((Math.min(8, itens.length) + 1) / 3));
+            const W = 1080, H = Math.min(1528, 310 + 92 + fileiras * 340 - 20 + 24 + 150), M = 36;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d');
+            const F = (p, t, fam) => `${p} ${t}px ${fam || 'Montserrat'}, "Segoe UI", sans-serif`;
+            const rr = (X, Y, w, h, r, cor) => { roundRectPath(x, X, Y, w, h, r); x.fillStyle = cor; x.fill(); };
+            // Fontes: carrega Anton/Montserrat do Google na 1ª vez (máx. 3 s; sem internet cai na do sistema)
+            if (!document.getElementById('destaque-fontes')) { const l = document.createElement('link'); l.id = 'destaque-fontes'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@600;700;800;900&display=swap'; document.head.appendChild(l); }
+            try { await Promise.race([Promise.all(['400 40px Anton', '900 40px Montserrat', '800 40px Montserrat', '600 40px Montserrat'].map(f => document.fonts.load(f))), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
+            const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#991b1b'); g.addColorStop(1, '#dc2626'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+            x.globalAlpha = 0.07; x.fillStyle = '#fff'; x.beginPath(); x.arc(W - 60, 40, 330, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(80, H - 80, 260, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
+            x.save(); x.shadowColor = 'rgba(0,0,0,0.35)'; x.shadowBlur = 18; x.shadowOffsetY = 8; rr(M, 34, 680, 250, 40, '#7f1d1d'); x.restore();
+            x.fillStyle = '#ffffff'; x.font = F(400, 84, 'Anton'); x.fillText((titulo1 || 'DESTAQUE DA').toUpperCase().slice(0, 18), M + 40, 128);
+            x.fillStyle = '#facc15'; x.font = F(400, 150, 'Anton'); x.fillText((titulo2 || 'SEMANA').toUpperCase().slice(0, 9), M + 36, 262);
+            let logo = null; try { logo = await carregarImagemCanvas(FRIGANSO_LOGO_BRANCO_PNG); const lh = 210, lw = logo.width * lh / logo.height; x.drawImage(logo, W - M - lw - 20, 48, lw, lh); } catch (e) {}
+            const pTop = 310, pBot = H - 150; rr(M, pTop, W - M * 2, pBot - pTop, 36, '#ffffff');
+            x.font = F(800, 22); const sel = 'CATÁLOGO SEMANAL DE OFERTAS'; const sw = x.measureText(sel).width + 48; rr(W - M - 24 - sw, pTop + 22, sw, 48, 24, '#0f172a'); x.fillStyle = '#fff'; x.fillText(sel, W - M - 24 - sw + 24, pTop + 54);
+            x.font = F(800, 20); x.fillStyle = '#b91c1c'; x.fillText('Preços finais por kg', M + 28, pTop + 54);
+            const lista = itens.slice(0, 8); const n = lista.length + 1, rows = Math.max(1, Math.ceil(n / 3));
+            const gx = M + 24, gy = pTop + 92, gap = 20, cw = (W - M * 2 - 48 - gap * 2) / 3, ch = Math.min(320, (pBot - gy - 24 - gap * (rows - 1)) / rows);
+            for (let i = 0; i < n; i++) {
+                const X = gx + (i % 3) * (cw + gap), Y = gy + Math.floor(i / 3) * (ch + gap);
+                if (i === n - 1) {
+                    rr(X, Y, cw, ch, 26, '#0f172a'); x.fillStyle = '#facc15'; x.font = F(900, 26); x.textAlign = 'center';
+                    x.fillText('CONSULTE SEU', X + cw / 2, Y + 66); x.fillText('REPRESENTANTE', X + cw / 2, Y + 100);
+                    x.fillStyle = '#fff'; x.font = F(800, 22);
+                    (contatos || []).slice(0, 3).forEach((c, k) => x.fillText(`${c.icone || ''} ${c.texto || ''}`.trim().slice(0, 24), X + cw / 2, Y + 150 + k * 34));
+                    if (validade) { x.fillStyle = '#cbd5e1'; x.font = F(600, 17); x.fillText('Ofertas válidas ' + validade, X + cw / 2, Y + ch - 44); x.fillText('ou enquanto durarem os estoques', X + cw / 2, Y + ch - 20); }
+                    x.textAlign = 'left'; continue;
+                }
+                const it = lista[i];
+                rr(X, Y, cw, ch, 26, '#f1f5f9');
+                const fh = Math.round(ch * 0.43);
+                x.save(); x.shadowColor = 'rgba(15,23,42,0.12)'; x.shadowBlur = 18; x.shadowOffsetY = 6; rr(X + 12, Y + 12, cw - 24, fh, 20, '#fff'); x.restore();
+                if (it.foto) { try { const im = await carregarImagemCanvas(it.foto, !/^data:/.test(it.foto)); const s = Math.min((cw - 40) / im.width, (fh - 14) / im.height); x.drawImage(im, X + cw / 2 - im.width * s / 2, Y + 12 + fh / 2 - im.height * s / 2, im.width * s, im.height * s); } catch (e) {} }
+                x.font = F(900, 14); const t = 'PREÇO FINAL', tw = x.measureText(t).width + 20; rr(X + 20, Y + 20, tw, 28, 14, '#dc2626'); x.fillStyle = '#fff'; x.fillText(t, X + 30, Y + 39);
+                let y = Y + 12 + fh + 30; x.fillStyle = '#0f172a'; x.font = F(800, 20); y = quebrarTexto(x, it.nome, X + 16, y, cw - 32, 24, 2) - 4;
+                x.fillStyle = '#64748b'; x.font = F(600, 15); x.fillText(String(it.emb || '').slice(0, 34), X + 16, y + 2);
+                const bh = 62, by = Y + ch - bh - 10; rr(X + 10, by, cw - 20, bh, 18, '#0f172a');
+                const [int, dec] = Number(it.preco || 0).toFixed(2).split('.');
+                x.fillStyle = '#facc15'; x.font = F(800, 18); x.fillText('R$', X + 26, by + 40);
+                x.font = F(900, 48); x.fillStyle = '#fff'; const wi = x.measureText(int).width; const bx = X + cw / 2 - (wi + 56) / 2 + 14; x.fillText(int, bx, by + 48);
+                x.font = F(900, 22); x.fillText(',' + dec, bx + wi + 2, by + 28); x.fillStyle = '#facc15'; x.font = F(800, 15); x.fillText('/' + String(it.un || 'kg').toUpperCase(), bx + wi + 4, by + 50);
+            }
+            if (logo) { const lh = 115; x.drawImage(logo, M + 6, H - 138, lh * logo.width / logo.height, lh); }
+            x.fillStyle = '#fff'; x.font = F(700, 24); x.fillText(DESTAQUE_RODAPE_EMPRESA[0], M + 170, H - 82);
+            x.font = F(800, 26); x.fillText(DESTAQUE_RODAPE_EMPRESA[1], M + 170, H - 40);
+            return cv;
+        };
+        const DestaqueSemanaModal = ({ products, produtoFotos, catalogoContatos, onFechar, showMessage }) => {
+            const hoje = new Date(); const fim = new Date(); fim.setDate(fim.getDate() + 5);
+            const dd = d => d.toISOString().slice(0, 10);
+            const [codigos, setCodigos] = useState([]);
+            const [busca, setBusca] = useState('');
+            const [de, setDe] = useState(dd(hoje)); const [ate, setAte] = useState(dd(fim));
+            const [aVista, setAVista] = useState(false);
+            const [imagem, setImagem] = useState(null); const [gerando, setGerando] = useState(false);
+            const [nomes, setNomes] = useState({}); // nome editado por código (o automático vem abreviado da tabela)
+            // Já começa a baixar as fontes ao abrir, pra 1ª arte não sair com a fonte do sistema.
+            useEffect(() => {
+                if (!document.getElementById('destaque-fontes')) { const l = document.createElement('link'); l.id = 'destaque-fontes'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@600;700;800;900&display=swap'; document.head.appendChild(l); }
+                setTimeout(() => { try { ['400 40px Anton', '900 40px Montserrat', '800 40px Montserrat'].forEach(f => document.fonts.load(f)); } catch (e) {} }, 300);
+            }, []);
+            const nomeDe = (p) => nomes[String(p.code)] != null ? nomes[String(p.code)] : nomeAmigavel(p);
+            const porCodigo = useMemo(() => new Map((products || []).map(p => [String(p.code), p])), [products]);
+            const escolhidos = codigos.map(c => porCodigo.get(c)).filter(Boolean);
+            const lista = useMemo(() => {
+                const ok = (products || []).filter(p => p.ativo !== false && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p));
+                const q = busca.trim();
+                return (q ? filtrarProdutos(ok, q) : ok.filter(p => produtoFotos && produtoFotos[String(p.code)] && disponivelParaOferta(p) >= OFERTA_MIN_DISPONIVEL)).slice(0, 60);
+            }, [busca, products, produtoFotos]);
+            const alternar = (p) => { const c = String(p.code); setImagem(null); if (codigos.includes(c)) setCodigos(codigos.filter(x => x !== c)); else if (codigos.length >= 8) showMessage('No máximo 8 produtos.', 'error'); else setCodigos([...codigos, c]); };
+            const mover = (i, d) => { const n = codigos.slice(); const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; setCodigos(n); setImagem(null); };
+            const precoDe = (p) => aVista ? checkDiscountRules(p.code, p.name, p.originalPrice).unitFinalPrice : Number(p.originalPrice) || 0;
+            const fmt = s => s ? s.split('-').reverse().slice(0, 2).join('/') : '';
+            const gerar = async () => {
+                if (!escolhidos.length) { showMessage('Escolha pelo menos 1 produto.', 'error'); return; }
+                setGerando(true);
+                try {
+                    const itens = escolhidos.map(p => { const f = fatosDoProduto(p); const s = produtoFotos && produtoFotos[String(p.code)]; return { nome: nomeDe(p), emb: [f.embalagem, f.peso].filter(Boolean).join(' · ').toUpperCase(), preco: precoDe(p), un: String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase(), foto: s && s !== FOTO_CARREGANDO ? s : null }; });
+                    const ano = String(ate || '').slice(2, 4);
+                    const cv = await gerarDestaqueSemana({ itens, contatos: catalogoContatos, validade: `de ${fmt(de)} até ${fmt(ate)}${ano ? '/' + ano : ''}` });
+                    setImagem(cv.toDataURL('image/png'));
+                } catch (e) { showMessage('Não consegui montar a arte.', 'error'); }
+                setGerando(false);
+            };
+            const baixar = () => { const a = document.createElement('a'); a.href = imagem; a.download = 'destaque-da-semana-' + de + '.png'; a.click(); };
+            const enviar = async () => {
+                try {
+                    const blob = await (await fetch(imagem)).blob(); const file = new File([blob], 'destaque-da-semana.png', { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+                    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showMessage('Arte copiada! Cole (Ctrl+V) no WhatsApp. 📋', 'success'); return; }
+                    baixar();
+                } catch (e) { if (e && e.name !== 'AbortError') baixar(); }
+            };
+            const reais = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const mini = (p) => <div className="h-10 w-10 rounded bg-white flex-shrink-0 overflow-hidden flex items-center justify-center">{produtoFotos && produtoFotos[String(p.code)] ? <img src={produtoFotos[String(p.code)]} className="w-full h-full object-contain" /> : '🍖'}</div>;
+            return (
+                <div className="fixed inset-0 z-[999] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3" onClick={onFechar}>
+                    <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[94vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-start justify-between gap-3">
+                            <div><h3 className="text-lg font-black text-white">🏆 Destaque da Semana</h3><p className="text-xs text-slate-400">Escolha até 8 produtos e a validade — sai o panfleto pronto pra mandar.</p></div>
+                            <button onClick={onFechar} className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xl">×</button>
+                        </div>
+                        <div className="grid md:grid-cols-2 gap-4 p-4 sm:p-5">
+                            <div>
+                                <p className="text-xs font-black text-violet-300 mb-2">Escolhidos ({escolhidos.length}/8) — na ordem do panfleto</p>
+                                <div className="space-y-1.5">
+                                    {escolhidos.map((p, i) => <div key={p.code} className="flex items-center gap-2 p-2 rounded-xl bg-violet-950/40 border border-violet-500/40">
+                                        <span className="h-6 w-6 rounded-full bg-rose-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                                        {mini(p)}
+                                        <div className="min-w-0 flex-1"><input value={nomeDe(p)} onChange={e => { const v = e.target.value; setNomes(prev => ({ ...prev, [String(p.code)]: v })); setImagem(null); }} title="Nome que aparece no panfleto — pode editar" className="w-full bg-transparent border-b border-violet-500/30 focus:border-cyan-400 outline-none text-[11px] font-bold leading-tight" /><div className="text-[10px] text-emerald-300">{reais(precoDe(p))}/kg · <span className="text-slate-500 font-mono">{p.code}</span></div></div>
+                                        <button onClick={() => mover(i, -1)} className="text-slate-400 px-1">▲</button><button onClick={() => mover(i, 1)} className="text-slate-400 px-1">▼</button>
+                                        <button onClick={() => alternar(p)} className="text-rose-300 text-lg px-1">×</button>
+                                    </div>)}
+                                    {!escolhidos.length && <p className="text-xs text-slate-500">Toque nos produtos ao lado.</p>}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 mt-4">
+                                    <label className="text-[11px] font-bold text-slate-400">Válido de<input type="date" value={de} onChange={e => { setDe(e.target.value); setImagem(null); }} className="w-full mt-1 rounded-lg border border-slate-700 bg-[#080a12] px-2 py-2 text-sm text-slate-100" /></label>
+                                    <label className="text-[11px] font-bold text-slate-400">até<input type="date" value={ate} onChange={e => { setAte(e.target.value); setImagem(null); }} className="w-full mt-1 rounded-lg border border-slate-700 bg-[#080a12] px-2 py-2 text-sm text-slate-100" /></label>
+                                </div>
+                                <label className="flex items-center gap-2 text-xs text-slate-200 mt-3"><input type="checkbox" checked={aVista} onChange={e => { setAVista(e.target.checked); setImagem(null); }} className="accent-emerald-500" /> Usar preço à vista (−3%) em vez do preço de tabela</label>
+                                <button onClick={gerar} disabled={gerando || !escolhidos.length} className="w-full mt-3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-black">{gerando ? 'Montando...' : '🖼️ Gerar panfleto'}</button>
+                                {imagem && <div className="mt-3">
+                                    <img src={imagem} alt="Destaque da Semana" className="w-full rounded-xl border border-slate-700" />
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                        <button onClick={enviar} className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black">📤 Enviar / copiar</button>
+                                        <button onClick={baixar} className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-black">⬇️ Baixar PNG</button>
+                                    </div>
+                                </div>}
+                            </div>
+                            <div>
+                                <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto (código ou nome)..." className="w-full rounded-xl border border-violet-500/40 bg-[#080a12] px-3 py-2.5 text-sm outline-none focus:border-cyan-400" />
+                                <p className="text-[11px] text-slate-500 mt-2 mb-1">{busca.trim() ? 'Resultado da busca' : `Sugestões: com foto e ${OFERTA_MIN_DISPONIVEL}+ disponíveis`}</p>
+                                <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+                                    {lista.map(p => { const marcado = codigos.includes(String(p.code));
+                                        return <button key={p.code} onClick={() => alternar(p)} className={`w-full flex items-center gap-2 p-2 rounded-xl border text-left ${marcado ? 'border-violet-500 bg-violet-950/40' : 'border-slate-800 bg-[#111420] hover:bg-[#171b2b]'}`}>
+                                            {mini(p)}
+                                            <div className="min-w-0 flex-1"><div className="text-[11px] font-bold leading-tight">{p.name}</div><div className="text-[10px] text-slate-400"><span className="font-mono">{p.code}</span> · <span className="text-emerald-300">{reais(precoDe(p))}</span> · {estoqueRotulo(p, true)}</div></div>
+                                            <span className={`h-5 w-5 rounded-full border text-[11px] font-black flex items-center justify-center ${marcado ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-600 text-transparent'}`}>✓</span>
+                                        </button>; })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         // 🍽️ Cardápio: cada produto pode ter uma foto, compartilhada com todo mundo que usa o sistema.
         // 🔎 DETALHES DO PRODUTO (v2.56.0 — pedido 24/11/2026): tocar no card do Catálogo abre isto em vez
         // de ir direto pro "trocar foto". Mostra foto grande, preços, estoque e dá as ações de foto:
@@ -12364,6 +12524,7 @@
             const detalheProduto = detalheCode ? (products || []).find(p => String(p.code) === detalheCode) : null;
             const qtdPedidos = Object.keys(pedidosFoto).length;
             const [comparar, setComparar] = useState(null); // ⚖️ { produto } — v2.60.0
+            const [destaque, setDestaque] = useState(false); // 🏆 v2.61.0
             // 🎨 Estúdio (PC). `estudio` = { produto } aberto; `avisoSoPc` no app/tela pequena.
             const [estudio, setEstudio] = useState(null);
             const [avisoSoPc, setAvisoSoPc] = useState(false);
@@ -12453,6 +12614,7 @@
                     {/* Portal no <body>: dentro da tela, o menu lateral e a barra de cima ficavam por cima. */}
                     {estudio && ReactDOM.createPortal(<EstudioArtes products={products} produtoFotos={produtoFotos} catalogoContatos={catalogoContatos} usuario={usuario} produtoInicial={estudio.produto} onFechar={() => setEstudio(null)} showMessage={showMessage} />, document.body)}
                     {avisoSoPc && ReactDOM.createPortal(<EstudioSoPcAviso onFechar={() => setAvisoSoPc(false)} />, document.body)}
+                    {destaque && ReactDOM.createPortal(<DestaqueSemanaModal products={products} produtoFotos={produtoFotos} catalogoContatos={catalogoContatos} onFechar={() => setDestaque(false)} showMessage={showMessage} />, document.body)}
                     {comparar && ReactDOM.createPortal(<CompararMarcasModal products={products} produtoFotos={produtoFotos} inicial={comparar.produto} catalogoContatos={catalogoContatos} onFechar={() => setComparar(null)} showMessage={showMessage} />, document.body)}
                     {detalheProduto && !crop && ReactDOM.createPortal(<ProdutoDetalheModal
                         produto={detalheProduto}
@@ -12581,6 +12743,7 @@
                             <div className="flex flex-wrap gap-2">
                                 {qtdPedidos > 0 && <button onClick={() => { setSoPedidos(v => !v); setModoSugestoes(false); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${soPedidos ? 'bg-slate-900 text-white' : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm'}`}>{soPedidos ? '✕ Ver todos' : '🙋 Pedidos de troca (' + qtdPedidos + ')'}</button>}
                                 {pendentesFoto.length > 0 && <button onClick={() => { setModoSugestoes(v => !v); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoSugestoes ? 'bg-slate-900 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'}`}>{modoSugestoes ? '✕ Fechar sugestões' : '📸 Escolher fotos (' + pendentesFoto.length + ')'}</button>}
+                                <button onClick={() => setDestaque(true)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-red-700 to-red-500 text-white shadow-sm">🏆 Destaque da Semana</button>
                                 <button onClick={() => setComparar({ produto: null })} className="px-4 py-2 rounded-xl font-bold text-sm bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm">⚖️ Comparar marcas</button>
                                 <button onClick={() => abrirEstudio(null)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-fuchsia-600 to-violet-600 text-white shadow-sm">🎨 Estúdio de artes <span className="ml-1 text-[10px] font-black bg-white/20 rounded px-1.5 py-0.5">PC</span></button>
                                 <button onClick={() => abrirArteProduto({ code: 'avulso', name: '' })} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-sm">✨ Nova arte avulsa</button>

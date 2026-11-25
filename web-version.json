@@ -1,9 +1,9 @@
 {
-    "version":  267,
-    "versao":  "2.60.0",
-    "data":  "24/11/2026",
+    "version":  268,
+    "versao":  "2.61.0",
+    "data":  "25/11/2026",
     "itens":  [
-                  "⚖️ COMPARAR MARCAS: no Catálogo (botão amarelo) ou nos detalhes do produto, escolha de 2 a 4 opções — já sugere as outras marcas do mesmo tipo com estoque, da mais barata pra mais cara — e gere uma imagem lado a lado com foto, marca, embalagem e preço, ou copie o texto pro Zap",
-                  "✨ Ficha do produto com visual novo: logo da Friganso nítido, nome fácil de ler, cartões de Marca/Embalagem/Conservação, destaques em selos verdes e preço em destaque"
+                  "🏆 DESTAQUE DA SEMANA: novo botão no Catálogo — escolha até 8 produtos e a validade e sai o panfleto pronto (no estilo do Prumo, com foto, nome, embalagem e preço de cada um + seu contato), pra mandar no WhatsApp. Dá pra editar o nome de cada produto e trocar a ordem",
+                  "📸 Fotos revisadas: 26 fotos erradas ou quebradas do Catálogo foram trocadas, e mais 318 produtos ganharam foto"
               ]
 }
