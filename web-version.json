@@ -1,9 +1,8 @@
 {
-    "version":  269,
-    "versao":  "2.62.0",
+    "version":  270,
+    "versao":  "2.63.0",
     "data":  "25/11/2026",
     "itens":  [
-                  "📉 Destaque da Semana ganhou filtros: \"Baixou desde a última tabela\", \"Baixou na semana\" e \"Mais estoque\". Mostra quanto cada item caiu (▼ R$ e %) e sempre coloca primeiro o que tem estoque",
-                  "Item que baixou de preço sai no panfleto com o selo verde \"▼ BAIXOU!\""
+                  "🏪 Destaque da Semana: filtro por tipo de comércio (Padaria, Açougue, Mercado, Restaurante, Pizzaria, Lanchonete), com os mesmos itens do Criar ofertas. Combina com \"Baixou de preço\" e \"Mais estoque\" — ex.: Padaria + Baixou na semana"
               ]
 }

@@ -1096,6 +1096,9 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 ## 📉 v2.62.0 (25/11/2026) — Filtros 'baixou de preço' no Destaque
 - `DestaqueSemanaModal` busca só 2 docs de `pdf_versions` (última tabela antes de hoje e a de ~7 dias atrás, pulando `ignorada`) e compara `originalPrice`. Filtros: sugeridos / ultima / semana / estoque. Baixou = só com disponível > 0, 6+ primeiro e depois maior % de queda. Item com queda sai no panfleto com selo '▼ BAIXOU!'.
 
+## 🏪 v2.63.0 (25/11/2026) — Tipo de comércio no Destaque
+- `DestaqueSemanaModal`: `perfilId` + `candidatosDoPerfil` (mesmos perfis/ajustes do Criar ofertas, lidos de system_data/ofertas_perfis) filtram a base antes dos filtros de preço/estoque. Contador 'baixou' mostra '…' enquanto `pdf_versions` carrega (docs grandes, ~8 s).
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

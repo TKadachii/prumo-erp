@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 269;
+        const APP_BUILD_VERSION = 270;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9705,6 +9705,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.63.0', data: '25/11/2026', areas: ['site'], itens: [
+                '🏪 Destaque da Semana: filtro por tipo de comércio (Padaria, Açougue, Mercado, Restaurante, Pizzaria, Lanchonete), com os mesmos itens do Criar ofertas. Combina com "Baixou de preço" e "Mais estoque" — ex.: Padaria + Baixou na semana',
+            ] },
             { versao: '2.62.0', data: '25/11/2026', areas: ['site'], itens: [
                 '📉 Destaque da Semana ganhou filtros: "Baixou desde a última tabela", "Baixou na semana" e "Mais estoque". Mostra quanto cada item caiu (▼ R$ e %) e sempre coloca primeiro o que tem estoque',
                 'Item que baixou de preço sai no panfleto com o selo verde "▼ BAIXOU!"',
@@ -11575,10 +11578,22 @@
                     setRefs({ ultima: u ? mapa(u) : null, semana: s ? mapa(s) : null, dataUltima: dt(u), dataSemana: dt(s), carregando: false });
                 });
             }, []);
+            // 🏪 Tipo de comércio (v2.63.0): mesmos perfis do Criar ofertas — palavras do perfil + ajustes da
+            // equipe (system_data/ofertas_perfis). Combina com os filtros de preço/estoque.
+            const [perfilId, setPerfilId] = useState('');
+            const [docPerfis, setDocPerfis] = useState({});
+            useEffect(() => {
+                const unsub = db.collection('system_data').doc('ofertas_perfis').onSnapshot(d => setDocPerfis((d && d.exists && d.data()) || {}), () => {});
+                return () => unsub();
+            }, []);
+            const doPerfil = useMemo(() => {
+                const perfil = OFERTA_PERFIS_COMERCIO.find(p => p.id === perfilId);
+                return perfil ? new Set(candidatosDoPerfil(perfil, products || [], docPerfis)) : null;
+            }, [perfilId, products, docPerfis]);
             const refAtiva = filtro === 'semana' ? refs.semana : refs.ultima;
             const queda = (p, ref) => { const r = ref && ref.get(String(p.code)); const a = Number(p.originalPrice) || 0; return r && a > 0 && a < r - 0.004 ? { de: r, por: a, pct: (r - a) / r * 100 } : null; };
             const lista = useMemo(() => {
-                const ok = (products || []).filter(p => p.ativo !== false && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p));
+                const ok = (products || []).filter(p => p.ativo !== false && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p) && (!doPerfil || doPerfil.has(String(p.code))));
                 const q = busca.trim();
                 if (q) return filtrarProdutos(ok, q).slice(0, 60);
                 const disp = p => disponivelParaOferta(p);
@@ -11590,8 +11605,9 @@
                 }
                 if (filtro === 'estoque') return ok.filter(p => disp(p) >= OFERTA_MIN_DISPONIVEL).sort((a, b) => estoqueKg(b) - estoqueKg(a) || disp(b) - disp(a)).slice(0, 60);
                 return ok.filter(p => produtoFotos && produtoFotos[String(p.code)] && disp(p) >= OFERTA_MIN_DISPONIVEL).slice(0, 60);
-            }, [busca, products, produtoFotos, filtro, refs]);
-            const qtdBaixou = (ref) => ref ? (products || []).filter(p => p.ativo !== false && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p) && disponivelParaOferta(p) > 0 && queda(p, ref)).length : 0;
+            }, [busca, products, produtoFotos, filtro, refs, doPerfil]);
+            // Enquanto o histórico carrega (pode levar uns segundos — cada tabela é grande) mostra "…", não "0".
+            const qtdBaixou = (ref) => refs.carregando ? '…' : ref ? (products || []).filter(p => p.ativo !== false && !produtoForaTabelaHoje(p) && !ehPaleteOuIndustria(p) && (!doPerfil || doPerfil.has(String(p.code))) && disponivelParaOferta(p) > 0 && queda(p, ref)).length : 0;
             const dataCurta = d => d ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
             const alternar = (p) => { const c = String(p.code); setImagem(null); if (codigos.includes(c)) setCodigos(codigos.filter(x => x !== c)); else if (codigos.length >= 8) showMessage('No máximo 8 produtos.', 'error'); else setCodigos([...codigos, c]); };
             const mover = (i, d) => { const n = codigos.slice(); const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; setCodigos(n); setImagem(null); };
@@ -11656,6 +11672,10 @@
                             <div>
                                 <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto (código ou nome)..." className="w-full rounded-xl border border-violet-500/40 bg-[#080a12] px-3 py-2.5 text-sm outline-none focus:border-cyan-400" />
                                 <div className="flex flex-wrap gap-1.5 mt-2">
+                                    <button onClick={() => setPerfilId('')} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg ${!perfilId ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>🏬 Todos</button>
+                                    {OFERTA_PERFIS_COMERCIO.map(pf => <button key={pf.id} onClick={() => setPerfilId(perfilId === pf.id ? '' : pf.id)} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg ${perfilId === pf.id ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>{pf.emoji} {pf.label}</button>)}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 mt-1.5">
                                     {[['sugeridos', '✨ Sugeridos'], ['ultima', `📉 Baixou desde ${refs.dataUltima ? dataCurta(refs.dataUltima) : 'a última tabela'} (${qtdBaixou(refs.ultima)})`], ['semana', `📉 Baixou na semana (${qtdBaixou(refs.semana)})`], ['estoque', '📦 Mais estoque']].map(([k, rot]) =>
                                         <button key={k} onClick={() => { setFiltro(k); setBusca(''); }} className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg ${filtro === k && !busca.trim() ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>{rot}</button>)}
                                 </div>
