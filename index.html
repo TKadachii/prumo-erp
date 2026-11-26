@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 277;
+        const APP_BUILD_VERSION = 278;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9747,6 +9747,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.66.1', data: '26/11/2026', areas: ['site', 'app'], itens: [
+                '🏆 O "Destaque da Semana" agora é "Destaque do DIA": o panfleto sai com DESTAQUE DO DIA e "Catálogo de ofertas do dia" (validade padrão continua de 1 dia)',
+            ] },
             { versao: '2.66.0', data: '26/11/2026', areas: ['site', 'app'], itens: [
                 '🖼️ Botão "Catálogo" em "Mudanças nesta tabela": leva os itens que mudaram de preço + os novos pro Montar Catálogo, já marcados, e gera as imagens na hora',
                 '📦 Itens sem estoque ficam fora desse catálogo automático',
@@ -11615,11 +11618,11 @@
             const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#991b1b'); g.addColorStop(1, '#dc2626'); x.fillStyle = g; x.fillRect(0, 0, W, H);
             x.globalAlpha = 0.07; x.fillStyle = '#fff'; x.beginPath(); x.arc(W - 60, 40, 330, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(80, H - 80, 260, 0, Math.PI * 2); x.fill(); x.globalAlpha = 1;
             x.save(); x.shadowColor = 'rgba(0,0,0,0.35)'; x.shadowBlur = 18; x.shadowOffsetY = 8; rr(M, 34, 680, 250, 40, '#7f1d1d'); x.restore();
-            x.fillStyle = '#ffffff'; x.font = F(400, 84, 'Anton'); x.fillText((titulo1 || 'DESTAQUE DA').toUpperCase().slice(0, 18), M + 40, 128);
-            x.fillStyle = '#facc15'; x.font = F(400, 150, 'Anton'); x.fillText((titulo2 || 'SEMANA').toUpperCase().slice(0, 9), M + 36, 262);
+            x.fillStyle = '#ffffff'; x.font = F(400, 84, 'Anton'); x.fillText((titulo1 || 'DESTAQUE DO').toUpperCase().slice(0, 18), M + 40, 128);
+            x.fillStyle = '#facc15'; x.font = F(400, 150, 'Anton'); x.fillText((titulo2 || 'DIA').toUpperCase().slice(0, 9), M + 36, 262);
             let logo = null; try { logo = await carregarImagemCanvas(FRIGANSO_LOGO_BRANCO_PNG); const lh = 210, lw = logo.width * lh / logo.height; x.drawImage(logo, W - M - lw - 20, 48, lw, lh); } catch (e) {}
             const pTop = 310, pBot = H - 150; rr(M, pTop, W - M * 2, pBot - pTop, 36, '#ffffff');
-            x.font = F(800, 22); const sel = 'CATÁLOGO SEMANAL DE OFERTAS'; const sw = x.measureText(sel).width + 48; rr(W - M - 24 - sw, pTop + 22, sw, 48, 24, '#0f172a'); x.fillStyle = '#fff'; x.fillText(sel, W - M - 24 - sw + 24, pTop + 54);
+            x.font = F(800, 22); const sel = 'CATÁLOGO DE OFERTAS DO DIA'; const sw = x.measureText(sel).width + 48; rr(W - M - 24 - sw, pTop + 22, sw, 48, 24, '#0f172a'); x.fillStyle = '#fff'; x.fillText(sel, W - M - 24 - sw + 24, pTop + 54);
             x.font = F(800, 20); x.fillStyle = '#b91c1c'; x.fillText('Preços finais por kg', M + 28, pTop + 54);
             const lista = itens.slice(0, 8); const n = lista.length + 1, rows = Math.max(1, Math.ceil(n / 3));
             const gx = M + 24, gy = pTop + 92, gap = 20, cw = (W - M * 2 - 48 - gap * 2) / 3, ch = Math.min(320, (pBot - gy - 24 - gap * (rows - 1)) / rows);
@@ -11732,10 +11735,10 @@
                 } catch (e) { showMessage('Não consegui montar a arte.', 'error'); }
                 setGerando(false);
             };
-            const baixar = () => { const a = document.createElement('a'); a.href = imagem; a.download = 'destaque-da-semana-' + de + '.png'; a.click(); };
+            const baixar = () => { const a = document.createElement('a'); a.href = imagem; a.download = 'destaque-do-dia-' + de + '.png'; a.click(); };
             const enviar = async () => {
                 try {
-                    const blob = await (await fetch(imagem)).blob(); const file = new File([blob], 'destaque-da-semana.png', { type: 'image/png' });
+                    const blob = await (await fetch(imagem)).blob(); const file = new File([blob], 'destaque-do-dia.png', { type: 'image/png' });
                     if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
                     if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showMessage('Arte copiada! Cole (Ctrl+V) no WhatsApp. 📋', 'success'); return; }
                     baixar();
@@ -11747,7 +11750,7 @@
                 <div className="fixed inset-0 z-[999] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3" onClick={onFechar}>
                     <div className="bg-[#0b0d17] text-slate-100 border border-violet-400/20 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[94vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-start justify-between gap-3">
-                            <div><h3 className="text-lg font-black text-white">🏆 Destaque da Semana</h3><p className="text-xs text-slate-400">Escolha até 8 produtos e a validade — sai o panfleto pronto pra mandar.</p></div>
+                            <div><h3 className="text-lg font-black text-white">🏆 Destaque do Dia</h3><p className="text-xs text-slate-400">Escolha até 8 produtos e a validade — sai o panfleto pronto pra mandar.</p></div>
                             <button onClick={onFechar} className="h-9 w-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xl">×</button>
                         </div>
                         <div className="grid md:grid-cols-2 gap-4 p-4 sm:p-5">
@@ -11770,7 +11773,7 @@
                                 <label className="flex items-center gap-2 text-xs text-slate-200 mt-3"><input type="checkbox" checked={aVista} onChange={e => { setAVista(e.target.checked); setImagem(null); }} className="accent-emerald-500" /> Usar preço à vista (−3%) em vez do preço de tabela</label>
                                 <button onClick={gerar} disabled={gerando || !escolhidos.length} className="w-full mt-3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-black">{gerando ? 'Montando...' : '🖼️ Gerar panfleto'}</button>
                                 {imagem && <div className="mt-3">
-                                    <img src={imagem} alt="Destaque da Semana" className="w-full rounded-xl border border-slate-700" />
+                                    <img src={imagem} alt="Destaque do Dia" className="w-full rounded-xl border border-slate-700" />
                                     <div className="grid grid-cols-2 gap-2 mt-2">
                                         <button onClick={enviar} className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black">📤 Enviar / copiar</button>
                                         <button onClick={baixar} className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-black">⬇️ Baixar PNG</button>
@@ -12917,7 +12920,7 @@
                             <div className="flex flex-wrap gap-2">
                                 {qtdPedidos > 0 && <button onClick={() => { setSoPedidos(v => !v); setModoSugestoes(false); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${soPedidos ? 'bg-slate-900 text-white' : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm'}`}>{soPedidos ? '✕ Ver todos' : '🙋 Pedidos de troca (' + qtdPedidos + ')'}</button>}
                                 {pendentesFoto.length > 0 && <button onClick={() => { setModoSugestoes(v => !v); setModoCatalogo(false); }} className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors ${modoSugestoes ? 'bg-slate-900 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'}`}>{modoSugestoes ? '✕ Fechar sugestões' : '📸 Escolher fotos (' + pendentesFoto.length + ')'}</button>}
-                                <button onClick={() => setDestaque(true)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-red-700 to-red-500 text-white shadow-sm">🏆 Destaque da Semana</button>
+                                <button onClick={() => setDestaque(true)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-red-700 to-red-500 text-white shadow-sm">🏆 Destaque do Dia</button>
                                 <button onClick={() => setComparar({ produto: null })} className="px-4 py-2 rounded-xl font-bold text-sm bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm">⚖️ Comparar marcas</button>
                                 <button onClick={() => abrirEstudio(null)} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-fuchsia-600 to-violet-600 text-white shadow-sm">🎨 Estúdio de artes <span className="ml-1 text-[10px] font-black bg-white/20 rounded px-1.5 py-0.5">PC</span></button>
                                 <button onClick={() => abrirArteProduto({ code: 'avulso', name: '' })} className="px-4 py-2 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-cyan-600 text-white shadow-sm">✨ Nova arte avulsa</button>

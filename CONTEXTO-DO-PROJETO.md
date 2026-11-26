@@ -1118,6 +1118,9 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 - PdfScreen azerCatalogoMudancas: changes+novos (sem duplicar, fora quem tem estoqueSpamov.disponivel<=0 ou não está em products) vão em window.__prumoCatalogoPre = {codigos, semEstoque, auto:true} e setActiveRoute('cardapio') (PdfScreen agora recebe setActiveRoute).
 - CardapioScreen lê e limpa esse handoff no 1º render: abre em modoCatalogo com os códigos marcados e um useEffect de montagem chama gerarCatalogo().
 
+## 🏆 v2.66.1 (26/11/2026) — Destaque do Dia
+- Pedido do Bruno: o panfleto virou 'DESTAQUE DO / DIA' e o selo 'CATÁLOGO DE OFERTAS DO DIA'; botão/título do modal 'Destaque do Dia', PNG 'destaque-do-dia-*.png'. Código segue com os nomes gerarDestaqueSemana/DestaqueSemanaModal; o filtro 'Baixou na semana' continua (é período de comparação).
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

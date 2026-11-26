@@ -1,9 +1,8 @@
 {
-    "version":  277,
-    "versao":  "2.66.0",
+    "version":  278,
+    "versao":  "2.66.1",
     "data":  "26/11/2026",
     "itens":  [
-                  "🖼️ Botão \"Catálogo\" em \"Mudanças nesta tabela\": leva os itens que mudaram de preço + os novos pro Montar Catálogo, já marcados, e gera as imagens na hora",
-                  "📦 Itens sem estoque ficam fora desse catálogo automático"
+                  "🏆 O \"Destaque da Semana\" agora é \"Destaque do DIA\": o panfleto sai com DESTAQUE DO DIA e \"Catálogo de ofertas do dia\" (validade padrão continua de 1 dia)"
               ]
 }
