@@ -1,9 +1,9 @@
 {
-    "version":  276,
-    "versao":  "2.65.0",
+    "version":  277,
+    "versao":  "2.66.0",
     "data":  "26/11/2026",
     "itens":  [
-                  "📄 PDF de \"Mudanças nesta tabela\": cada item agora mostra quantos estão DISPONÍVEIS (cx, pc, sc…), e \"sem estoque\" em vermelho quando zerou",
-                  "🕒 O PDF também traz no topo a ÚLTIMA ATUALIZAÇÃO da tabela (dia, hora e minuto) e a hora em que o estoque foi lido"
+                  "🖼️ Botão \"Catálogo\" em \"Mudanças nesta tabela\": leva os itens que mudaram de preço + os novos pro Montar Catálogo, já marcados, e gera as imagens na hora",
+                  "📦 Itens sem estoque ficam fora desse catálogo automático"
               ]
 }

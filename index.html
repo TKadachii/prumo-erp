@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 276;
+        const APP_BUILD_VERSION = 277;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -4288,7 +4288,7 @@
             </div>
         );
 
-        const PdfScreen = ({ user, products, setProducts, showMessage, listaNegra, toggleListaNegra, valorMaximo, setValorMaximoProduto }) => {
+        const PdfScreen = ({ user, products, setProducts, showMessage, listaNegra, toggleListaNegra, valorMaximo, setValorMaximoProduto, setActiveRoute }) => {
             const lnSet = new Set((listaNegra || []).map(String));
             const vmMap = valorMaximo || {};
             const [isLoading, setIsLoading] = useState(false);
@@ -4328,6 +4328,18 @@
                     if (e && e.message === 'sem-lib') showMessage('O gerador de PDF não carregou. Conecte na internet e atualize a página uma vez.', 'error');
                     else showMessage('Erro ao gerar o PDF: ' + (e && e.message ? e.message : e), 'error');
                 }
+            };
+            // 🖼️ v2.66.0: leva os itens que mudaram + os novos pro "Montar Catálogo" do Cardápio, já marcados,
+            // e o Cardápio gera as imagens sozinho. Quem está zerado no estoque fica de fora (não dá pra ofertar).
+            const fazerCatalogoMudancas = () => {
+                const porCod = {}; (products || []).forEach(p => { porCod[String(p.code)] = p; });
+                const codigos = [...((priceChanges && priceChanges.changes) || []), ...((priceChanges && priceChanges.novos) || [])].map(x => String(x.code));
+                const unicos = [...new Set(codigos)];
+                const semEstoque = unicos.filter(c => { const e = porCod[c] && porCod[c].estoqueSpamov; return e && e.disponivel != null && Number(e.disponivel) <= 0; });
+                const lista = unicos.filter(c => porCod[c] && !semEstoque.includes(c));
+                if (!lista.length) { showMessage('Nenhum item das mudanças dá pra pôr no catálogo (todos sem estoque ou fora da tabela).', 'error'); return; }
+                window.__prumoCatalogoPre = { codigos: lista, semEstoque: semEstoque.length, auto: true };
+                if (setActiveRoute) setActiveRoute('cardapio');
             };
 
             // 📄 Tabela completa em PDF: SEMPRE a última tabela DISTRIBUÍDA (nuvem), nunca a lista local —
@@ -4696,6 +4708,7 @@
                                         <>
                                             <EscolhaLayoutPdf valor={layoutPdf} onChange={setLayoutPdf} />
                                             <button onClick={baixarPdfMudancas} className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">📄 Gerar PDF</button>
+                                            <button onClick={fazerCatalogoMudancas} className="bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">🖼️ Catálogo</button>
                                         </>
                                     )}
                                     <button onClick={() => setPriceChanges(null)} className="h-7 w-7 flex items-center justify-center rounded-full bg-amber-100 hover:bg-amber-200 text-amber-700"><div className="h-3.5 w-3.5"><IconX/></div></button>
@@ -9734,6 +9747,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.66.0', data: '26/11/2026', areas: ['site', 'app'], itens: [
+                '🖼️ Botão "Catálogo" em "Mudanças nesta tabela": leva os itens que mudaram de preço + os novos pro Montar Catálogo, já marcados, e gera as imagens na hora',
+                '📦 Itens sem estoque ficam fora desse catálogo automático',
+            ] },
             { versao: '2.65.0', data: '26/11/2026', areas: ['site', 'app'], itens: [
                 '📄 PDF de "Mudanças nesta tabela": cada item agora mostra quantos estão DISPONÍVEIS (cx, pc, sc…), e "sem estoque" em vermelho quando zerou',
                 '🕒 O PDF também traz no topo a ÚLTIMA ATUALIZAÇÃO da tabela (dia, hora e minuto) e a hora em que o estoque foi lido',
@@ -12511,7 +12528,9 @@
             const [enviando, setEnviando] = useState({}); // { [code]: true } enquanto sobe a foto
             const [crop, setCrop] = useState(null); // { code, file } enquanto o modal de recorte está aberto
             // 🖼️ Modo "montar catálogo": toca no card pra marcar/desmarcar em vez de trocar a foto.
-            const [modoCatalogo, setModoCatalogo] = useState(false);
+            // 🖼️ v2.66.0: vindo do botão "Catálogo" de "Mudanças nesta tabela" — já abre com os itens marcados.
+            const [preCatalogo] = useState(() => { const p = window.__prumoCatalogoPre || null; window.__prumoCatalogoPre = null; return p; });
+            const [modoCatalogo, setModoCatalogo] = useState(!!preCatalogo);
             // 📸 Sugestões de foto achadas na internet (fotos_sugestoes/{code}): a equipe escolhe a melhor
             // e quem tocar primeiro salva pra todo mundo. Ao escolher (ou "nenhuma serve"), a sugestão some.
             const [sugestoes, setSugestoes] = useState({});
@@ -12523,7 +12542,7 @@
                 return () => unsub();
             }, []);
             const pendentesFoto = useMemo(() => (products || []).filter(p => p.ativo !== false && sugestoes[String(p.code)] && !(produtoFotos && produtoFotos[String(p.code)])), [products, sugestoes, produtoFotos]);
-            const [selecionados, setSelecionados] = useState(new Set());
+            const [selecionados, setSelecionados] = useState(() => new Set(preCatalogo ? preCatalogo.codigos : []));
             const [gerando, setGerando] = useState(false);
             const [posterUrls, setPosterUrls] = useState(null); // array de URLs, uma por página
             const [paginaAtual, setPaginaAtual] = useState(0);
@@ -12622,6 +12641,11 @@
                 } catch (e) { showMessage('Erro ao gerar o catálogo.', 'error'); }
                 finally { setGerando(false); }
             };
+            useEffect(() => {
+                if (!preCatalogo || !preCatalogo.auto) return;
+                if (preCatalogo.semEstoque) showMessage(preCatalogo.semEstoque + ' item(ns) sem estoque ficaram fora do catálogo.', 'success');
+                gerarCatalogo();
+            }, []);
 
             // ⚙️ Editor do rodapé (mudar/excluir/adicionar linhas de contato) — salva compartilhado na nuvem.
             const mudarLinhaRodape = (i, campo, valor) => setRodapeRascunho(prev => prev.map((c, idx) => idx === i ? { ...c, [campo]: valor } : c));
@@ -16682,7 +16706,7 @@
                     case 'credits': return <CreditsScreen />;
                     case 'changelog': return <AtualizacoesScreen />;
                     case 'profile': return <ProfileAdminScreen user={user} showMessage={showMessage} setActiveRoute={setActiveRoute} />;
-                    case 'pdf': return <PdfScreen key={tabelaNonce} user={user} products={products} setProducts={setProducts} showMessage={showMessage} listaNegra={listaNegra} toggleListaNegra={toggleListaNegra} valorMaximo={valorMaximo} setValorMaximoProduto={setValorMaximoProduto} />;
+                    case 'pdf': return <PdfScreen key={tabelaNonce} user={user} products={products} setProducts={setProducts} showMessage={showMessage} listaNegra={listaNegra} toggleListaNegra={toggleListaNegra} valorMaximo={valorMaximo} setValorMaximoProduto={setValorMaximoProduto} setActiveRoute={setActiveRoute} />;
                     case 'cardapio': return <CardapioScreen products={products} produtoFotos={produtoFotos} showMessage={showMessage} catalogoContatos={catalogoContatos} salvarCatalogoContatos={salvarCatalogoContatos} usuario={user} />;
                     case 'resumo': return <ResumoScreen key={resumoNonce} products={products} showMessage={showMessage} clients={clients} user={user} setActiveRoute={setActiveRoute} />;
                     case 'fila': return <FilaScreen showMessage={showMessage} setActiveRoute={setActiveRoute} products={products} clients={clients} user={user} />;

@@ -1114,6 +1114,10 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 ## 📄 v2.65.0 (26/11/2026) — Disponível + última atualização no PDF de mudanças
 - `gerarPdfMudancasPreco(changes, novos, layout, opts)`: `opts.produtos` dá o DISPONÍVEL (estoqueSpamov.disponivel/un) numa coluna à direita do nome (nome agora 74 mm); 0 = 'sem estoque' em L.sobe, sem leitura = '—'. `opts.tabelaEm` (cloudInfo.ms) e `opts.estoqueEm` (maior estoqueSpamov.em) viram a faixa 'ÚLTIMA ATUALIZAÇÃO: dd/mm/aaaa às hh:mm' na 1ª página.
 
+## 🖼️ v2.66.0 (26/11/2026) — Catálogo direto das Mudanças
+- PdfScreen azerCatalogoMudancas: changes+novos (sem duplicar, fora quem tem estoqueSpamov.disponivel<=0 ou não está em products) vão em window.__prumoCatalogoPre = {codigos, semEstoque, auto:true} e setActiveRoute('cardapio') (PdfScreen agora recebe setActiveRoute).
+- CardapioScreen lê e limpa esse handoff no 1º render: abre em modoCatalogo com os códigos marcados e um useEffect de montagem chama gerarCatalogo().
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
