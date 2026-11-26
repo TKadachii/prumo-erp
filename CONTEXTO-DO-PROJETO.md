@@ -1111,6 +1111,9 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 ## 🏆 v2.64.2 (25/11/2026) — Panfleto sem 'enquanto durarem os estoques'
 - `gerarDestaqueSemana`: cartão do contato mostra só 'Ofertas válidas ...' (pedido do Bruno). Em v2.64.4 saiu de tudo (ficha, comparativo, artes): o Bruno não quer 'enquanto durar o estoque' em nada.
 
+## 📄 v2.65.0 (26/11/2026) — Disponível + última atualização no PDF de mudanças
+- `gerarPdfMudancasPreco(changes, novos, layout, opts)`: `opts.produtos` dá o DISPONÍVEL (estoqueSpamov.disponivel/un) numa coluna à direita do nome (nome agora 74 mm); 0 = 'sem estoque' em L.sobe, sem leitura = '—'. `opts.tabelaEm` (cloudInfo.ms) e `opts.estoqueEm` (maior estoqueSpamov.em) viram a faixa 'ÚLTIMA ATUALIZAÇÃO: dd/mm/aaaa às hh:mm' na 1ª página.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

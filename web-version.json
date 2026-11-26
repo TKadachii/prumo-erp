@@ -1,8 +1,9 @@
 {
-    "version":  275,
-    "versao":  "2.64.4",
-    "data":  "25/11/2026",
+    "version":  276,
+    "versao":  "2.65.0",
+    "data":  "26/11/2026",
     "itens":  [
-                  "✂️ Saiu o \"ou enquanto durar o estoque\" também da ficha do produto, do Comparar marcas e das artes do Catálogo — fica só \"válido até DD/MM\""
+                  "📄 PDF de \"Mudanças nesta tabela\": cada item agora mostra quantos estão DISPONÍVEIS (cx, pc, sc…), e \"sem estoque\" em vermelho quando zerou",
+                  "🕒 O PDF também traz no topo a ÚLTIMA ATUALIZAÇÃO da tabela (dia, hora e minuto) e a hora em que o estoque foi lido"
               ]
 }

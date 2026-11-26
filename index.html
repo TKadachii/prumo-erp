@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 275;
+        const APP_BUILD_VERSION = 276;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -3533,7 +3533,8 @@
         // 📄 PDF só com as MUDANÇAS DE PREÇO da tabela nova em relação à anterior, pra mandar pro cliente
         // no WhatsApp. Separa em "baixaram" e "subiram" (as quedas primeiro, da maior pra menor — é o que
         // interessa pro cliente ver), mais os itens novos, e quebra em várias páginas sozinho.
-        const gerarPdfMudancasPreco = (changes, novos, layout) => {
+        // opts: { produtos, tabelaEm (ms), estoqueEm (ms) } — pra mostrar o DISPONÍVEL de cada item e a hora da última atualização (pedido 26/11/2026)
+        const gerarPdfMudancasPreco = (changes, novos, layout, opts = {}) => {
             const JsPDF = window.jspdf && window.jspdf.jsPDF;
             if (!JsPDF) throw new Error('sem-lib');
             const L = PDF_LAYOUTS[layout] || PDF_LAYOUTS[lerLayoutPdf()];
@@ -3550,9 +3551,33 @@
                 .filter(Boolean).join('  ·  ') || 'sem mudanças';
             const novaPagina = () => pdfPintarPagina(doc, L, W, H, 'MUDANÇAS DE PREÇO', 'Tabela de ' + hoje + '  ·  ' + resumo + ' em relação à tabela anterior');
             let y = novaPagina();
+            const dataHora = (ms) => { const d = new Date(ms); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+            // 🕒 faixa com a última atualização (tabela e estoque) — só na 1ª página
+            if (opts.tabelaEm || opts.estoqueEm) {
+                doc.setFillColor(...L.zebra); doc.rect(10, y, W - 20, 9, 'F');
+                doc.setFillColor(...L.acento); doc.rect(10, y, 1.4, 9, 'F');
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...L.texto);
+                doc.text('ÚLTIMA ATUALIZAÇÃO: ' + dataHora(opts.tabelaEm || opts.estoqueEm), 14, y + 5.9);
+                if (opts.estoqueEm) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...L.suave); doc.text('Estoque disponível lido em ' + dataHora(opts.estoqueEm), W - 12, y + 5.9, { align: 'right' }); }
+                y += 13;
+            }
+            // 📦 DISPONÍVEL de cada item (o mesmo da coluna do PDF da tabela: Procura de Ítens do SPAmov)
+            const porCodigo = new Map((opts.produtos || []).map(p => [String(p.code), p]));
+            const disponivel = (cod) => {
+                const es = (porCodigo.get(String(cod)) || {}).estoqueSpamov;
+                if (!es || es.disponivel == null || es.disponivel === '') return null;
+                return { n: Math.max(0, Number(es.disponivel) || 0), un: String(es.un || 'un').toLowerCase() };
+            };
+            const desenharDisponivel = (cod, base) => {
+                const d = disponivel(cod);
+                doc.setFontSize(8.5);
+                if (!d) { doc.setFont('helvetica', 'normal'); doc.setTextColor(...L.suave); doc.text('—', 126, base, { align: 'right' }); return; }
+                doc.setFont('helvetica', 'bold'); doc.setTextColor(...(d.n > 0 ? L.texto : L.sobe));
+                doc.text(d.n > 0 ? d.n.toLocaleString('pt-BR') + ' ' + d.un : 'sem estoque', 126, base, { align: 'right' });
+            };
 
             // Nome nunca é cortado: quebra em linhas e a linha cresce junto (igual ao PDF da tabela)
-            const LARG_NOME = 92;
+            const LARG_NOME = 74;
             const linha = (i, cod, nome, desenharPrecos) => {
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
                 const linhasNome = doc.splitTextToSize(String(nome || ''), LARG_NOME);
@@ -3565,6 +3590,7 @@
                 doc.text(String(cod), 12, base);
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...L.texto);
                 doc.text(linhasNome, 30, base, { lineHeightFactor: 1.2 });
+                desenharDisponivel(cod, base);
                 desenharPrecos(base);
                 y += altura;
             };
@@ -3573,6 +3599,8 @@
                 doc.setFillColor(...cor); doc.rect(10, y, 1.4, 6, 'F');
                 doc.setTextColor(...cor); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
                 doc.text(titulo, 14, y + 4.6);
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(...L.suave);
+                doc.text('DISPONÍVEL', 126, y + 4.6, { align: 'right' });
                 y += 9;
             };
             const secao = (titulo, lista, cor) => {
@@ -4290,7 +4318,8 @@
                 if (!lista.length && !listaNovos.length) { showMessage('Nada pra pôr no PDF: nenhum preço mudou e nenhum produto novo.', 'error'); return; }
                 try {
                     await window.prumoLib("jspdf");
-                    const doc = gerarPdfMudancasPreco(lista, listaNovos, layoutPdf);
+                    const estoqueEm = (products || []).reduce((m, p) => Math.max(m, Number(p.estoqueSpamov && p.estoqueSpamov.em) || 0), 0);
+                    const doc = gerarPdfMudancasPreco(lista, listaNovos, layoutPdf, { produtos: products, tabelaEm: cloudInfo && cloudInfo.ms, estoqueEm });
                     const d = new Date();
                     const nome = layoutPdf + '-mudancas-preco-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '.pdf';
                     doc.save(nome);
@@ -9705,6 +9734,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.65.0', data: '26/11/2026', areas: ['site', 'app'], itens: [
+                '📄 PDF de "Mudanças nesta tabela": cada item agora mostra quantos estão DISPONÍVEIS (cx, pc, sc…), e "sem estoque" em vermelho quando zerou',
+                '🕒 O PDF também traz no topo a ÚLTIMA ATUALIZAÇÃO da tabela (dia, hora e minuto) e a hora em que o estoque foi lido',
+            ] },
             { versao: '2.64.4', data: '25/11/2026', areas: ['site', 'app'], itens: [
                 '✂️ Saiu o "ou enquanto durar o estoque" também da ficha do produto, do Comparar marcas e das artes do Catálogo — fica só "válido até DD/MM"',
             ] },
