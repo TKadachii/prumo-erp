@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 280;
+        const APP_BUILD_VERSION = 281;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9747,6 +9747,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.66.4', data: '27/11/2026', areas: ['site', 'app'], itens: [
+                '📝 Ficha do produto: o peso não some mais no cartão EMBALAGEM — quando não cabe, quebra em 2 linhas (ex.: "Peça" / "aprox. 45 kg")',
+            ] },
             { versao: '2.66.3', data: '27/11/2026', areas: ['site', 'app'], itens: [
                 '⚖️ Peso no Catálogo, ficha, panfleto e Comparar marcas: quando o nome traz "+-" (ex.: BANDA SUÍNA +-45 KG), vale esse peso (aprox. 45 kg) em vez da faixa larga da tabela (20 à 80 kg)',
             ] },
@@ -11380,8 +11383,17 @@
                     ctx.font = fonte(400, 34); ctx.fillText(ic, tx + 18, y + 60);
                     ctx.font = fonte(700, 16); ctx.fillStyle = '#94a3b8'; ctx.fillText(rot, tx + 70, y + 36);
                     ctx.font = fonte(800, infos.length >= 3 ? 22 : 25); ctx.fillStyle = '#0f172a';
-                    let v = String(val); while (ctx.measureText(v).width > tw2 - 88 && v.length > 4) v = v.slice(0, -2) + '…';
-                    ctx.fillText(v, tx + 70, y + 68);
+                    const larg = tw2 - 88; let v = String(val);
+                    // ⚖️ "Peça · aprox. 45 kg" não cabia e virava "Peça · apr…" — agora quebra em 2 linhas
+                    if (ctx.measureText(v).width > larg && v.includes(' · ')) {
+                        const [l1, ...resto] = v.split(' · '); let l2 = resto.join(' · '); let fs = 20; ctx.font = fonte(800, fs);
+                        while ((ctx.measureText(l1).width > larg || ctx.measureText(l2).width > larg) && fs > 15) { fs--; ctx.font = fonte(800, fs); }
+                        while (ctx.measureText(l2).width > larg && l2.length > 4) l2 = l2.slice(0, -2) + '…';
+                        ctx.fillText(l1, tx + 70, y + 58); ctx.fillText(l2, tx + 70, y + 58 + fs + 3);
+                    } else {
+                        while (ctx.measureText(v).width > larg && v.length > 4) v = v.slice(0, -2) + '…';
+                        ctx.fillText(v, tx + 70, y + 68);
+                    }
                 });
                 y += th + 40;
             } else y += 20;

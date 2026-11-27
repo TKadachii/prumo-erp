@@ -1,8 +1,8 @@
 {
-    "version":  280,
-    "versao":  "2.66.3",
+    "version":  281,
+    "versao":  "2.66.4",
     "data":  "27/11/2026",
     "itens":  [
-                  "⚖️ Peso no Catálogo, ficha, panfleto e Comparar marcas: quando o nome traz \"+-\" (ex.: BANDA SUÍNA +-45 KG), vale esse peso (aprox. 45 kg) em vez da faixa larga da tabela (20 à 80 kg)"
+                  "📝 Ficha do produto: o peso não some mais no cartão EMBALAGEM — quando não cabe, quebra em 2 linhas (ex.: \"Peça\" / \"aprox. 45 kg\")"
               ]
 }

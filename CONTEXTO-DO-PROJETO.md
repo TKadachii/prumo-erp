@@ -1127,6 +1127,9 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 ## ⚖️ v2.66.3 (27/11/2026) — Peso '+-' do nome vale mais que a faixa da tabela
 - atosDoProduto: se o nome tem '+-'/'+/-'/'±' e um 'NN KG', peso = 'aprox. NN kg' (antes vencia p.tipo, ex. banda suína '20 à 80 Kg'; o Bruno disse que a banda é +-45 kg). Sem '+-' no nome continua p.tipo.
 
+## 📝 v2.66.4 (27/11/2026) — Peso inteiro na ficha
+- gerarFichaProduto, cartões de info: valor com ' · ' que não cabe vira 2 linhas (fonte 20→15) em vez de cortar com '…' ('Peça · apr…').
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
