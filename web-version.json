@@ -1,8 +1,8 @@
 {
-    "version":  279,
-    "versao":  "2.66.2",
+    "version":  280,
+    "versao":  "2.66.3",
     "data":  "27/11/2026",
     "itens":  [
-                  "🔧 O aviso \"Sem desconto no grupo 80\" não aparece mais ao abrir o app — o grupo 80 voltou a ter desconto normal"
+                  "⚖️ Peso no Catálogo, ficha, panfleto e Comparar marcas: quando o nome traz \"+-\" (ex.: BANDA SUÍNA +-45 KG), vale esse peso (aprox. 45 kg) em vez da faixa larga da tabela (20 à 80 kg)"
               ]
 }
