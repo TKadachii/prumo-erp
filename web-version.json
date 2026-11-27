@@ -1,8 +1,8 @@
 {
-    "version":  278,
-    "versao":  "2.66.1",
-    "data":  "26/11/2026",
+    "version":  279,
+    "versao":  "2.66.2",
+    "data":  "27/11/2026",
     "itens":  [
-                  "🏆 O \"Destaque da Semana\" agora é \"Destaque do DIA\": o panfleto sai com DESTAQUE DO DIA e \"Catálogo de ofertas do dia\" (validade padrão continua de 1 dia)"
+                  "🔧 O aviso \"Sem desconto no grupo 80\" não aparece mais ao abrir o app — o grupo 80 voltou a ter desconto normal"
               ]
 }

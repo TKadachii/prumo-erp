@@ -1121,6 +1121,9 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 ## 🏆 v2.66.1 (26/11/2026) — Destaque do Dia
 - Pedido do Bruno: o panfleto virou 'DESTAQUE DO / DIA' e o selo 'CATÁLOGO DE OFERTAS DO DIA'; botão/título do modal 'Destaque do Dia', PNG 'destaque-do-dia-*.png'. Código segue com os nomes gerarDestaqueSemana/DestaqueSemanaModal; o filtro 'Baixou na semana' continua (é período de comparação).
 
+## 🔧 v2.66.2 (27/11/2026) — Grupo 80 com desconto de novo
+- 26/11 o Bruno pediu o desconto do grupo 80 de volta: system_data/bloqueio_desconto ficou ativo:false. BLOQUEIO_DESCONTO_PADRAO virou ativo:false — antes, até o onSnapshot chegar, o padrão (ativo:true) fazia o aviso 'Sem desconto no grupo 80' aparecer e travava o desconto.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 278;
+        const APP_BUILD_VERSION = 279;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -770,7 +770,7 @@
         // Fica na nuvem (system_data/bloqueio_desconto) e o admin liga/desliga em ⚙️ Configurações.
         // Enquanto o documento não existe na nuvem, vale o padrão abaixo. `ate` (AAAA-MM-DD, opcional)
         // é o último dia do bloqueio — depois disso o desconto volta sozinho.
-        const BLOQUEIO_DESCONTO_PADRAO = { ativo: true, grupos: ['80'], ate: '' }; // sem data = até desligar em Configurações (pedido 17/11)
+        const BLOQUEIO_DESCONTO_PADRAO = { ativo: false, grupos: ['80'], ate: '' }; // desligado até a nuvem responder (grupo 80 voltou a ter desconto em 26/11)
         window.__bloqueioDesconto = window.__bloqueioDesconto || BLOQUEIO_DESCONTO_PADRAO;
         const CAMPO_ESCURO = { background: '#0b0b10', border: '1px solid #8b7cff44', color: '#ededf2', colorScheme: 'dark' };
         const gruposSemDescontoHoje = () => {
@@ -9747,6 +9747,9 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.66.2', data: '27/11/2026', areas: ['site', 'app'], itens: [
+                '🔧 O aviso "Sem desconto no grupo 80" não aparece mais ao abrir o app — o grupo 80 voltou a ter desconto normal',
+            ] },
             { versao: '2.66.1', data: '26/11/2026', areas: ['site', 'app'], itens: [
                 '🏆 O "Destaque da Semana" agora é "Destaque do DIA": o panfleto sai com DESTAQUE DO DIA e "Catálogo de ofertas do dia" (validade padrão continua de 1 dia)',
             ] },
