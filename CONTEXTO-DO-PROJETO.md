@@ -1130,6 +1130,10 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 ## 📝 v2.66.4 (27/11/2026) — Peso inteiro na ficha
 - gerarFichaProduto, cartões de info: valor com ' · ' que não cabe vira 2 linhas (fonte 20→15) em vez de cortar com '…' ('Peça · apr…').
 
+## 🎨 v2.67.0 (27/11/2026) — Ficha no visual do Destaque + Disparos só pede grupo 16
+- gerarFichaProduto reescrita no estilo de gerarDestaqueSemana (fundo vermelho, caixa '#7f1d1d' com 'FICHA DO'/'PRODUTO' Anton, logo à direita, painel branco com selo CÓDIGO, faixa preta com preço estilo destaque + 'Consulte seu representante' com contatos, rodapé DESTAQUE_RODAPE_EMPRESA). Sem preço: faixa só com o representante.
+- Disparos: uditoriaPrecos filtra só códigos 16* (pedido do Bruno: preencher toda vez era chato; o resto fora da tabela só fica de fora). Modo 'Os escolhidos' agora também exclui produtoForaTabelaHoje.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores

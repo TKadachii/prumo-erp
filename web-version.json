@@ -1,8 +1,9 @@
 {
-    "version":  281,
-    "versao":  "2.66.4",
+    "version":  282,
+    "versao":  "2.67.0",
     "data":  "27/11/2026",
     "itens":  [
-                  "📝 Ficha do produto: o peso não some mais no cartão EMBALAGEM — quando não cabe, quebra em 2 linhas (ex.: \"Peça\" / \"aprox. 45 kg\")"
+                  "🎨 Ficha do produto com o MESMO visual do Destaque do Dia: fundo vermelho, título FICHA DO PRODUTO, painel branco, preço grande na faixa preta e rodapé da Friganso",
+                  "📣 Disparos: o aviso de preços agora pede só os itens do GRUPO 16 (boi no osso). O resto que está fora da tabela fica de fora da campanha sozinho — não vai pro cliente"
               ]
 }

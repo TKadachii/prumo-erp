@@ -457,7 +457,7 @@
         const isCapacitor = (typeof window !== 'undefined') && !!(window.Capacitor && (typeof window.Capacitor.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : window.Capacitor.isNative));
         // 🔄 Versão desta página, pra comparar com web-version.json e saber se tem atualização pendente
         // (site/PWA/PC). PRECISA bater com o número em web-version.json — bump os dois juntos SEMPRE.
-        const APP_BUILD_VERSION = 281;
+        const APP_BUILD_VERSION = 282;
         // 📋 Chaves da Fila de Pedidos. Ficam aqui no topo porque são usadas por DUAS telas distantes:
         // a FilaScreen (que monta a lista) e a ResumoScreen (que marca o pedido como conferido ao copiar).
         const FILA_ATIVA = 'friganso_fila_ativa';   // [{ pedido, feito, texto }] — a fila em andamento
@@ -9747,6 +9747,10 @@
         // (reseta Y). Y também sobe se Z chegasse a 100 (reseta Z). Mais recente primeiro.
         // Toda entrega nova (site/extensão/app/PC) ganha uma entrada aqui.
         const CHANGELOG = [
+            { versao: '2.67.0', data: '27/11/2026', areas: ['site', 'app'], itens: [
+                '🎨 Ficha do produto com o MESMO visual do Destaque do Dia: fundo vermelho, título FICHA DO PRODUTO, painel branco, preço grande na faixa preta e rodapé da Friganso',
+                '📣 Disparos: o aviso de preços agora pede só os itens do GRUPO 16 (boi no osso). O resto que está fora da tabela fica de fora da campanha sozinho — não vai pro cliente',
+            ] },
             { versao: '2.66.4', data: '27/11/2026', areas: ['site', 'app'], itens: [
                 '📝 Ficha do produto: o peso não some mais no cartão EMBALAGEM — quando não cabe, quebra em 2 linhas (ex.: "Peça" / "aprox. 45 kg")',
             ] },
@@ -11314,43 +11318,48 @@
         // v2.60.0: visual novo (pedido 24/11 "mais bonito, moderno e fácil de entender"): cabeçalho com logo
         // branco nítido, fotos num painel claro, nome legível, "cartões" de informação com rótulo, destaques
         // em chips verdes e preço num cartão escuro com número grande.
+        // 🎨 v2.67.0 (27/11/2026): ficha no MESMO visual do "Destaque do Dia" (pedido do Bruno) — fundo vermelho,
+        // título Anton branco/amarelo, logo à direita, painel branco, preço na faixa preta e rodapé da Friganso.
         const gerarFichaProduto = async ({ produto: p, fotos, info, mostrarPreco, contatos }) => {
-            const W = 1080, H = 1350, M = 56;
+            const W = 1080, H = 1350, M = 36;
             const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
             const ctx = cv.getContext('2d');
-            const fonte = (peso, tam) => `${peso} ${tam}px Montserrat, "Segoe UI", system-ui, sans-serif`;
+            const fonte = (peso, tam, fam) => `${peso} ${tam}px ${fam || 'Montserrat'}, "Segoe UI", system-ui, sans-serif`;
             const f = fatosDoProduto(p); const r = checkDiscountRules(p.code, p.name, p.originalPrice);
             const reais = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const ret = (x, y, w, h, rr, cor) => { roundRectPath(ctx, x, y, w, h, rr); ctx.fillStyle = cor; ctx.fill(); };
             const comPreco = mostrarPreco && Number(p.originalPrice) > 0;
-            const vermelho = ctx.createLinearGradient(0, 0, W, 220); vermelho.addColorStop(0, '#7f1d1d'); vermelho.addColorStop(1, '#dc2626');
-            // fundo e cabeçalho
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
-            ctx.fillStyle = vermelho; ctx.fillRect(0, 0, W, 200);
-            ctx.globalAlpha = 0.08; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(W - 90, -40, 260, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-            try { const logo = await carregarImagemCanvas(FRIGANSO_LOGO_BRANCO_PNG); const lh = 150, lw = logo.width * (lh / logo.height); ctx.drawImage(logo, M, 25, lw, lh); } catch (e) {}
-            ctx.textAlign = 'right';
-            ctx.font = fonte(800, 22); const tag = 'FICHA DO PRODUTO'; const tw = ctx.measureText(tag).width + 44;
-            ret(W - M - tw, 62, tw, 48, 24, 'rgba(255,255,255,0.18)'); ctx.fillStyle = '#ffffff'; ctx.fillText(tag, W - M - 22, 94);
-            ctx.font = fonte(600, 22); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillText('Código ' + p.code, W - M - 22, 146);
-            ctx.textAlign = 'left';
-            // fotos num painel claro
+            if (!document.getElementById('destaque-fontes')) { const l = document.createElement('link'); l.id = 'destaque-fontes'; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@600;700;800;900&display=swap'; document.head.appendChild(l); }
+            try { await Promise.race([Promise.all(['400 40px Anton', '900 40px Montserrat', '800 40px Montserrat', '600 40px Montserrat', '500 40px Montserrat'].map(x => document.fonts.load(x))), new Promise(res => setTimeout(res, 3000))]); } catch (e) {}
+            // fundo vermelho + cabeçalho (igual ao Destaque do Dia)
+            const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#991b1b'); g.addColorStop(1, '#dc2626'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+            ctx.globalAlpha = 0.07; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(W - 60, 40, 330, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(80, H - 80, 260, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+            ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 8; ret(M, 28, 620, 186, 40, '#7f1d1d'); ctx.restore();
+            ctx.fillStyle = '#ffffff'; ctx.font = fonte(400, 66, 'Anton'); ctx.fillText('FICHA DO', M + 40, 102);
+            ctx.fillStyle = '#facc15'; ctx.font = fonte(400, 100, 'Anton'); ctx.fillText('PRODUTO', M + 36, 198);
+            let logo = null; try { logo = await carregarImagemCanvas(FRIGANSO_LOGO_BRANCO_PNG); const lh = 166, lw = logo.width * lh / logo.height; ctx.drawImage(logo, W - M - lw - 20, 38, lw, lh); } catch (e) {}
+            // painel branco
+            const pTop = 236, pBot = H - 150, PX = M + 24, PW = W - M * 2 - 48;
+            ret(M, pTop, W - M * 2, pBot - pTop, 36, '#ffffff');
+            ctx.font = fonte(800, 22); const sel = 'CÓDIGO ' + p.code; const sw = ctx.measureText(sel).width + 48; ret(W - M - 24 - sw, pTop + 22, sw, 48, 24, '#0f172a'); ctx.fillStyle = '#fff'; ctx.fillText(sel, W - M - 24 - sw + 24, pTop + 54);
+            ctx.font = fonte(800, 20); ctx.fillStyle = '#b91c1c'; ctx.fillText(f.marca ? 'Marca ' + f.marca : 'Ficha técnica', PX + 4, pTop + 54);
+            // fotos
             const imgs = [];
             for (const s of (fotos || []).slice(0, 4)) { try { imgs.push(await carregarImagemCanvas(s, !/^data:/.test(s))); } catch (e) {} }
-            const pTop = 226, pH = imgs.length ? (comPreco ? 370 : 410) : 0;
+            const fTop = pTop + 88, fH = imgs.length ? 300 : 0;
             if (imgs.length) {
-                ret(M, pTop, W - M * 2, pH, 36, '#f1f5f9');
+                ret(PX, fTop, PW, fH, 28, '#f1f5f9');
                 const cabe = (img, x, y, w, h) => { const s = Math.min(w / img.width, h / img.height); const iw = img.width * s, ih = img.height * s; ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); };
                 let c0 = null;
                 const cartao = (img, x, y, w, h) => {
                     if (!c0) c0 = { x, y, w, h };
-                    ctx.save(); ctx.shadowColor = 'rgba(15,23,42,0.12)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8; ret(x, y, w, h, 26, '#ffffff'); ctx.restore();
-                    ctx.save(); roundRectPath(ctx, x, y, w, h, 26); ctx.clip(); cabe(img, x + 14, y + 14, w - 28, h - 28); ctx.restore();
+                    ctx.save(); ctx.shadowColor = 'rgba(15,23,42,0.12)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6; ret(x, y, w, h, 22, '#ffffff'); ctx.restore();
+                    ctx.save(); roundRectPath(ctx, x, y, w, h, 22); ctx.clip(); cabe(img, x + 12, y + 12, w - 24, h - 24); ctx.restore();
                 };
-                const ix = M + 24, iy = pTop + 24, iw = W - M * 2 - 48, ih = pH - 48;
-                if (imgs.length === 1) cartao(imgs[0], (W - ih) / 2, iy, ih, ih);
+                const ix = PX + 20, iy = fTop + 20, iw = PW - 40, ih = fH - 40;
+                if (imgs.length === 1) cartao(imgs[0], PX + (PW - ih) / 2, iy, ih, ih);
                 else if (imgs.length === 2) { const w = (iw - 20) / 2; cartao(imgs[0], ix, iy, w, ih); cartao(imgs[1], ix + w + 20, iy, w, ih); }
-                else { const big = ih, sw = iw - big - 20, sh = (ih - 20 * (imgs.length - 2)) / (imgs.length - 1); cartao(imgs[0], ix, iy, big, big); imgs.slice(1).forEach((im, i) => cartao(im, ix + big + 20, iy + i * (sh + 20), sw, sh)); }
+                else { const big = ih, sw2 = iw - big - 20, sh = (ih - 20 * (imgs.length - 2)) / (imgs.length - 1); cartao(imgs[0], ix, iy, big, big); imgs.slice(1).forEach((im, i) => cartao(im, ix + big + 20, iy + i * (sh + 20), sw2, sh)); }
                 // 🏷️ selo na foto principal: logo Friganso (produto dela) + "Boi no osso"/"Suíno banda"
                 if (c0 && (f.propria || f.corte)) {
                     const k = Math.min(1, c0.w / 560), mx = Math.round(16 * k + 6); let by = c0.y + c0.h - mx;
@@ -11359,78 +11368,92 @@
                         by -= chH; ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 10; ret(c0.x + mx, by, cw, chH, chH / 2, '#fbbf24'); ctx.restore();
                         ctx.fillStyle = '#0f172a'; ctx.fillText(txt, c0.x + mx + fs * 0.8, by + chH * 0.68); by -= 8;
                     }
-                    if (f.propria) { try {
-                        const lg = await carregarImagemCanvas(FRIGANSO_LOGO_BRANCO_PNG); const lh = Math.round(64 * k), lw = lg.width * (lh / lg.height), pad = Math.round(8 * k);
-                        by -= lh + pad * 2; const g = ctx.createLinearGradient(c0.x + mx, by, c0.x + mx + lw + pad * 2, by + lh); g.addColorStop(0, '#991b1b'); g.addColorStop(1, '#dc2626');
-                        ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 10; ret(c0.x + mx, by, lw + pad * 2, lh + pad * 2, 14, g); ctx.restore();
-                        ctx.drawImage(lg, c0.x + mx + pad, by + pad, lw, lh);
-                    } catch (e) {} }
+                    if (f.propria && logo) {
+                        const lh = Math.round(64 * k), lw = logo.width * (lh / logo.height), pad = Math.round(8 * k);
+                        by -= lh + pad * 2; const gl = ctx.createLinearGradient(c0.x + mx, by, c0.x + mx + lw + pad * 2, by + lh); gl.addColorStop(0, '#991b1b'); gl.addColorStop(1, '#dc2626');
+                        ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 10; ret(c0.x + mx, by, lw + pad * 2, lh + pad * 2, 14, gl); ctx.restore();
+                        ctx.drawImage(logo, c0.x + mx + pad, by + pad, lw, lh);
+                    }
                 }
             }
-            let y = (imgs.length ? pTop + pH : 230) + 72;
-            // nome legível
-            ctx.fillStyle = '#0f172a'; ctx.font = fonte(800, 50);
-            y = quebrarTexto(ctx, nomeAmigavel(p), M, y, W - M * 2, 58, 2) - 6;
-            ctx.font = fonte(500, 22); ctx.fillStyle = '#94a3b8';
-            ctx.fillText(String(p.name || '').toUpperCase().slice(0, 70), M, y); y += 26;
+            let y = fTop + fH + 58;
+            // nome legível + nome da tabela
+            ctx.fillStyle = '#0f172a'; ctx.font = fonte(800, 44);
+            y = quebrarTexto(ctx, nomeAmigavel(p), PX + 4, y, PW - 8, 50, 2) - 8;
+            ctx.font = fonte(600, 19); ctx.fillStyle = '#64748b';
+            ctx.fillText(String(p.name || '').toUpperCase().slice(0, 74), PX + 4, y); y += 22;
             // cartões de informação (rótulo + valor)
             const infos = [['🏷️', 'MARCA', f.marca], ['🥩', 'TIPO', f.corte], ['📦', 'EMBALAGEM', [f.embalagem, f.peso].filter(Boolean).join(' · ')], ['❄️', 'CONSERVAÇÃO', f.conservacao]].filter(i => i[2]);
             if (infos.length) {
-                const gap = 16, th = 92, tw2 = (W - M * 2 - gap * (infos.length - 1)) / infos.length;
+                const gap = 14, th = 88, tw2 = (PW - gap * (infos.length - 1)) / infos.length;
                 infos.forEach(([ic, rot, val], i) => {
-                    const tx = M + i * (tw2 + gap);
-                    ret(tx, y, tw2, th, 22, '#f8fafc'); ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 2; roundRectPath(ctx, tx, y, tw2, th, 22); ctx.stroke();
-                    ctx.font = fonte(400, 34); ctx.fillText(ic, tx + 18, y + 60);
-                    ctx.font = fonte(700, 16); ctx.fillStyle = '#94a3b8'; ctx.fillText(rot, tx + 70, y + 36);
-                    ctx.font = fonte(800, infos.length >= 3 ? 22 : 25); ctx.fillStyle = '#0f172a';
-                    const larg = tw2 - 88; let v = String(val);
-                    // ⚖️ "Peça · aprox. 45 kg" não cabia e virava "Peça · apr…" — agora quebra em 2 linhas
+                    const tx = PX + i * (tw2 + gap);
+                    ret(tx, y, tw2, th, 20, '#f1f5f9');
+                    ctx.font = fonte(400, 32); ctx.fillText(ic, tx + 16, y + 58);
+                    ctx.font = fonte(800, 15); ctx.fillStyle = '#b91c1c'; ctx.fillText(rot, tx + 64, y + 34);
+                    ctx.font = fonte(800, infos.length >= 3 ? 21 : 24); ctx.fillStyle = '#0f172a';
+                    const larg = tw2 - 80; let v = String(val);
+                    // ⚖️ "Peça · aprox. 45 kg" não cabia e virava "Peça · apr…" — quebra em 2 linhas
                     if (ctx.measureText(v).width > larg && v.includes(' · ')) {
                         const [l1, ...resto] = v.split(' · '); let l2 = resto.join(' · '); let fs = 20; ctx.font = fonte(800, fs);
                         while ((ctx.measureText(l1).width > larg || ctx.measureText(l2).width > larg) && fs > 15) { fs--; ctx.font = fonte(800, fs); }
                         while (ctx.measureText(l2).width > larg && l2.length > 4) l2 = l2.slice(0, -2) + '…';
-                        ctx.fillText(l1, tx + 70, y + 58); ctx.fillText(l2, tx + 70, y + 58 + fs + 3);
+                        ctx.fillText(l1, tx + 64, y + 56); ctx.fillText(l2, tx + 64, y + 56 + fs + 3);
                     } else {
                         while (ctx.measureText(v).width > larg && v.length > 4) v = v.slice(0, -2) + '…';
-                        ctx.fillText(v, tx + 70, y + 68);
+                        ctx.fillText(v, tx + 64, y + 64);
                     }
                 });
-                y += th + 40;
-            } else y += 20;
-            // descrição + destaques (o espaço que sobrar até o preço/rodapé)
-            const fundo = H - 70 - (comPreco ? 196 : 24);
-            const chipsAlt = (info.destaques || []).length ? 64 : 0;
-            ctx.fillStyle = '#475569'; ctx.font = fonte(500, 27);
-            const linhasMax = Math.max(2, Math.floor((fundo - chipsAlt - y) / 37));
-            y = quebrarTexto(ctx, info.descricao || '', M, y, W - M * 2, 37, linhasMax) + 4;
-            if (chipsAlt) {
-                let x = M; ctx.font = fonte(700, 21);
-                (info.destaques || []).slice(0, 4).forEach(d => {
-                    const t = '✓  ' + d, w = ctx.measureText(t).width + 36;
-                    if (x + w > W - M) return;
-                    ret(x, y - 4, w, 46, 23, '#dcfce7'); ctx.fillStyle = '#166534'; ctx.fillText(t, x + 18, y + 27); x += w + 10;
+                y += th + 46;
+            } else y += 16;
+            // faixa preta de baixo: preço (se marcado) + "consulte seu representante"
+            const bh = 150, bY = pBot - 24 - bh;
+            // descrição + destaques no espaço que sobra
+            const chips = (info.destaques || []).slice(0, 4), chipsAlt = chips.length ? 58 : 0;
+            ctx.fillStyle = '#475569'; ctx.font = fonte(500, 24);
+            const linhasMax = Math.floor((bY - 16 - chipsAlt - y + 24) / 32);
+            if (linhasMax > 0 && info.descricao) y = quebrarTexto(ctx, info.descricao, PX + 4, y, PW - 8, 32, linhasMax) + 14;
+            if (chipsAlt && y + 46 <= bY - 10) {
+                let x = PX + 4; ctx.font = fonte(700, 20);
+                chips.forEach(d => {
+                    const t = '✓  ' + d, w = ctx.measureText(t).width + 34;
+                    if (x + w > PX + PW) return;
+                    ret(x, y - 6, w, 44, 22, '#dcfce7'); ctx.fillStyle = '#166534'; ctx.fillText(t, x + 17, y + 23); x += w + 10;
                 });
             }
-            // preço num cartão escuro
+            ret(PX, bY, PW, bh, 28, '#0f172a');
+            const amanha = new Date(); amanha.setDate(amanha.getDate() + 1); const validade = 'válido até ' + amanha.toLocaleDateString('pt-BR');
+            const ctt = (contatos || []).slice(0, 2).map(c => `${c.icone || ''} ${c.texto || ''}`.trim()).filter(Boolean);
             if (comPreco) {
-                const by = H - 70 - 176, bh = 128, un = '/' + String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toLowerCase();
-                ret(M, by, W - M * 2, bh, 30, '#0f172a');
-                ctx.fillStyle = '#facc15'; ctx.font = fonte(800, 20); ctx.fillText(r.hasDiscount ? 'PREÇO À VISTA' : 'PREÇO', M + 34, by + 42);
-                ctx.fillStyle = '#cbd5e1'; ctx.font = fonte(500, 20);
-                if (r.hasDiscount) { const de = 'de ' + reais(r.origPrice); ctx.fillText(de, M + 34, by + 76); const w0 = ctx.measureText('de ').width, w1 = ctx.measureText(de).width; ctx.fillRect(M + 34 + w0, by + 69, w1 - w0, 2); ctx.fillStyle = '#86efac'; ctx.fillText('3% de desconto já aplicado', M + 34, by + 106); }
-                else { const d = new Date(); d.setDate(d.getDate() + 1); ctx.fillText('válido até ' + d.toLocaleDateString('pt-BR'), M + 34, by + 80); }
-                ctx.textAlign = 'right';
-                ctx.fillStyle = '#facc15'; ctx.font = fonte(800, 34); const wu = ctx.measureText(un).width; ctx.fillText(un, W - M - 34, by + 88);
-                ctx.fillStyle = '#ffffff'; ctx.font = fonte(900, 72); ctx.fillText(reais(r.unitFinalPrice), W - M - 40 - wu, by + 90);
+                const un = '/' + String(p.unidade || 'kg').replace(/\s*\[.*\]/, '').toUpperCase();
+                ctx.fillStyle = '#facc15'; ctx.font = fonte(800, 19); ctx.fillText(r.hasDiscount ? 'PREÇO À VISTA' : 'PREÇO FINAL', PX + 30, bY + 40);
+                ctx.fillStyle = '#cbd5e1'; ctx.font = fonte(600, 18);
+                if (r.hasDiscount) { const de = 'de ' + reais(r.origPrice); ctx.fillText(de, PX + 30, bY + 72); const w0 = ctx.measureText('de ').width, w1 = ctx.measureText(de).width; ctx.fillRect(PX + 30 + w0, bY + 66, w1 - w0, 2); }
+                ctx.fillStyle = '#94a3b8'; ctx.font = fonte(600, 16); ctx.fillText(validade, PX + 30, bY + bh - 26);
+                // preço grande no estilo do Destaque: R$ amarelo, inteiro enorme, centavos e /KG ao lado
+                const [int, dec] = Number(r.unitFinalPrice || 0).toFixed(2).split('.');
+                const cx = PX + (ctt.length ? 250 : 280);
+                ctx.fillStyle = '#facc15'; ctx.font = fonte(800, 30); ctx.fillText('R$', cx, bY + 98);
+                ctx.fillStyle = '#ffffff'; ctx.font = fonte(900, 96); const wi = ctx.measureText(int).width; ctx.fillText(int, cx + 52, bY + 112);
+                ctx.font = fonte(900, 40); ctx.fillText(',' + dec, cx + 56 + wi, bY + 70);
+                ctx.fillStyle = '#facc15'; ctx.font = fonte(800, 24); ctx.fillText(un, cx + 58 + wi, bY + 110);
+                if (ctt.length) {
+                    const rx = PX + PW - 30; ctx.textAlign = 'right';
+                    ctx.fillStyle = '#facc15'; ctx.font = fonte(900, 20); ctx.fillText('CONSULTE SEU', rx, bY + 44); ctx.fillText('REPRESENTANTE', rx, bY + 68);
+                    ctx.fillStyle = '#ffffff'; ctx.font = fonte(800, 19); ctt.forEach((t, k) => ctx.fillText(t.slice(0, 26), rx, bY + 102 + k * 26));
+                    ctx.textAlign = 'left';
+                }
+            } else {
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#facc15'; ctx.font = fonte(900, 30); ctx.fillText('CONSULTE SEU REPRESENTANTE', W / 2, bY + 56);
+                ctx.fillStyle = '#ffffff'; ctx.font = fonte(800, 24); ctx.fillText(ctt.join('     ') || 'Peça já o seu!', W / 2, bY + 100);
+                ctx.fillStyle = '#94a3b8'; ctx.font = fonte(600, 16); ctx.fillText('Consulte preço e disponibilidade', W / 2, bY + 132);
                 ctx.textAlign = 'left';
-                const d = new Date(); d.setDate(d.getDate() + 1);
-                ctx.font = fonte(500, 18); ctx.fillStyle = '#94a3b8'; ctx.textAlign = 'center';
-                ctx.fillText('Preço válido até ' + d.toLocaleDateString('pt-BR'), W / 2, by + bh + 26); ctx.textAlign = 'left';
             }
-            // rodapé
-            ctx.fillStyle = vermelho; ctx.fillRect(0, H - 70, W, 70);
-            ctx.fillStyle = '#ffffff'; ctx.font = fonte(700, 26); ctx.textAlign = 'center';
-            ctx.fillText((contatos || []).map(c => `${c.icone || ''} ${c.texto || ''}`.trim()).filter(Boolean).join('     ') || 'Friganso', W / 2, H - 26); ctx.textAlign = 'left';
+            // rodapé da empresa (igual ao Destaque do Dia)
+            if (logo) { const lh = 115; ctx.drawImage(logo, M + 6, H - 138, lh * logo.width / logo.height, lh); }
+            ctx.fillStyle = '#fff'; ctx.font = fonte(700, 24); ctx.fillText(DESTAQUE_RODAPE_EMPRESA[0], M + 170, H - 82);
+            ctx.font = fonte(800, 26); ctx.fillText(DESTAQUE_RODAPE_EMPRESA[1], M + 170, H - 40);
             return cv;
         };
         // ═══ ⚖️ COMPARAR MARCAS (v2.60.0 — pedido 24/11/2026) ════════════════════════════════════════
@@ -14691,7 +14714,7 @@
 
                 // 📦 modo "os escolhidos": oferta exatamente o(s) produto(s) que você selecionou
                 if (ofertaModo === 'selecionados') {
-                    const sel = products.filter(p => produtosAlvo.has(String(p.code)) && !lnSet.has(String(p.code)));
+                    const sel = products.filter(p => produtosAlvo.has(String(p.code)) && !lnSet.has(String(p.code)) && !produtoForaTabelaHoje(p)); // fora da tabela não vai pro cliente
                     const comprou = sel.filter(p => histSet.has(String(p.code)));
                     return comprou.length ? comprou : sel;
                 }
@@ -15004,7 +15027,9 @@
                     const code = String(p.code);
                     const clientes = clientesSelecionados.filter(c => (c.history || []).some(h => String(h) === code)).length;
                     return { code, name: p.name, clientes };
-                }).filter(it => it.clientes > 0 || produtosAlvo.has(it.code)).sort((a, b) => b.clientes - a.clientes || a.name.localeCompare(b.name, 'pt-BR'));
+                // v2.67.0 (pedido do Bruno 27/11): só o grupo 16 (boi no osso) pede preço aqui; o resto fora da
+                // tabela fica de fora da campanha sem perguntar (já sai das ofertas automáticas).
+                }).filter(it => it.code.startsWith('16') && (it.clientes > 0 || produtosAlvo.has(it.code))).sort((a, b) => b.clientes - a.clientes || a.name.localeCompare(b.name, 'pt-BR'));
             }, [products, clients, selecionados, produtosAlvo]);
 
             const iniciar = (precosConfirmados) => {
@@ -15158,8 +15183,8 @@
                 <div className="animate-in fade-in space-y-6">
                     {avisoAuditoriaCampanha && <ModalConfirmarPrecos
                         itens={auditoriaPrecos}
-                        titulo="Carteira com preços que precisam de atualização"
-                        descricao="Os números mostram quantos clientes selecionados costumam comprar cada item fora da tabela. Esses produtos já foram retirados das ofertas automáticas; atualize-os no site do vendedor antes de voltar a oferecê-los."
+                        titulo="Boi no osso (grupo 16) sem preço de hoje"
+                        descricao="Digite o preço de hoje dos itens do grupo 16 se quiser oferecê-los. Os outros itens fora da tabela já ficam de fora da campanha automaticamente — não vão pro cliente."
                         onCancelar={() => setAvisoAuditoriaCampanha(false)}
                         onConfirmar={() => { setAvisoAuditoriaCampanha(false); iniciar(true); }}
                         confirmarLabel="Continuar campanha protegida"
