@@ -1,9 +1,8 @@
 {
-    "version":  282,
-    "versao":  "2.67.0",
+    "version":  283,
+    "versao":  "2.67.1",
     "data":  "27/11/2026",
     "itens":  [
-                  "🎨 Ficha do produto com o MESMO visual do Destaque do Dia: fundo vermelho, título FICHA DO PRODUTO, painel branco, preço grande na faixa preta e rodapé da Friganso",
-                  "📣 Disparos: o aviso de preços agora pede só os itens do GRUPO 16 (boi no osso). O resto que está fora da tabela fica de fora da campanha sozinho — não vai pro cliente"
+                  "🏆 A ficha do produto virou OFERTA DO DIA de um item só: igual ao panfleto Destaque do Dia, com foto grande, nome, embalagem/peso, preço na faixa preta e seu contato (botão \"🏆 Oferta do dia\" no detalhe do produto)"
               ]
 }

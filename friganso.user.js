@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Prumo ERP - Lancar pedido
 // @namespace    friganso-erp
-// @version      2026.11.27.1242
+// @version      2026.11.27.1247
 // @description  Le e lanca pedidos no SPAmov direto pelo app Prumo (funciona no celular via Firefox + Tampermonkey).
 // @author       Prumo
 // @match        https://tkadachii.github.io/*

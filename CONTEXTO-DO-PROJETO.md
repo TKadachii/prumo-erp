@@ -1134,6 +1134,9 @@ Pedido: cliente pergunta "como é essa mussarela?" → abrir o item e ter o que 
 - gerarFichaProduto reescrita no estilo de gerarDestaqueSemana (fundo vermelho, caixa '#7f1d1d' com 'FICHA DO'/'PRODUTO' Anton, logo à direita, painel branco com selo CÓDIGO, faixa preta com preço estilo destaque + 'Consulte seu representante' com contatos, rodapé DESTAQUE_RODAPE_EMPRESA). Sem preço: faixa só com o representante.
 - Disparos: uditoriaPrecos filtra só códigos 16* (pedido do Bruno: preencher toda vez era chato; o resto fora da tabela só fica de fora). Modo 'Os escolhidos' agora também exclui produtoForaTabelaHoje.
 
+## 🏆 v2.67.1 (27/11/2026) — Ficha virou Oferta do Dia de 1 item
+- O Bruno não quer 'FICHA DO PRODUTO': gerarFichaProduto agora desenha 'OFERTA DO / DIA' (Anton), foto grande (até 3), selo 'OFERTA DO DIA' + selos Friganso/corte, nome, linha 'MARCA · EMBALAGEM · PESO · CONSERVAÇÃO', faixa preta de preço/representante, rodapé da empresa. Sem cartões e sem descrição (info.descricao não é mais desenhada; continua no texto do Zap). Botão '🏆 Oferta do dia', arquivo oferta-do-dia-{code}.png.
+
 ## 🐞 PENDENTE / em investigação
 - ⛔ **A EXTENSÃO lê errado o produto `29741` (ARROZ BCO T1, pallet):** dá R$ 510,00 quando o preço
   certo é **R$ 5.100,00** (confirmado pelo usuário e pelo PDF). O PDF lê certo. Suspeita: valores
